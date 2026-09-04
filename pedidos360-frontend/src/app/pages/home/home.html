@@ -1,0 +1,107 @@
+<section class="hero">
+  <div class="container hero__inner">
+    <div class="hero__copy">
+      <h1>Tu día se mueve rápido.<br />Tus compras también.</h1>
+      <p>Descubre, combina y recibe productos de distintas categorías en un solo pedido.</p>
+      <div class="hero__actions">
+        <a routerLink="/carrito" class="btn btn-primary">Explorar mi pedido</a>
+        <button type="button" class="btn btn-secondary">Ver cómo funciona</button>
+      </div>
+    </div>
+    <div class="hero__art" aria-hidden="true">
+      <div class="hero__blob">
+        <span>🎧</span><span>🥤</span><span>🍌</span><span>📦</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="container section">
+  <h2>Shop by need</h2>
+  <div class="need-grid">
+    @for (need of catalog.needShortcuts; track need.id) {
+      <div class="need-card card">
+        <div class="need-card__top">
+          <span class="need-card__icon">{{ need.icon }}</span>
+          <span class="need-card__eta"><app-icon name="clock" size="12" /> {{ need.etaLabel }}</span>
+        </div>
+        <h3>{{ need.title }}</h3>
+        <p>{{ need.subtitle }}</p>
+      </div>
+    }
+  </div>
+</section>
+
+<section class="container section">
+  <div class="section__head">
+    <h2>Categorías principales</h2>
+    <a href="javascript:void(0)" class="link">Ver todas las categorías</a>
+  </div>
+  <div class="category-grid">
+    @for (cat of catalog.categories; track cat.id) {
+      <button type="button" class="category-card">
+        <span class="category-card__icon">{{ cat.icon }}</span>
+        {{ cat.name }}
+      </button>
+    }
+  </div>
+</section>
+
+<section class="container section">
+  <h2>Promociones destacadas</h2>
+  <div class="promo-grid">
+    @for (promo of catalog.promotions; track promo.id) {
+      <div class="promo-card" [style.background]="promo.color">
+        <span class="promo-tag">{{ promo.tag }}</span>
+        <p>{{ promo.title }}</p>
+        <button type="button" class="link-arrow">Ver oferta <app-icon name="arrow-right" size="14" /></button>
+      </div>
+    }
+  </div>
+</section>
+
+<section class="container section">
+  <div class="section__head">
+    <h2>Selección 360 para ti</h2>
+    <a href="javascript:void(0)" class="link">Ver todo</a>
+  </div>
+  <div class="product-grid">
+    @for (product of catalog.products; track product.id) {
+      <div class="product-card card">
+        <button type="button" class="product-card__fav" aria-label="Agregar a favoritos">
+          <app-icon name="heart" size="16" />
+        </button>
+        <div class="product-card__img">{{ product.icon }}</div>
+        <p class="product-card__brand">{{ product.brand }}</p>
+        <p class="product-card__name">{{ product.name }}</p>
+        <div class="product-card__rating">
+          <app-icon name="star" size="13" /> {{ product.rating }}
+          <span class="dot-sep"></span>
+          <app-icon name="clock" size="13" /> {{ product.deliveryMinutes }} min
+        </div>
+        <div class="product-card__foot">
+          <span class="product-card__price">${{ product.price | number }}</span>
+          <button type="button" class="btn btn-primary btn-sm" (click)="addToCart(product)">
+            <app-icon name="plus" size="14" /> Agregar
+          </button>
+        </div>
+      </div>
+    }
+  </div>
+</section>
+
+<section class="steps-section">
+  <div class="container">
+    <h2>De la tienda a tu puerta, sin perder tiempo</h2>
+    <div class="steps-grid">
+      @for (step of steps; track step.title; let i = $index) {
+        <div class="step-card">
+          <span class="step-card__num">{{ i + 1 }}</span>
+          <div class="step-card__icon"><app-icon [name]="step.icon" size="20" /></div>
+          <h3>{{ step.title }}</h3>
+          <p>{{ step.text }}</p>
+        </div>
+      }
+    </div>
+  </div>
+</section>

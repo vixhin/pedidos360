@@ -1,0 +1,96 @@
+.site-footer {
+  background: var(--color-header);
+  color: rgba(255, 255, 255, 0.85);
+  margin-top: 48px;
+}
+
+.footer__grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 1fr;
+  gap: 32px;
+  padding: 40px 24px 24px;
+}
+
+.footer__brand .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand__mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(135deg, var(--color-accent), var(--color-primary));
+  color: #06231d;
+  font-size: 0.6rem;
+  font-weight: 800;
+}
+
+.brand__name {
+  font-weight: 600;
+  color: #fff;
+}
+
+.brand__name strong {
+  color: var(--color-accent);
+}
+
+.footer__brand p {
+  margin-top: 10px;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.footer__badges {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.store-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 6px 12px;
+  border-radius: var(--radius);
+  font-size: 0.72rem;
+}
+
+.footer__col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.footer__col h4 {
+  color: #fff;
+  font-size: 0.85rem;
+  margin-bottom: 4px;
+}
+
+.footer__col a {
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.footer__col a:hover {
+  color: var(--color-accent);
+}
+
+.footer__bottom {
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 16px 24px;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+@media (max-width: 800px) {
+  .footer__grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}

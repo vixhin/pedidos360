@@ -1,0 +1,369 @@
+.account {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 24px;
+  padding: 32px 24px 56px;
+  align-items: start;
+}
+
+.account-nav {
+  padding: 20px;
+  position: sticky;
+  top: 90px;
+}
+
+.account-nav__profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 10px;
+}
+
+.avatar-lg {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: #06231d;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
+.account-nav__name {
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.account-nav__email {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+}
+
+.account-nav__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 10px;
+  border: none;
+  background: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-align: left;
+}
+
+.account-nav__item:hover {
+  background: var(--color-bg);
+}
+
+.account-nav__item--active {
+  background: var(--color-accent-light);
+  color: var(--color-primary-dark);
+}
+
+.account-content h1 {
+  font-size: 1.5rem;
+  color: var(--color-header);
+  margin-bottom: 18px;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.stat-card {
+  padding: 16px;
+}
+
+.stat-card__icon {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-full);
+  background: var(--color-accent-light);
+  color: var(--color-primary-dark);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+.stat-card__value {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--color-header);
+}
+
+.stat-card__label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+.stat-card__hint {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+
+.order-track {
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.order-track__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.order-track__head h2 {
+  font-size: 1.05rem;
+}
+
+.order-track__head p {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.order-track__eta {
+  margin-top: 12px;
+  font-weight: 700;
+  color: var(--color-primary-dark);
+}
+
+.order-track__meta {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+
+.timeline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.timeline__step {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  position: relative;
+}
+
+.timeline__step:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 13px;
+  left: 55%;
+  width: 90%;
+  height: 2px;
+  background: var(--color-border);
+  z-index: 0;
+}
+
+.timeline__step--done:not(:last-child)::after {
+  background: var(--color-primary);
+}
+
+.timeline__dot {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--color-border);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+.timeline__step--done .timeline__dot {
+  background: var(--color-primary);
+}
+
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.list-card {
+  padding: 18px;
+}
+
+.list-card__head h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95rem;
+  margin-bottom: 12px;
+}
+
+.list-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--color-border);
+  gap: 12px;
+}
+
+.list-row:last-of-type {
+  border-bottom: none;
+}
+
+.list-row__title {
+  font-weight: 700;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.list-row__sub {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin-top: 3px;
+}
+
+.list-row__actions {
+  display: flex;
+  gap: 6px;
+}
+
+.tag {
+  font-size: 0.65rem;
+  font-weight: 700;
+  background: var(--color-accent-light);
+  color: var(--color-primary-dark);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+
+.tag--live {
+  background: #fde7c8;
+  color: #a15c00;
+}
+
+.icon-btn-outline {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  background: #fff;
+  color: var(--color-text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-block {
+  margin-top: 14px;
+}
+
+.fav-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.fav-card {
+  padding: 16px;
+}
+
+.fav-card__img {
+  font-size: 2rem;
+  background: var(--color-bg);
+  border-radius: var(--radius);
+  height: 90px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+.fav-card__name {
+  font-weight: 700;
+  font-size: 0.85rem;
+  min-height: 36px;
+}
+
+.fav-card__price {
+  font-weight: 800;
+  color: var(--color-header);
+  margin: 6px 0 12px;
+}
+
+.help-card {
+  padding: 20px;
+}
+
+.help-card app-icon {
+  color: var(--color-primary);
+}
+
+.help-card h3 {
+  margin-top: 10px;
+  font-size: 0.95rem;
+}
+
+.help-card p {
+  margin-top: 6px;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.switch {
+  width: 40px;
+  height: 22px;
+  border-radius: var(--radius-full);
+  background: var(--color-border);
+  border: none;
+  position: relative;
+  flex: none;
+}
+
+.switch__knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: left 0.15s ease;
+}
+
+.switch--on {
+  background: var(--color-primary);
+}
+
+.switch--on .switch__knob {
+  left: 20px;
+}
+
+@media (max-width: 900px) {
+  .account {
+    grid-template-columns: 1fr;
+  }
+  .account-nav {
+    position: static;
+  }
+  .stat-grid, .two-col, .fav-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}

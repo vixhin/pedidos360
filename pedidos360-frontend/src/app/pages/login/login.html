@@ -1,0 +1,128 @@
+<div class="login">
+  <div class="login__art">
+    <a routerLink="/" class="login__brand">
+      <span class="brand__mark">360</span>
+      <span class="brand__name">Pedidos<strong>360</strong></span>
+    </a>
+    <div class="login__illustration" aria-hidden="true">🛵📦</div>
+    <h1>Pedidos360: tu entrega en 360 grados.</h1>
+    <p>Rápido, seguro, confiable. Tus compras a domicilio, siempre a tiempo.</p>
+  </div>
+
+  <div class="login__panel">
+    <div class="login-card card">
+      <div class="login-card__logo">
+        <span class="brand__mark">360</span>
+      </div>
+
+      @if (mode() === 'login') {
+        <h2>Iniciar sesión</h2>
+        <p class="login-card__sub">Elige cómo quieres acceder a tu cuenta.</p>
+
+        <button type="button" class="btn btn-primary btn-block" (click)="signInWithMicrosoft()">
+          <app-icon name="lock" size="16" /> Iniciar sesión con Microsoft
+        </button>
+
+        <div class="divider"><span>o con tu cuenta Pedidos360</span></div>
+
+        @if (error()) {
+          <div class="form-error">{{ error() }}</div>
+        }
+
+        <form (ngSubmit)="submitLogin()">
+          <label class="field">
+            <span>Correo electrónico</span>
+            <input
+              type="email"
+              required
+              [ngModel]="loginEmail()"
+              (ngModelChange)="loginEmail.set($event)"
+              name="loginEmail"
+              placeholder="tu@correo.cl"
+            />
+          </label>
+          <label class="field">
+            <span>Contraseña</span>
+            <input
+              type="password"
+              required
+              [ngModel]="loginPassword()"
+              (ngModelChange)="loginPassword.set($event)"
+              name="loginPassword"
+              placeholder="••••••••"
+            />
+          </label>
+
+          <button type="submit" class="btn btn-secondary btn-block" [disabled]="loading()">
+            {{ loading() ? 'Ingresando...' : 'Iniciar sesión' }}
+          </button>
+        </form>
+
+        <p class="login-card__switch">
+          ¿No tienes cuenta?
+          <button type="button" class="link-btn" (click)="setMode('register')">Regístrate</button>
+        </p>
+      } @else {
+        <h2>Crear cuenta</h2>
+        <p class="login-card__sub">Se guarda directamente en la base de datos de Pedidos360.</p>
+
+        @if (error()) {
+          <div class="form-error">{{ error() }}</div>
+        }
+
+        <form (ngSubmit)="submitRegister()">
+          <label class="field">
+            <span>Nombre completo</span>
+            <input
+              type="text"
+              required
+              [ngModel]="registerNombre()"
+              (ngModelChange)="registerNombre.set($event)"
+              name="registerNombre"
+              placeholder="Valentina Ruiz"
+            />
+          </label>
+          <label class="field">
+            <span>Correo electrónico</span>
+            <input
+              type="email"
+              required
+              [ngModel]="registerEmail()"
+              (ngModelChange)="registerEmail.set($event)"
+              name="registerEmail"
+              placeholder="tu@correo.cl"
+            />
+          </label>
+          <label class="field">
+            <span>Contraseña</span>
+            <input
+              type="password"
+              required
+              minlength="6"
+              [ngModel]="registerPassword()"
+              (ngModelChange)="registerPassword.set($event)"
+              name="registerPassword"
+              placeholder="Mínimo 6 caracteres"
+            />
+          </label>
+
+          <button type="submit" class="btn btn-primary btn-block" [disabled]="loading()">
+            {{ loading() ? 'Creando cuenta...' : 'Crear cuenta' }}
+          </button>
+        </form>
+
+        <p class="login-card__switch">
+          ¿Ya tienes cuenta?
+          <button type="button" class="link-btn" (click)="setMode('login')">Inicia sesión</button>
+        </p>
+      }
+
+      <div class="login-card__note">
+        <app-icon name="shield" size="14" />
+        Microsoft usa OAuth 2.0 / OpenID Connect (Authorization Code + PKCE).
+      </div>
+
+      <a routerLink="/" class="login-card__back">Volver al inicio</a>
+    </div>
+  </div>
+</div>

@@ -1,12 +1,21 @@
-import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/core';
+import { ApplicationConfig, inject, provideAppInitializer, provideBrowserGlobalErrorListeners } from '@angular/core';
 import { provideRouter } from '@angular/router';
+import { HTTP_INTERCEPTORS, provideHttpClient, withFetch, withInterceptorsFromDi } from '@angular/common/http';
+import { IPublicClientApplication } from '@azure/msal-browser';
+import { MSAL_INSTANCE, MsalInterceptor } from '@azure/msal-angular';
 
 import { routes } from './app.routes';
-import { provideClientHydration, withEventReplay } from '@angular/platform-browser';
+import { MSAL_PROVIDERS } from './core/msal.providers';
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
-    provideRouter(routes), provideClientHydration(withEventReplay())
+    provideRouter(routes),
+    provideHttpClient(withFetch(), withInterceptorsFromDi()),
+    ...MSAL_PROVIDERS,
+    { provide: HTTP_INTERCEPTORS, useClass: MsalInterceptor, multi: true },
+    provideAppInitializer(() =>
+      (inject(MSAL_INSTANCE) as unknown as IPublicClientApplication).initialize()
+    ),
   ]
 };

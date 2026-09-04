@@ -1,0 +1,157 @@
+<header class="site-header">
+  <div class="info-bar">
+    <div class="container info-bar__inner">
+      <span class="info-bar__item"><app-icon name="clock" size="14" /> Entrega estimada: 25-40 min</span>
+      <span class="info-bar__divider"></span>
+      <span class="info-bar__item"><app-icon name="map-pin" size="14" /> Productos disponibles cerca de ti</span>
+      <span class="info-bar__divider"></span>
+      <span class="info-bar__item"><app-icon name="truck" size="14" /> Envío gratis desde $20.000</span>
+    </div>
+  </div>
+
+  <div class="main-bar">
+    <div class="container main-bar__inner">
+      <a routerLink="/" class="brand" (click)="closeMenus()">
+        <span class="brand__mark">360</span>
+        <span class="brand__name">Pedidos<strong>360</strong></span>
+      </a>
+
+      <button type="button" class="location">
+        <app-icon name="map-pin" size="16" />
+        <span class="location__text">
+          <small>Entregar en</small>
+          Santiago Centro
+        </span>
+        <app-icon name="chevron-down" size="14" />
+      </button>
+
+      <div class="search">
+        <app-icon name="search" size="18" />
+        <input type="text" placeholder="Busca productos, marcas o una necesidad..." />
+      </div>
+
+      <div class="actions">
+        <button type="button" class="icon-btn icon-btn--light" aria-label="Favoritos">
+          <app-icon name="heart" size="20" />
+        </button>
+
+        <div class="dropdown-wrap">
+          <button
+            type="button"
+            class="icon-btn icon-btn--light"
+            aria-label="Notificaciones"
+            (click)="toggleNotifications()"
+          >
+            <app-icon name="bell" size="20" />
+            @if (notifications.unreadCount() > 0) {
+              <span class="badge badge--float">{{ notifications.unreadCount() }}</span>
+            }
+          </button>
+
+          @if (notifOpen()) {
+            <div class="overlay" (click)="closeMenus()"></div>
+            <div class="panel panel--notif">
+              <div class="panel__head">
+                <div>
+                  <h3>Notificaciones <span class="pill-count">{{ notifications.unreadCount() }} nuevas</span></h3>
+                  <p>Mantente al día con tus pedidos y beneficios.</p>
+                </div>
+                <app-icon name="settings" size="18" />
+              </div>
+
+              <button type="button" class="link-btn" (click)="notifications.markAllRead()">
+                Marcar todo como leído
+              </button>
+
+              <div class="tabs">
+                @for (tab of notifTabs; track tab.key) {
+                  <button
+                    type="button"
+                    class="tab"
+                    [class.tab--active]="activeTab() === tab.key"
+                    (click)="setTab(tab.key)"
+                  >
+                    {{ tab.label }}
+                  </button>
+                }
+              </div>
+
+              <div class="notif-list">
+                @for (n of filteredNotifications(); track n.id) {
+                  <div class="notif-card" [class.notif-card--unread]="!n.read">
+                    <div class="notif-card__icon">
+                      <app-icon
+                        [name]="n.category === 'pedidos' ? 'truck' : n.category === 'ofertas' ? 'gift' : n.category === 'productos' ? 'package' : 'shield'"
+                        size="18"
+                      />
+                    </div>
+                    <div class="notif-card__body">
+                      <p class="notif-card__title">{{ n.title }}</p>
+                      <p class="notif-card__msg">{{ n.message }}</p>
+                      <div class="notif-card__foot">
+                        <span>{{ n.time }}</span>
+                        @if (n.actionLabel) {
+                          <button type="button" class="link-btn">{{ n.actionLabel }}</button>
+                        }
+                      </div>
+                    </div>
+                    @if (!n.read) {
+                      <span class="dot"></span>
+                    }
+                  </div>
+                } @empty {
+                  <p class="notif-empty">No tienes notificaciones en esta categoría.</p>
+                }
+              </div>
+
+              <div class="panel__foot">
+                <button type="button" class="btn btn-secondary btn-sm btn-block" (click)="goToNotifications()">
+                  Ver todas las notificaciones
+                </button>
+              </div>
+            </div>
+          }
+        </div>
+
+        <a routerLink="/carrito" class="icon-btn icon-btn--light" aria-label="Carrito" (click)="closeMenus()">
+          <app-icon name="cart" size="20" />
+          @if (cart.itemCount() > 0) {
+            <span class="badge badge--float">{{ cart.itemCount() }}</span>
+          }
+        </a>
+
+        @if (auth.isLoggedIn()) {
+          <div class="dropdown-wrap">
+            <button type="button" class="avatar-btn" (click)="toggleProfile()">
+              {{ auth.user()?.avatarInitial }}
+            </button>
+
+            @if (profileOpen()) {
+              <div class="overlay" (click)="closeMenus()"></div>
+              <div class="panel panel--profile">
+                <div class="panel__profile-head">
+                  <div class="avatar-btn avatar-btn--lg">{{ auth.user()?.avatarInitial }}</div>
+                  <div>
+                    <p class="profile-name">{{ auth.user()?.name }}</p>
+                    <p class="profile-email">{{ auth.user()?.email }}</p>
+                  </div>
+                </div>
+                <a routerLink="/cuenta" class="profile-link" (click)="closeMenus()">
+                  <app-icon name="user" size="16" /> Mi cuenta
+                </a>
+                <a routerLink="/cuenta" class="profile-link" (click)="closeMenus()">
+                  <app-icon name="package" size="16" /> Mis pedidos
+                </a>
+                <button type="button" class="profile-link profile-link--danger" (click)="logout()">
+                  <app-icon name="logout" size="16" /> Cerrar sesión
+                </button>
+              </div>
+            }
+          </div>
+        } @else {
+          <a routerLink="/login" class="btn btn-primary btn-sm">Iniciar sesión / Registrarse</a>
+        }
+      </div>
+    </div>
+  </div>
+</header>

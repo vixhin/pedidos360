@@ -1,0 +1,228 @@
+<div class="container account">
+  <aside class="account-nav card">
+    <div class="account-nav__profile">
+      <div class="avatar-lg">{{ auth.user()?.avatarInitial || 'U' }}</div>
+      <div>
+        <p class="account-nav__name">{{ auth.user()?.name || 'Invitado' }}</p>
+        <p class="account-nav__email">{{ auth.user()?.email }}</p>
+      </div>
+    </div>
+    <nav>
+      @for (item of navItems; track item.key) {
+        <button
+          type="button"
+          class="account-nav__item"
+          [class.account-nav__item--active]="activeSection() === item.key"
+          (click)="select(item.key)"
+        >
+          <app-icon [name]="item.icon" size="18" />
+          {{ item.label }}
+        </button>
+      }
+    </nav>
+  </aside>
+
+  <main class="account-content">
+    @switch (activeSection()) {
+      @case ('resumen') {
+        <h1>Resumen</h1>
+        <div class="stat-grid">
+          @for (s of stats; track s.label) {
+            <div class="stat-card card">
+              <div class="stat-card__icon"><app-icon [name]="s.icon" size="18" /></div>
+              <p class="stat-card__value">{{ s.value }}</p>
+              <p class="stat-card__label">{{ s.label }}</p>
+              <p class="stat-card__hint">{{ s.hint }}</p>
+            </div>
+          }
+        </div>
+
+        <div class="card order-track">
+          <div class="order-track__head">
+            <div>
+              <h2>Pedido en camino</h2>
+              <p>#{{ currentOrder.id }}</p>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm">Seguir pedido</button>
+          </div>
+          <p class="order-track__eta">Llega en aproximadamente {{ currentOrder.etaMinutes }} min</p>
+          <p class="order-track__meta">
+            {{ currentOrder.itemsCount }} productos de {{ currentOrder.storesCount }} tiendas cercanas ·
+            Valor total: ${{ currentOrder.total | number }}
+          </p>
+
+          <div class="timeline">
+            @for (step of orderSteps; track step.key; let i = $index) {
+              <div class="timeline__step" [class.timeline__step--done]="i <= stepIndex(currentOrder.status)">
+                <span class="timeline__dot"><app-icon name="check" size="12" /></span>
+                <span>{{ step.label }}</span>
+              </div>
+            }
+          </div>
+        </div>
+
+        <div class="two-col">
+          <div class="card list-card">
+            <div class="list-card__head">
+              <h3><app-icon name="map-pin" size="16" /> Mis direcciones</h3>
+            </div>
+            @for (a of addresses; track a.id) {
+              <div class="list-row">
+                <div>
+                  <p class="list-row__title">{{ a.label }} @if (a.isPrimary) { <span class="tag">Principal</span> }</p>
+                  <p class="list-row__sub">{{ a.detail }}</p>
+                </div>
+                <button type="button" class="icon-btn-outline"><app-icon name="edit" size="14" /></button>
+              </div>
+            }
+            <button type="button" class="btn btn-secondary btn-sm btn-block">Agregar nueva dirección</button>
+          </div>
+
+          <div class="card list-card">
+            <div class="list-card__head">
+              <h3><app-icon name="credit-card" size="16" /> Métodos de pago</h3>
+            </div>
+            @for (pm of paymentMethods; track pm.id) {
+              <div class="list-row">
+                <div>
+                  <p class="list-row__title">{{ pm.brand }}</p>
+                  <p class="list-row__sub">{{ pm.kind }} •••• {{ pm.last4 }}</p>
+                </div>
+                <button type="button" class="icon-btn-outline"><app-icon name="edit" size="14" /></button>
+              </div>
+            }
+            <button type="button" class="btn btn-secondary btn-sm btn-block">Agregar método de pago</button>
+          </div>
+        </div>
+      }
+
+      @case ('pedidos') {
+        <h1>Mis pedidos</h1>
+        <div class="card list-card">
+          <div class="list-row">
+            <div>
+              <p class="list-row__title">#{{ currentOrder.id }} <span class="tag tag--live">En camino</span></p>
+              <p class="list-row__sub">{{ currentOrder.itemsCount }} productos · ${{ currentOrder.total | number }}</p>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm">Seguir pedido</button>
+          </div>
+          @for (o of pastOrders; track o.id) {
+            <div class="list-row">
+              <div>
+                <p class="list-row__title">#{{ o.id }} <span class="tag">Entregado</span></p>
+                <p class="list-row__sub">{{ o.date }} · {{ o.itemsCount }} productos · ${{ o.total | number }}</p>
+              </div>
+              <button type="button" class="btn btn-secondary btn-sm">Repetir pedido</button>
+            </div>
+          }
+        </div>
+      }
+
+      @case ('favoritos') {
+        <h1>Favoritos</h1>
+        <div class="fav-grid">
+          @for (p of catalog.products.slice(0, 4); track p.id) {
+            <div class="card fav-card">
+              <div class="fav-card__img">{{ p.icon }}</div>
+              <p class="fav-card__name">{{ p.name }}</p>
+              <p class="fav-card__price">${{ p.price | number }}</p>
+              <button type="button" class="btn btn-primary btn-sm btn-block">Agregar al carrito</button>
+            </div>
+          }
+        </div>
+      }
+
+      @case ('direcciones') {
+        <h1>Direcciones</h1>
+        <div class="card list-card">
+          @for (a of addresses; track a.id) {
+            <div class="list-row">
+              <div>
+                <p class="list-row__title">{{ a.label }} @if (a.isPrimary) { <span class="tag">Principal</span> }</p>
+                <p class="list-row__sub">{{ a.detail }}</p>
+              </div>
+              <div class="list-row__actions">
+                <button type="button" class="icon-btn-outline"><app-icon name="edit" size="14" /></button>
+                <button type="button" class="icon-btn-outline"><app-icon name="trash" size="14" /></button>
+              </div>
+            </div>
+          }
+          <button type="button" class="btn btn-secondary btn-sm btn-block">Agregar nueva dirección</button>
+        </div>
+      }
+
+      @case ('pagos') {
+        <h1>Métodos de pago</h1>
+        <div class="card list-card">
+          @for (pm of paymentMethods; track pm.id) {
+            <div class="list-row">
+              <div>
+                <p class="list-row__title">{{ pm.brand }}</p>
+                <p class="list-row__sub">{{ pm.kind }} •••• {{ pm.last4 }}</p>
+              </div>
+              <div class="list-row__actions">
+                <button type="button" class="icon-btn-outline"><app-icon name="edit" size="14" /></button>
+                <button type="button" class="icon-btn-outline"><app-icon name="trash" size="14" /></button>
+              </div>
+            </div>
+          }
+          <button type="button" class="btn btn-secondary btn-sm btn-block">Agregar método de pago</button>
+        </div>
+      }
+
+      @case ('preferencias') {
+        <h1>Preferencias</h1>
+        <div class="card list-card">
+          @for (p of preferenceToggles(); track p.key) {
+            <div class="list-row">
+              <p class="list-row__title">{{ p.label }}</p>
+              <button
+                type="button"
+                class="switch"
+                [class.switch--on]="p.on"
+                (click)="togglePreference(p.key)"
+                [attr.aria-pressed]="p.on"
+              >
+                <span class="switch__knob"></span>
+              </button>
+            </div>
+          }
+        </div>
+      }
+
+      @case ('ayuda') {
+        <h1>Ayuda y soporte</h1>
+        <div class="two-col">
+          <div class="card help-card">
+            <app-icon name="help-circle" size="20" />
+            <h3>Centro de ayuda</h3>
+            <p>Encuentra respuestas a las preguntas más frecuentes.</p>
+          </div>
+          <div class="card help-card">
+            <app-icon name="user" size="20" />
+            <h3>Contactar soporte</h3>
+            <p>Escríbenos y te responderemos en menos de 24 horas.</p>
+          </div>
+        </div>
+      }
+
+      @case ('seguridad') {
+        <h1>Configuración de seguridad</h1>
+        <div class="card list-card">
+          <div class="list-row">
+            <p class="list-row__title"><app-icon name="check" size="16" /> Correo verificado</p>
+            <span class="tag">Activo</span>
+          </div>
+          <div class="list-row">
+            <p class="list-row__title"><app-icon name="lock" size="16" /> Autenticación Microsoft Entra ID</p>
+            <span class="tag">Activo</span>
+          </div>
+          <div class="list-row">
+            <p class="list-row__title">Último inicio de sesión</p>
+            <span class="list-row__sub">Hoy · Santiago, Chile</span>
+          </div>
+        </div>
+      }
+    }
+  </main>
+</div>

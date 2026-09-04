@@ -1,0 +1,114 @@
+<div class="container notif-page">
+  <div class="notif-page__head">
+    <div>
+      <h1>Tu actividad</h1>
+      <p>Mantente al día con tus pedidos, beneficios y novedades de Pedidos360.</p>
+    </div>
+    @if (notifications.unreadCount() > 0) {
+      <button type="button" class="btn btn-secondary btn-sm" (click)="notifications.markAllRead()">
+        Marcar todo como leído ({{ notifications.unreadCount() }})
+      </button>
+    }
+  </div>
+
+  <div class="notif-layout">
+    <main>
+      <div class="tabs-row">
+        @for (tab of tabs; track tab.key) {
+          <button
+            type="button"
+            class="tab-pill"
+            [class.tab-pill--active]="activeTab() === tab.key"
+            (click)="setTab(tab.key)"
+          >
+            {{ tab.label }}
+          </button>
+        }
+      </div>
+
+      <div class="filters-row">
+        <button type="button" class="filter-chip" [class.filter-chip--active]="readFilter() === 'no_leidas'" (click)="readFilter.set('no_leidas')">No leídas</button>
+        <button type="button" class="filter-chip" [class.filter-chip--active]="readFilter() === 'leidas'" (click)="readFilter.set('leidas')">Leídas</button>
+        <span class="filter-sep"></span>
+        <button type="button" class="filter-chip" [class.filter-chip--active]="timeFilter() === 'hoy'" (click)="timeFilter.set('hoy')">Hoy</button>
+        <button type="button" class="filter-chip" [class.filter-chip--active]="timeFilter() === 'semana'" (click)="timeFilter.set('semana')">Esta semana</button>
+      </div>
+
+      <div class="notif-feed">
+        @for (n of filtered(); track n.id) {
+          <div class="feed-card card" [class.feed-card--unread]="!n.read">
+            <div class="feed-card__icon">
+              <app-icon
+                [name]="n.category === 'pedidos' ? 'truck' : n.category === 'ofertas' ? 'gift' : n.category === 'productos' ? 'package' : 'shield'"
+                size="18"
+              />
+            </div>
+            <div class="feed-card__body">
+              <p class="feed-card__title">{{ n.title }}</p>
+              <p class="feed-card__msg">{{ n.message }}</p>
+              <div class="feed-card__foot">
+                <span>{{ n.time }}</span>
+                @if (n.actionLabel) {
+                  <button type="button" class="btn btn-secondary btn-sm" (click)="notifications.markRead(n.id)">
+                    {{ n.actionLabel }}
+                  </button>
+                }
+              </div>
+            </div>
+            @if (!n.read) {
+              <span class="feed-card__dot"></span>
+            }
+          </div>
+        } @empty {
+          <div class="card notif-empty">
+            <app-icon name="bell" size="28" />
+            <p>No hay notificaciones que coincidan con este filtro.</p>
+          </div>
+        }
+      </div>
+    </main>
+
+    <aside>
+      <div class="card side-card">
+        <h3>Resumen rápido</h3>
+        <div class="mini-order">
+          <div>
+            <p class="mini-order__title">Tu pedido está en camino</p>
+            <p class="mini-order__sub">Pedido #PED-360-0248</p>
+          </div>
+          <span class="tag tag--live">En camino</span>
+        </div>
+        <p class="mini-order__eta">Llega en aproximadamente 12 min</p>
+        <p class="mini-order__meta">4 productos · 2 tiendas cercanas · Santiago Centro</p>
+        <button type="button" class="btn btn-primary btn-sm btn-block">Seguir pedido</button>
+      </div>
+
+      <div class="card side-card">
+        <h3>Beneficios activos</h3>
+        <div class="benefit-list">
+          <span class="benefit-chip"><app-icon name="truck" size="13" /> Envío gratis</span>
+          <span class="benefit-chip"><app-icon name="gift" size="13" /> Cupón BIENVENIDA360</span>
+          <span class="benefit-chip"><app-icon name="star" size="13" /> 10% mascotas</span>
+        </div>
+      </div>
+
+      <div class="card side-card">
+        <h3>Configura tus alertas</h3>
+        @for (a of alertToggles(); track a.key) {
+          <div class="alert-row">
+            <span>{{ a.label }}</span>
+            <button
+              type="button"
+              class="switch"
+              [class.switch--on]="a.on"
+              (click)="toggleAlert(a.key)"
+              [attr.aria-pressed]="a.on"
+            >
+              <span class="switch__knob"></span>
+            </button>
+          </div>
+        }
+      </div>
+    </aside>
+  </div>
+</div>

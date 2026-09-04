@@ -1,0 +1,157 @@
+<div class="container cart-page">
+  <div class="cart-page__head">
+    <h1>Tu pedido inteligente</h1>
+    <p>Revisamos los productos, agrupamos tu compra y calculamos la entrega más rápida para ti.</p>
+  </div>
+
+  <div class="cart-layout" [class.cart-layout--empty]="cart.itemCount() === 0">
+    <main class="cart-main">
+      @if (cart.itemCount() > 0) {
+        <div class="cart-summary-bar">
+          <span>{{ cart.itemCount() }} producto(s) · Entrega estimada: 25-40 min</span>
+          <a routerLink="/" class="link">Seguir comprando</a>
+        </div>
+
+        <div class="card cart-lines">
+          @for (line of cart.lines(); track line.product.id) {
+            <div class="cart-line">
+              <div class="cart-line__img">{{ line.product.icon }}</div>
+              <div class="cart-line__info">
+                <p class="cart-line__brand">{{ line.product.brand }}</p>
+                <p class="cart-line__name">{{ line.product.name }}</p>
+                <p class="cart-line__price">${{ line.product.price | number }}</p>
+              </div>
+              <div class="qty-control">
+                <button type="button" (click)="cart.setQuantity(line.product.id, line.quantity - 1)">
+                  <app-icon name="minus" size="14" />
+                </button>
+                <span>{{ line.quantity }}</span>
+                <button type="button" (click)="cart.setQuantity(line.product.id, line.quantity + 1)">
+                  <app-icon name="plus" size="14" />
+                </button>
+              </div>
+              <button type="button" class="cart-line__remove" (click)="cart.remove(line.product.id)">
+                <app-icon name="trash" size="16" />
+              </button>
+            </div>
+          }
+        </div>
+
+        <div class="card suggest-block">
+          <h3>Completa tu pedido en minutos</h3>
+          <p>Estos productos pueden llegar junto con tu pedido sin aumentar el tiempo estimado.</p>
+          <div class="suggest-grid">
+            @for (p of suggestions(); track p.id) {
+              <div class="suggest-card">
+                <div class="suggest-card__img">{{ p.icon }}</div>
+                <p>{{ p.name }}</p>
+                <span>${{ p.price | number }}</span>
+                <button type="button" class="btn btn-secondary btn-sm btn-block" (click)="addSuggestion(p)">
+                  <app-icon name="plus" size="12" /> Agregar
+                </button>
+              </div>
+            }
+          </div>
+        </div>
+      } @else {
+        <div class="card empty-cart">
+          <app-icon name="cart" size="34" />
+          <h2>Carrito vacío</h2>
+          <p>Tu pedido está esperando ideas.</p>
+          <a routerLink="/" class="btn btn-primary">Explorar productos</a>
+        </div>
+      }
+    </main>
+
+    @if (cart.itemCount() > 0) {
+    <aside class="cart-side">
+      <div class="card summary-card">
+        <h3>Resumen de tu pedido</h3>
+        <div class="summary-row">
+          <span>Productos</span>
+          <span>${{ cart.subtotal() | number }}</span>
+        </div>
+        <div class="summary-row">
+          <span>Costo de envío</span>
+          <span>{{ shippingCost() === 0 ? 'Gratis' : '$' + shippingCost() }}</span>
+        </div>
+        <div class="summary-row">
+          <span>Tarifa de servicio</span>
+          <span>${{ 1500 | number }}</span>
+        </div>
+        @if (appliedDiscount() > 0) {
+          <div class="summary-row summary-row--discount">
+            <span>BIENVENIDA360</span>
+            <span>-${{ appliedDiscount() | number }}</span>
+          </div>
+        }
+        <div class="summary-row summary-row--total">
+          <span>Total</span>
+          <span>${{ total() | number }}</span>
+        </div>
+
+        @if (amountToFreeShipping() > 0 && cart.itemCount() > 0) {
+          <p class="summary-hint">Te faltan ${{ amountToFreeShipping() | number }} para desbloquear envío gratis.</p>
+        }
+
+        <div class="coupon">
+          <input
+            type="text"
+            placeholder="Ingresa un cupón de descuento"
+            [ngModel]="couponCode()"
+            (ngModelChange)="couponCode.set($event)"
+            name="coupon"
+          />
+          <button type="button" class="btn btn-secondary btn-sm" (click)="applyCoupon()">Aplicar</button>
+        </div>
+
+        <button type="button" class="btn btn-primary btn-block" [disabled]="cart.itemCount() === 0">
+          Continuar al pago <app-icon name="arrow-right" size="16" />
+        </button>
+        <p class="summary-secure"><app-icon name="shield" size="13" /> Pago seguro y protegido</p>
+      </div>
+
+      <div class="card address-card">
+        <h3><app-icon name="map-pin" size="16" /> ¿Dónde quieres recibir tu pedido?</h3>
+        <div class="delivery-toggle">
+          <button
+            type="button"
+            [class.delivery-toggle__btn--active]="deliveryOption() === 'ahora'"
+            class="delivery-toggle__btn"
+            (click)="deliveryOption.set('ahora')"
+          >
+            Lo necesito ahora
+          </button>
+          <button
+            type="button"
+            [class.delivery-toggle__btn--active]="deliveryOption() === 'programar'"
+            class="delivery-toggle__btn"
+            (click)="deliveryOption.set('programar')"
+          >
+            Programar entrega
+          </button>
+        </div>
+
+        @for (addr of addresses; track addr.id) {
+          <label class="address-option" [class.address-option--active]="selectedAddress() === addr.id">
+            <input
+              type="radio"
+              name="address"
+              [checked]="selectedAddress() === addr.id"
+              (change)="selectedAddress.set(addr.id)"
+            />
+            <span>
+              <strong>{{ addr.label }}</strong>
+              <small>{{ addr.detail }}</small>
+            </span>
+          </label>
+        }
+
+        <div class="benefit-note">
+          <app-icon name="gift" size="14" /> Tienes envío gratis disponible en este pedido.
+        </div>
+      </div>
+    </aside>
+    }
+  </div>
+</div>
