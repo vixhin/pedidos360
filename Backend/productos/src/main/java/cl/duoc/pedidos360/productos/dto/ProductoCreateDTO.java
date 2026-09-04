@@ -1,40 +1,35 @@
-package cl.duoc.pedidos360.productos.entity;
+package cl.duoc.pedidos360.productos.dto;
 
-import jakarta.persistence.*;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 
-@Entity
-@Table(name = "productos")
-public class Producto {
+public class ProductoCreateDTO {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
-    @Column(nullable = false, unique = true)
+    @NotBlank(message = "El SKU no puede estar vacío")
     private String sku;
 
-    @Column(nullable = false)
+    @NotBlank(message = "El nombre del producto no puede estar vacío")
     private String nombre;
 
-    @Column(nullable = false)
+    @NotBlank(message = "La categoría no puede estar vacía")
     private String categoria;
 
-    @Column(columnDefinition = "TEXT")
     private String descripcion;
 
-    @Column(nullable = false)
+    @NotNull(message = "El precio es obligatorio")
+    @Min(value = 0, message = "El precio no puede ser negativo")
     private Double precio;
 
-    @Column(nullable = false)
+    @NotNull(message = "El stock es obligatorio")
+    @Min(value = 0, message = "El stock no puede ser negativo")
     private Integer stock;
 
-    @Column(name = "imagen_url")
     private String imagenUrl;
 
-    public Producto() {}
+    public ProductoCreateDTO() {}
 
-    public Producto(Long id, String sku, String nombre, String categoria, String descripcion, Double precio, Integer stock, String imagenUrl) {
-        this.id = id;
+    public ProductoCreateDTO(String sku, String nombre, String categoria, String descripcion, Double precio, Integer stock, String imagenUrl) {
         this.sku = sku;
         this.nombre = nombre;
         this.categoria = categoria;
@@ -42,14 +37,6 @@ public class Producto {
         this.precio = precio;
         this.stock = stock;
         this.imagenUrl = imagenUrl;
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
     }
 
     public String getSku() {
