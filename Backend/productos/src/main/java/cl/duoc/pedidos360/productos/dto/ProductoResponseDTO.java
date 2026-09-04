@@ -1,39 +1,21 @@
-package cl.duoc.pedidos360.productos.entity;
+package cl.duoc.pedidos360.productos.dto;
 
-import jakarta.persistence.*;
+import cl.duoc.pedidos360.productos.entity.Producto;
 
-@Entity
-@Table(name = "productos")
-public class Producto {
+public class ProductoResponseDTO {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
-    @Column(nullable = false, unique = true)
     private String sku;
-
-    @Column(nullable = false)
     private String nombre;
-
-    @Column(nullable = false)
     private String categoria;
-
-    @Column(columnDefinition = "TEXT")
     private String descripcion;
-
-    @Column(nullable = false)
     private Double precio;
-
-    @Column(nullable = false)
     private Integer stock;
-
-    @Column(name = "imagen_url")
     private String imagenUrl;
 
-    public Producto() {}
+    public ProductoResponseDTO() {}
 
-    public Producto(Long id, String sku, String nombre, String categoria, String descripcion, Double precio, Integer stock, String imagenUrl) {
+    public ProductoResponseDTO(Long id, String sku, String nombre, String categoria, String descripcion, Double precio, Integer stock, String imagenUrl) {
         this.id = id;
         this.sku = sku;
         this.nombre = nombre;
@@ -42,6 +24,19 @@ public class Producto {
         this.precio = precio;
         this.stock = stock;
         this.imagenUrl = imagenUrl;
+    }
+
+    public static ProductoResponseDTO fromEntity(Producto p) {
+        return new ProductoResponseDTO(
+                p.getId(),
+                p.getSku(),
+                p.getNombre(),
+                p.getCategoria(),
+                p.getDescripcion(),
+                p.getPrecio(),
+                p.getStock(),
+                p.getImagenUrl()
+        );
     }
 
     public Long getId() {

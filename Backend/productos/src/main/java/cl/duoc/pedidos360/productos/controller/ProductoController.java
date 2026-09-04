@@ -1,7 +1,11 @@
 package cl.duoc.pedidos360.productos.controller;
 
-import cl.duoc.pedidos360.productos.entity.Producto;
+import cl.duoc.pedidos360.productos.dto.ApiResponse;
+import cl.duoc.pedidos360.productos.dto.ProductoCreateDTO;
+import cl.duoc.pedidos360.productos.dto.ProductoResponseDTO;
 import cl.duoc.pedidos360.productos.service.ProductoService;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,30 +22,46 @@ public class ProductoController {
     }
 
     @GetMapping
-    public ResponseEntity<List<Producto>> listar() {
-        return ResponseEntity.ok(productoService.obtenerTodos());
+    public ResponseEntity<ApiResponse<List<ProductoResponseDTO>>> listar() {
+        List<ProductoResponseDTO> productos = productoService.obtenerTodos();
+        return ResponseEntity.ok(ApiResponse.ok("Catálogo de productos obtenido correctamente", productos));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Producto> obtenerPorId(@PathVariable Long id) {
-        return productoService.obtenerPorId(id)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+    public ResponseEntity<ApiResponse<ProductoResponseDTO>> obtenerPorId(@PathVariable Long id) {
+        ProductoResponseDTO producto = productoService.obtenerPorId(id);
+        return ResponseEntity.ok(ApiResponse.ok("Producto encontrado", producto));
+    }
+
+    @GetMapping("/categoria/{categoria}")
+    public ResponseEntity<ApiResponse<List<ProductoResponseDTO>>> obtenerPorCategoria(@PathVariable String categoria) {
+        List<ProductoResponseDTO> productos = productoService.obtenerPorCategoria(categoria);
+        return ResponseEntity.ok(ApiResponse.ok("Productos de categoría '" + categoria + "' obtenidos correctamente", productos));
     }
 
     @GetMapping("/buscar")
-    public ResponseEntity<List<Producto>> buscarPorNombre(@RequestParam String nombre) {
-        return ResponseEntity.ok(productoService.buscarPorNombre(nombre));
+    public ResponseEntity<ApiResponse<List<ProductoResponseDTO>>> buscarPorNombre(@RequestParam String nombre) {
+        List<ProductoResponseDTO> productos = productoService.buscarPorNombre(nombre);
+        return ResponseEntity.ok(ApiResponse.ok("Resultados de búsqueda para '" + nombre + "'", productos));
     }
 
     @PostMapping
-    public ResponseEntity<Producto> crear(@RequestBody Producto producto) {
-        return ResponseEntity.ok(productoService.guardar(producto));
+    public ResponseEntity<ApiResponse<ProductoResponseDTO>> crear(@Valid @RequestBody ProductoCreateDTO dto) {
+        ProductoResponseDTO creado = productoService.crearProducto(dto);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.ok("Producto creado correctamente", creado));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<ApiResponse<ProductoResponseDTO>> actualizar(@PathVariable Long id,
+                                                                        @Valid @RequestBody ProductoCreateDTO dto) {
+        ProductoResponseDTO actualizado = productoService.actualizarProducto(id, dto);
+        return ResponseEntity.ok(ApiResponse.ok("Producto actualizado correctamente", actualizado));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> eliminar(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<Void>> eliminar(@PathVariable Long id) {
         productoService.eliminar(id);
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.ok(ApiResponse.ok("Producto eliminado correctamente", null));
     }
 }
