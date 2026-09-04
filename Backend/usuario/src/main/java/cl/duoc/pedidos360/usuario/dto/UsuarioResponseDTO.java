@@ -1,55 +1,38 @@
-package cl.duoc.pedidos360.usuario.entity;
+package cl.duoc.pedidos360.usuario.dto;
 
+import cl.duoc.pedidos360.usuario.entity.Usuario;
 import cl.duoc.pedidos360.usuario.enums.Rol;
-import jakarta.persistence.*;
+
 import java.time.LocalDateTime;
 
-@Entity
-@Table(name = "usuarios")
-public class Usuario {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+public class UsuarioResponseDTO {
     private Long id;
-
-    @Column(nullable = false)
     private String nombre;
-
-    @Column(nullable = false, unique = true)
     private String email;
-
-    @Column(name = "password_hash", nullable = false)
-    private String passwordHash;
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
     private Rol rol;
-
-    @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
-
-    @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    public Usuario() {}
+    public UsuarioResponseDTO() {}
 
-    public Usuario(Long id, String nombre, String email, String passwordHash, Rol rol) {
+    public UsuarioResponseDTO(Long id, String nombre, String email, Rol rol, LocalDateTime createdAt, LocalDateTime updatedAt) {
         this.id = id;
         this.nombre = nombre;
         this.email = email;
-        this.passwordHash = passwordHash;
         this.rol = rol;
+        this.createdAt = createdAt;
+        this.updatedAt = updatedAt;
     }
 
-    @PrePersist
-    protected void onCreate() {
-        this.createdAt = LocalDateTime.now();
-        this.updatedAt = LocalDateTime.now();
-    }
-
-    @PreUpdate
-    protected void onUpdate() {
-        this.updatedAt = LocalDateTime.now();
+    public static UsuarioResponseDTO fromEntity(Usuario usuario) {
+        return new UsuarioResponseDTO(
+                usuario.getId(),
+                usuario.getNombre(),
+                usuario.getEmail(),
+                usuario.getRol(),
+                usuario.getCreatedAt(),
+                usuario.getUpdatedAt()
+        );
     }
 
     public Long getId() {
@@ -74,14 +57,6 @@ public class Usuario {
 
     public void setEmail(String email) {
         this.email = email;
-    }
-
-    public String getPasswordHash() {
-        return passwordHash;
-    }
-
-    public void setPasswordHash(String passwordHash) {
-        this.passwordHash = passwordHash;
     }
 
     public Rol getRol() {
