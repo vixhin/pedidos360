@@ -12,6 +12,11 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init-dbs.sql:/docker-entrypoint-initdb.d/init-dbs.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   pgadmin:
     image: dpage/pgadmin4:latest
@@ -23,6 +28,102 @@ services:
       - "5050:80"
     depends_on:
       - postgres
+
+  usuario:
+    build: ./usuario
+    container_name: pedidos360-usuario
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: usuario_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  pedidos:
+    build: ./pedidos
+    container_name: pedidos360-pedidos
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: pedidos_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+    ports:
+      - "8082:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  carrito:
+    build: ./carrito
+    container_name: pedidos360-carrito
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: carrito_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+    ports:
+      - "8083:8083"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  analitica:
+    build: ./analitica
+    container_name: pedidos360-analitica
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: analitica_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+    ports:
+      - "8084:8084"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  productos:
+    build: ./productos
+    container_name: pedidos360-productos
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: productos_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+    ports:
+      - "8085:8085"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  notificacion:
+    build: ./notificacion
+    container_name: pedidos360-notificacion
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: notificacion_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+    ports:
+      - "8086:8086"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   postgres_data:
