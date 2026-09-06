@@ -125,5 +125,42 @@ services:
       postgres:
         condition: service_healthy
 
+  # ─── BFF (Backend for Frontend) ────────────────────────────────────────────
+  # Puerto: 8090
+  # Valida JWT de Microsoft Entra ID y actúa como proxy hacia microservicios.
+  #
+  # Para configurar Azure, crea un archivo .env en la carpeta Backend/ con:
+  #   AZURE_TENANT_ID=tu-tenant-id
+  #   AZURE_API_CLIENT_ID=tu-api-client-id
+  bff:
+    build: ./bff
+    container_name: pedidos360-bff
+    restart: unless-stopped
+    environment:
+      AZURE_TENANT_ID: ${AZURE_TENANT_ID:-PLACEHOLDER_TENANT_ID}
+      AZURE_API_CLIENT_ID: ${AZURE_API_CLIENT_ID:-PLACEHOLDER_API_CLIENT_ID}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:4200}
+      # Nombres Docker de los microservicios (no localhost)
+      USUARIO_SERVICE_URL: http://usuario:8081
+      PEDIDOS_SERVICE_URL: http://pedidos:8082
+      CARRITO_SERVICE_URL: http://carrito:8083
+      ANALITICA_SERVICE_URL: http://analitica:8084
+      PRODUCTOS_SERVICE_URL: http://productos:8085
+      NOTIFICACION_SERVICE_URL: http://notificacion:8086
+    ports:
+      - "8090:8090"
+    depends_on:
+      - usuario
+      - pedidos
+      - carrito
+      - analitica
+      - productos
+      - notificacion
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8090/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
 volumes:
   postgres_data:
