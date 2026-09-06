@@ -1,61 +1,92 @@
-import { Injectable, computed, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { catchError, of } from 'rxjs';
 import { AppNotification } from '../models/notification.model';
+import { API_CONFIG } from '../config/api.config';
+import { AuthService } from './auth.service';
 
-const SEED: AppNotification[] = [
-  {
-    id: 'n1',
-    category: 'pedidos',
-    title: 'Pedido en camino',
-    message: 'Tu repartidor ya retiró tus productos y se dirige a tu dirección.',
-    time: 'Hace 1 min',
-    read: false,
-    actionLabel: 'Seguir pedido',
-  },
-  {
-    id: 'n2',
-    category: 'pedidos',
-    title: 'Pedido confirmado',
-    message: 'Tu pedido #PED-360-0248 ya está siendo preparado.',
-    time: 'Hace 3 min',
-    read: false,
-    actionLabel: 'Ver pedido',
-  },
-  {
-    id: 'n3',
-    category: 'ofertas',
-    title: 'Envío gratis disponible',
-    message: 'Actívalo en tu próximo pedido antes del domingo.',
-    time: 'Hace 8 min',
-    read: false,
-    actionLabel: 'Usar beneficio',
-  },
-  {
-    id: 'n4',
-    category: 'ofertas',
-    title: '10% en productos para mascotas',
-    message: 'Activa el cupón antes de que expire.',
-    time: 'Hace 8 min',
-    read: true,
-    actionLabel: 'Usar beneficio',
-  },
-  {
-    id: 'n5',
-    category: 'productos',
-    title: 'Producto disponible cerca de ti',
-    message: 'Los audífonos que guardaste ya tienen entrega rápida.',
-    time: 'Hace 12 min',
-    read: true,
-    actionLabel: 'Agregar al carrito',
-  },
-];
+export interface NotificacionDB {
+  id: number;
+  usuarioId: number;
+  mensaje: string;
+  canal: string;
+  fechaEnvio: string;
+}
 
 @Injectable({ providedIn: 'root' })
 export class NotificationsService {
-  private readonly _items = signal<AppNotification[]>(SEED);
+  private readonly http = inject(HttpClient);
+  private readonly auth = inject(AuthService);
+
+  private readonly _items = signal<AppNotification[]>([]);
+  private readonly _activeToast = signal<AppNotification | null>(null);
 
   readonly items = this._items.asReadonly();
-
+  readonly activeToast = this._activeToast.asReadonly();
   readonly unreadCount = computed(() => this._items().filter((n) => !n.read).length);
+
+  constructor() {
+    // Intentar cargar notificaciones del backend cuando el usuario esté disponible
+    setTimeout(() => this.cargarDeBackend(), 500);
+  }
+
+  cargarDeBackend(): void {
+    const user = this.auth.user();
+    if (!user?.id) {
+      // Sin usuario autenticado: sin notificaciones
+      this._items.set([]);
+      return;
+    }
+
+    this.http
+      .get<NotificacionDB[]>(`${API_CONFIG.notificacion}/notificacion/usuario/${user.id}`)
+      .pipe(
+        catchError(() => {
+          return of([] as NotificacionDB[]);
+        })
+      )
+      .subscribe((data) => {
+        const mapped: AppNotification[] = (data || []).map((n) => ({
+          id: String(n.id),
+          category: this.inferCategory(n.canal, n.mensaje),
+          title: this.inferTitle(n.canal, n.mensaje),
+          message: n.mensaje,
+          time: n.fechaEnvio
+            ? this.timeAgo(new Date(n.fechaEnvio))
+            : 'Reciente',
+          read: false,
+          actionLabel: n.canal === 'PEDIDOS' ? 'Ver pedido' : 'Ver detalle',
+        }));
+        this._items.set(mapped);
+      });
+  }
+
+  enviarNotificacion(usuarioId: number, mensaje: string, canal: string): void {
+    const payload = { usuarioId, mensaje, canal };
+    this.http
+      .post<NotificacionDB>(`${API_CONFIG.notificacion}/notificacion`, payload)
+      .pipe(catchError(() => of(null)))
+      .subscribe((created) => {
+        if (created) {
+          const newNotif: AppNotification = {
+            id: String(created.id),
+            category: this.inferCategory(canal, mensaje),
+            title: this.inferTitle(canal, mensaje),
+            message: mensaje,
+            time: 'Justo ahora',
+            read: false,
+            actionLabel: 'Ver detalle',
+          };
+          this._items.set([newNotif, ...this._items()]);
+          this._activeToast.set(newNotif);
+          setTimeout(() => {
+            if (this._activeToast()?.id === newNotif.id) {
+              this._activeToast.set(null);
+            }
+          }, 5000);
+        }
+      });
+  }
 
   byCategory(category: AppNotification['category'] | 'todas') {
     return computed(() =>
@@ -69,5 +100,54 @@ export class NotificationsService {
 
   markRead(id: string): void {
     this._items.set(this._items().map((n) => (n.id === id ? { ...n, read: true } : n)));
+  }
+
+  pushNotification(notif: Omit<AppNotification, 'id' | 'time' | 'read'>): void {
+    const newNotif: AppNotification = {
+      ...notif,
+      id: 'n_' + Date.now(),
+      time: 'Justo ahora',
+      read: false,
+    };
+    this._items.set([newNotif, ...this._items()]);
+    this._activeToast.set(newNotif);
+
+    setTimeout(() => {
+      if (this._activeToast()?.id === newNotif.id) {
+        this._activeToast.set(null);
+      }
+    }, 5000);
+  }
+
+  closeToast(): void {
+    this._activeToast.set(null);
+  }
+
+  private inferCategory(canal: string, mensaje: string): AppNotification['category'] {
+    const c = (canal || '').toUpperCase();
+    const m = (mensaje || '').toLowerCase();
+    if (c === 'PEDIDOS' || m.includes('pedido') || m.includes('repartidor')) return 'pedidos';
+    if (c === 'OFERTAS' || m.includes('oferta') || m.includes('descuento') || m.includes('cupón')) return 'ofertas';
+    if (c === 'PRODUCTOS' || m.includes('producto') || m.includes('stock')) return 'productos';
+    if (c === 'CUENTA' || m.includes('cuenta') || m.includes('contraseña')) return 'cuenta';
+    return 'pedidos';
+  }
+
+  private inferTitle(canal: string, mensaje: string): string {
+    const c = (canal || '').toUpperCase();
+    if (c === 'PEDIDOS') return 'Actualización de pedido';
+    if (c === 'OFERTAS') return 'Oferta disponible';
+    if (c === 'PRODUCTOS') return 'Producto disponible';
+    if (c === 'CUENTA') return 'Aviso de cuenta';
+    return mensaje.length > 40 ? mensaje.substring(0, 40) + '...' : mensaje;
+  }
+
+  private timeAgo(date: Date): string {
+    const now = new Date();
+    const diff = Math.floor((now.getTime() - date.getTime()) / 1000);
+    if (diff < 60) return 'Hace un momento';
+    if (diff < 3600) return `Hace ${Math.floor(diff / 60)} min`;
+    if (diff < 86400) return `Hace ${Math.floor(diff / 3600)} h`;
+    return `Hace ${Math.floor(diff / 86400)} días`;
   }
 }

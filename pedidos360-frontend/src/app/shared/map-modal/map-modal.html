@@ -1,0 +1,94 @@
+<div class="map-modal-backdrop" (click)="close.emit()">
+  <div class="map-modal-card card" (click)="$event.stopPropagation()">
+    <div class="map-modal-head">
+      <div>
+        <h2><app-icon name="map-pin" size="20" /> Cobertura y Dirección de Entrega</h2>
+        <p>Selecciona tu comuna o pin en el mapa de Santiago para ajustar tu tiempo estimado de entrega.</p>
+      </div>
+      <button type="button" class="close-btn" (click)="close.emit()" aria-label="Cerrar mapa">
+        <app-icon name="x" size="20" />
+      </button>
+    </div>
+
+    <div class="map-modal-body">
+      <!-- Mapa SVG interactivo de Santiago -->
+      <div class="interactive-map-container">
+        <svg viewBox="0 0 100 100" class="santiago-svg-map">
+          <!-- Fondo de cuadrícula urbana -->
+          <defs>
+            <pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse">
+              <path d="M 10 0 L 0 0 0 10" fill="none" stroke="#e2e8f0" stroke-width="0.5"/>
+            </pattern>
+            <radialGradient id="coverage-gradient">
+              <stop offset="0%" stop-color="#10b981" stop-opacity="0.3"/>
+              <stop offset="100%" stop-color="#10b981" stop-opacity="0.0"/>
+            </radialGradient>
+          </defs>
+          <rect width="100" height="100" fill="url(#grid)" />
+
+          <!-- Círculo de radio de cobertura desde Santiago Centro -->
+          <circle cx="50" cy="48" r="38" fill="url(#coverage-gradient)" stroke="#10b981" stroke-width="0.6" stroke-dasharray="2 1" />
+
+          <!-- Rutas principales / Avenidas -->
+          <path d="M 10 48 Q 50 46 90 35" fill="none" stroke="#cbd5e1" stroke-width="1.8" /> <!-- Av. Alameda / Providencia -->
+          <path d="M 48 10 Q 48 50 46 90" fill="none" stroke="#cbd5e1" stroke-width="1.8" /> <!-- Autopista Central -->
+          <path d="M 25 25 Q 50 48 75 75" fill="none" stroke="#cbd5e1" stroke-width="1.2" stroke-dasharray="1 1" /> <!-- Américo Vespucio -->
+
+          <!-- Pines de Comunas -->
+          @for (sec of sectors; track sec.id) {
+            <g
+              class="map-pin-group"
+              [class.active]="selectedSector().id === sec.id"
+              (click)="onSelectSector(sec)"
+            >
+              <circle [attr.cx]="sec.pinX" [attr.cy]="sec.pinY" r="4.5" class="pin-pulse" />
+              <circle [attr.cx]="sec.pinX" [attr.cy]="sec.pinY" r="2.8" class="pin-core" />
+              <text [attr.x]="sec.pinX" [attr.y]="sec.pinY - 5" class="pin-label">{{ sec.name }}</text>
+            </g>
+          }
+        </svg>
+
+        <div class="map-overlay-badge">
+          <span>Ubicación Seleccionada: <strong>{{ selectedSector().name }}</strong></span>
+          <small>Despacho Promedio: {{ selectedSector().eta }}</small>
+        </div>
+      </div>
+
+      <!-- Formulario de Dirección y Lista de Comunas -->
+      <div class="map-sidebar">
+        <h3>Sectores con Cobertura Exprés</h3>
+        <div class="sector-list">
+          @for (sec of sectors; track sec.id) {
+            <button
+              type="button"
+              class="sector-btn"
+              [class.active]="selectedSector().id === sec.id"
+              (click)="onSelectSector(sec)"
+            >
+              <div>
+                <strong>{{ sec.name }}</strong>
+                <small>Entrega: {{ sec.eta }}</small>
+              </div>
+              <span class="badge badge--success">● Disponible</span>
+            </button>
+          }
+        </div>
+
+        <div class="address-input-group">
+          <label for="custom-address">Dirección Exacta de Despacho</label>
+          <input
+            id="custom-address"
+            type="text"
+            [value]="customAddress()"
+            (input)="customAddress.set($any($event.target).value)"
+            placeholder="ej: Av. Libertador Bernardo O'Higgins 1449"
+          />
+        </div>
+
+        <button type="button" class="btn btn-primary btn-block" (click)="confirm()">
+          <app-icon name="check" size="16" /> Confirmar Dirección de Entrega
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

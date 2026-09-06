@@ -6,6 +6,7 @@ export interface Category {
 
 export interface Product {
   id: string;
+  sku?: string;
   name: string;
   brand: string;
   price: number;
@@ -13,6 +14,21 @@ export interface Product {
   rating: number;
   deliveryMinutes: number;
   discountPercent?: number;
+  categoria?: string;
+  descripcion?: string;
+  stock?: number;
+  imagenUrl?: string;
+}
+
+export interface BackendProductDTO {
+  id: number;
+  sku: string;
+  nombre: string;
+  categoria: string;
+  descripcion: string;
+  precio: number;
+  stock: number;
+  imagenUrl: string;
 }
 
 export interface Promotion {

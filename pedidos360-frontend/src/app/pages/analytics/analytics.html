@@ -1,0 +1,240 @@
+<div class="analytics-page container">
+  @if (!auth.isAdmin()) {
+    <!-- AVISO DE ACCESO RESTRINGIDO PARA NO-ADMINISTRADORES -->
+    <div style="text-align: center; padding: 4rem 1.5rem; background: #ffffff; border-radius: 20px; border: 1px solid #cbd5e1; box-shadow: 0 4px 12px rgba(0,0,0,0.05); max-width: 650px; margin: 3rem auto;">
+      <app-icon name="lock" size="48" />
+      <h2 style="font-size: 1.6rem; font-weight: 800; color: #0f172a; margin-bottom: 0.5rem;">Vista Restringida a Administradores</h2>
+      <p style="color: #64748b; margin-bottom: 1.5rem; line-height: 1.6;">
+        El módulo de <strong>Analítica Financiera</strong> es de acceso exclusivo para el rol de <strong>Administrador (ADMIN)</strong>.
+      </p>
+      <div style="display: flex; justify-content: center; gap: 12px; flex-wrap: wrap;">
+        <a routerLink="/login" class="btn btn-primary">Iniciar Sesión como Administrador</a>
+        <a routerLink="/" class="btn btn-secondary">Volver a la Tienda</a>
+      </div>
+    </div>
+  } @else {
+    <!-- DASHBOARD FINANCIERO DE ADMINISTRADOR -->
+    <div class="page-head">
+      <div>
+        <span class="badge badge--primary">Dashboard Financiero & Métricas</span>
+        <h1>Analítica de Ingresos, Egresos y Rendimiento</h1>
+        <p>Datos en tiempo real calculados desde los pedidos y productos de PostgreSQL. Snapshot automático cada 7 días.</p>
+      </div>
+      <div class="period-selector">
+        <button type="button" [class.active]="selectedPeriod() === '7d'" (click)="setPeriod('7d')">7 Días</button>
+        <button type="button" [class.active]="selectedPeriod() === '30d'" (click)="setPeriod('30d')">30 Días</button>
+        <button type="button" [class.active]="selectedPeriod() === '90d'" (click)="setPeriod('90d')">90 Días</button>
+        <button type="button" [class.active]="selectedPeriod() === '1y'" (click)="setPeriod('1y')">1 Año</button>
+      </div>
+    </div>
+
+    @if (isLoading()) {
+      <div style="text-align: center; padding: 4rem; color: #64748b;">
+        <app-icon name="package" size="40" />
+        <p style="margin-top: 1rem; font-size: 1.1rem;">Cargando datos desde PostgreSQL...</p>
+      </div>
+    } @else {
+
+    <!-- Tarjetas KPI Principales -->
+    <div class="kpi-grid">
+      <div class="kpi-card kpi-card--income">
+        <div class="kpi-card__head">
+          <span>Ingresos Totales</span>
+          <div class="kpi-icon kpi-icon--green"><app-icon name="arrow-right" size="16" /></div>
+        </div>
+        <p class="kpi-amount">
+          @if (totalRevenue() > 0) { ${{ totalRevenue() | number }} }
+          @else { <span style="color:#94a3b8; font-size:1rem;">Sin datos aún</span> }
+        </p>
+        <span class="kpi-tag kpi-tag--up">Calculado de pedidos reales</span>
+      </div>
+
+      <div class="kpi-card kpi-card--expense">
+        <div class="kpi-card__head">
+          <span>Egresos & Costos Operativos</span>
+          <div class="kpi-icon kpi-icon--red"><app-icon name="arrow-right" size="16" /></div>
+        </div>
+        <p class="kpi-amount">
+          @if (totalExpenses() > 0) { ${{ totalExpenses() | number }} }
+          @else { <span style="color:#94a3b8; font-size:1rem;">Sin datos aún</span> }
+        </p>
+        <span class="kpi-tag kpi-tag--down">Estimado: 56% del ingreso</span>
+      </div>
+
+      <div class="kpi-card kpi-card--profit">
+        <div class="kpi-card__head">
+          <span>Utilidad Neta</span>
+          <div class="kpi-icon kpi-icon--blue"><app-icon name="check" size="16" /></div>
+        </div>
+        <p class="kpi-amount">
+          @if (netProfit() !== 0) { ${{ netProfit() | number }} }
+          @else { <span style="color:#94a3b8; font-size:1rem;">Sin datos aún</span> }
+        </p>
+        <span class="kpi-tag kpi-tag--up">Margen: {{ profitMargin() | percent:'1.1-1' }}</span>
+      </div>
+
+      <div class="kpi-card kpi-card--orders">
+        <div class="kpi-card__head">
+          <span>Total Pedidos Procesados</span>
+          <div class="kpi-icon kpi-icon--purple"><app-icon name="package" size="16" /></div>
+        </div>
+        <p class="kpi-amount">{{ totalPedidos() }}</p>
+        <span class="kpi-tag kpi-tag--up">
+          Ticket promedio:
+          @if (ticketPromedio() > 0) { ${{ ticketPromedio() | number }} }
+          @else { N/A }
+        </span>
+      </div>
+    </div>
+
+    <!-- Sección Destacados: Producto con más y menos stock -->
+    @if (topProduct() || leastProduct()) {
+      <div class="top-least-grid">
+        @if (topProduct(); as top) {
+          <div class="card highlight-card highlight-card--top">
+            <div class="highlight-card__badge badge--success">Producto con Mayor Stock</div>
+            <div class="highlight-card__body">
+              <span class="highlight-icon">{{ top.icon }}</span>
+              <div>
+                <h3>{{ top.name }}</h3>
+                <p class="sku-tag">SKU: {{ top.sku }} | Categoría: {{ top.category }}</p>
+              </div>
+            </div>
+            <div class="highlight-stats">
+              <div>
+                <small>Stock Actual</small>
+                <strong>{{ top.stock | number }} unidades</strong>
+              </div>
+              <div>
+                <small>Precio Unitario</small>
+                <strong class="text-success">${{ top.price | number }}</strong>
+              </div>
+              <div>
+                <small>Valor estimado en stock</small>
+                <strong>${{ top.totalRevenue | number }}</strong>
+              </div>
+            </div>
+          </div>
+        }
+
+        @if (leastProduct(); as least) {
+          <div class="card highlight-card highlight-card--least">
+            <div class="highlight-card__badge badge--warning">Producto con Menor Stock</div>
+            <div class="highlight-card__body">
+              <span class="highlight-icon">{{ least.icon }}</span>
+              <div>
+                <h3>{{ least.name }}</h3>
+                <p class="sku-tag">SKU: {{ least.sku }} | Categoría: {{ least.category }}</p>
+              </div>
+            </div>
+            <div class="highlight-stats">
+              <div>
+                <small>Stock Actual</small>
+                <strong>{{ least.stock }} unidades</strong>
+              </div>
+              <div>
+                <small>Precio Unitario</small>
+                <strong class="text-danger">${{ least.price | number }}</strong>
+              </div>
+              <div>
+                <small>Alerta de reabastecimiento</small>
+                <span class="badge badge--danger">Stock bajo</span>
+              </div>
+            </div>
+          </div>
+        }
+      </div>
+    } @else {
+      <div class="card" style="text-align:center; padding:2rem; color:#64748b; margin: 1.5rem 0;">
+        <app-icon name="package" size="32" />
+        <p style="margin-top:0.75rem;">No hay productos en el catálogo aún. Agrega productos desde el panel de vendedor.</p>
+      </div>
+    }
+
+    <!-- Categorías y Rendimiento Financiero -->
+    <div class="analytics-content-grid">
+      <!-- Distribución por Categorías -->
+      <div class="card section-card">
+        <div class="card__head">
+          <h2>Distribución del Catálogo por Categoría</h2>
+          <p>Basado en productos reales de PostgreSQL (stock × precio).</p>
+        </div>
+
+        <div class="category-bars">
+          @if (categoryMetrics().length > 0) {
+            @for (cat of categoryMetrics(); track cat.category) {
+              <div class="category-bar-item">
+                <div class="category-bar-item__head">
+                  <strong>{{ cat.category }}</strong>
+                  <span>${{ cat.revenue | number }} ({{ cat.salesCount }} un. est.)</span>
+                </div>
+                <div class="progress-track">
+                  <div
+                    class="progress-fill"
+                    [style.width.%]="cat.percentage * 100"
+                    [style.background]="cat.color"
+                  ></div>
+                </div>
+              </div>
+            }
+          } @else {
+            <p style="color:#94a3b8; text-align:center; padding:1.5rem 0;">Sin productos en el catálogo para calcular métricas.</p>
+          }
+        </div>
+      </div>
+
+      <!-- Historial de Pedidos como Transacciones -->
+      <div class="card section-card">
+        <div class="card__head">
+          <h2>Pedidos e Historial Financiero</h2>
+          <p>Pedidos reales registrados en la base de datos PostgreSQL.</p>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>ID Pedido</th>
+                <th>Fecha</th>
+                <th>Descripción</th>
+                <th>Tipo</th>
+                <th>Monto</th>
+              </tr>
+            </thead>
+            <tbody>
+              @if (transactions().length > 0) {
+                @for (trx of transactions(); track trx.id) {
+                  <tr>
+                    <td><code>{{ trx.id }}</code></td>
+                    <td>{{ trx.date }}</td>
+                    <td>{{ trx.description }}</td>
+                    <td>
+                      <span
+                        class="pill-tag"
+                        [class.pill-tag--green]="trx.type === 'INGRESO'"
+                        [class.pill-tag--red]="trx.type === 'EGRESO'"
+                      >
+                        {{ trx.type }}
+                      </span>
+                    </td>
+                    <td class="font-bold" [class.text-success]="trx.type === 'INGRESO'" [class.text-danger]="trx.type === 'EGRESO'">
+                      {{ trx.type === 'INGRESO' ? '+' : '-' }}${{ trx.amount | number }}
+                    </td>
+                  </tr>
+                }
+              } @else {
+                <tr>
+                  <td colspan="5" style="text-align:center; padding:2rem; color:#94a3b8;">
+                    No hay pedidos registrados en el periodo seleccionado.
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    } <!-- end @if (!isLoading) -->
+  }
+</div>

@@ -1,0 +1,256 @@
+<div class="staff-page container">
+  @if (!auth.isAdmin()) {
+    <!-- AVISO DE ACCESO RESTRINGIDO PARA NO-ADMINISTRADORES -->
+    <div style="text-align: center; padding: 4rem 1.5rem; background: #ffffff; border-radius: 20px; border: 1px solid #cbd5e1; box-shadow: 0 4px 12px rgba(0,0,0,0.05); max-width: 650px; margin: 3rem auto;">
+      <app-icon name="user" size="48" />
+      <h2 style="font-size: 1.6rem; font-weight: 800; color: #0f172a; margin-bottom: 0.5rem;">Gestión de Personal Exclusiva de Administrador</h2>
+      <p style="color: #64748b; margin-bottom: 1.5rem; line-height: 1.6;">
+        El módulo para <strong>Agregar y Gestionar Personal</strong> (Vendedores, Repartidores y Equipo de Soporte) es de acceso exclusivo para la cuenta de <strong>Administrador (ADMIN)</strong>.
+      </p>
+      <div style="display: flex; justify-content: center; gap: 12px; flex-wrap: wrap;">
+        <a routerLink="/login" class="btn btn-primary">
+          Iniciar Sesión como Administrador
+        </a>
+        <a routerLink="/" class="btn btn-secondary">
+          Volver al Catálogo
+        </a>
+      </div>
+    </div>
+  } @else {
+    <!-- ENCABEZADO DE GESTIÓN DE PERSONAL -->
+    <div class="page-head">
+      <div>
+        <span class="badge badge--staff">Módulo de Administración de Personal</span>
+        <h1>Gestión de Personal & Roles de Empresa</h1>
+        <p>Registra nuevos empleados, asigna roles de vendedor o repartidor y gestiona turnos de trabajo.</p>
+      </div>
+      <div>
+        <button type="button" class="btn btn-primary" (click)="setTab('add-staff')">
+          Agregar Nuevo Empleado
+        </button>
+      </div>
+    </div>
+
+    <!-- TOAST NOTIFICACIÓN -->
+    @if (toastMessage()) {
+      <div class="toast-banner">
+        <app-icon name="check" size="18" /> {{ toastMessage() }}
+      </div>
+    }
+
+    <!-- METRICAS DE EQUIPO -->
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-head">
+          <span>Personal Activo Total</span>
+          <div class="kpi-icon kpi-icon--blue"><app-icon name="user" size="18" /></div>
+        </div>
+        <p class="kpi-number">{{ activeCount() }} personas</p>
+        <small class="text-success">✓ 100% operativo</small>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-head">
+          <span>Vendedores en Tienda</span>
+          <div class="kpi-icon kpi-icon--amber"><app-icon name="cart" size="18" /></div>
+        </div>
+        <p class="kpi-number">{{ sellerCount() }} vendedores</p>
+        <small>Atención de inventario</small>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-head">
+          <span>Repartidores en Ruta</span>
+          <div class="kpi-icon kpi-icon--green"><app-icon name="package" size="18" /></div>
+        </div>
+        <p class="kpi-number">{{ courierCount() }} repartidores</p>
+        <small class="text-success">Despacho exprés 360</small>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-head">
+          <span>Administradores</span>
+          <div class="kpi-icon kpi-icon--purple"><app-icon name="shield" size="18" /></div>
+        </div>
+        <p class="kpi-number">{{ adminCount() }} admins</p>
+        <small>Gestión total plataforma</small>
+      </div>
+    </div>
+
+    <!-- PESTAÑAS -->
+    <div class="tab-nav">
+      <button type="button" [class.active]="activeTab() === 'list'" (click)="setTab('list')">
+        Directorio de Personal ({{ filteredStaff().length }})
+      </button>
+      <button type="button" [class.active]="activeTab() === 'add-staff'" (click)="setTab('add-staff')">
+        Agregar Nuevo Personal
+      </button>
+    </div>
+
+    <!-- PESTAÑA 1: LISTADO DE PERSONAL -->
+    @if (activeTab() === 'list') {
+      <div class="tab-content">
+        <!-- FILTROS DE ROL -->
+        <div class="filter-bar">
+          <span>Filtrar por Rol:</span>
+          <button type="button" class="filter-chip" [class.active]="selectedRoleFilter() === 'TODOS'" (click)="setRoleFilter('TODOS')">Todos</button>
+          <button type="button" class="filter-chip" [class.active]="selectedRoleFilter() === 'VENDEDOR'" (click)="setRoleFilter('VENDEDOR')">Vendedores</button>
+          <button type="button" class="filter-chip" [class.active]="selectedRoleFilter() === 'REPARTIDOR'" (click)="setRoleFilter('REPARTIDOR')">Repartidores</button>
+          <button type="button" class="filter-chip" [class.active]="selectedRoleFilter() === 'ADMIN'" (click)="setRoleFilter('ADMIN')">Administradores</button>
+          <button type="button" class="filter-chip" [class.active]="selectedRoleFilter() === 'SOPORTE'" (click)="setRoleFilter('SOPORTE')">Soporte</button>
+        </div>
+
+        <div class="card section-card">
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Empleado</th>
+                  <th>ID</th>
+                  <th>Correo Corporativo</th>
+                  <th>Teléfono</th>
+                  <th>Rol Asignado</th>
+                  <th>Turno</th>
+                  <th>Estado</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (emp of filteredStaff(); track emp.id) {
+                  <tr>
+                    <td>
+                      <div class="emp-cell">
+                        <span class="emp-avatar">{{ emp.avatarInitial }}</span>
+                        <div>
+                          <strong>{{ emp.name }}</strong>
+                          <small>Ingreso: {{ emp.joinedDate }}</small>
+                        </div>
+                      </div>
+                    </td>
+                    <td><code>{{ emp.id }}</code></td>
+                    <td>{{ emp.email }}</td>
+                    <td>{{ emp.phone }}</td>
+                    <td>
+                      <span
+                        class="pill-role"
+                        [class.pill-role--admin]="emp.role === 'ADMIN'"
+                        [class.pill-role--seller]="emp.role === 'VENDEDOR'"
+                        [class.pill-role--courier]="emp.role === 'REPARTIDOR'"
+                        [class.pill-role--support]="emp.role === 'SOPORTE'"
+                      >
+                        {{ emp.role }}
+                      </span>
+                    </td>
+                    <td><span class="shift-tag">{{ emp.shift }}</span></td>
+                    <td>
+                      @if (emp.status === 'ACTIVO') {
+                        <span class="badge badge--success">● Activo</span>
+                      } @else {
+                        <span class="badge badge--danger">○ Inactivo</span>
+                      }
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        class="btn btn-secondary btn-sm"
+                        (click)="toggleStaffStatus(emp.id)"
+                      >
+                        {{ emp.status === 'ACTIVO' ? 'Desactivar' : 'Activar' }}
+                      </button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- PESTAÑA 2: FORMULARIO AGREGAR PERSONAL -->
+    @if (activeTab() === 'add-staff') {
+      <div class="tab-content">
+        <div class="card section-card form-card">
+          <div class="card__head">
+            <h2>Registrar Nuevo Miembro de Personal</h2>
+            <p>Completa la información para autorizar el acceso y asignar un rol al empleado.</p>
+          </div>
+
+          <form (ngSubmit)="addStaffMember()" class="staff-form">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="staff-name">Nombre Completo *</label>
+                <input
+                  id="staff-name"
+                  type="text"
+                  [value]="newName()"
+                  (input)="newName.set($any($event.target).value)"
+                  placeholder="ej: Andrés Valenzuela Parra"
+                  required
+                />
+              </div>
+
+              <div class="form-group">
+                <label for="staff-email">Correo Corporativo *</label>
+                <input
+                  id="staff-email"
+                  type="email"
+                  [value]="newEmail()"
+                  (input)="newEmail.set($any($event.target).value)"
+                  placeholder="ej: andres.valenzuela@pedidos360.cl"
+                  required
+                />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="staff-phone">Teléfono de Contacto</label>
+                <input
+                  id="staff-phone"
+                  type="text"
+                  [value]="newPhone()"
+                  (input)="newPhone.set($any($event.target).value)"
+                  placeholder="+56 9 8877 6655"
+                />
+              </div>
+
+              <div class="form-group">
+                <label for="staff-role">Rol de Empresa *</label>
+                <select
+                  id="staff-role"
+                  [value]="newRole()"
+                  (change)="newRole.set($any($event.target).value)"
+                >
+                  <option value="VENDEDOR">VENDEDOR (Gestión de Productos e Inventario)</option>
+                  <option value="REPARTIDOR">REPARTIDOR (Despacho y Logística Exprés)</option>
+                  <option value="ADMIN">ADMIN (Administrador General del Sistema)</option>
+                  <option value="SOPORTE">SOPORTE (Atención al Cliente y Reclamos)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="staff-shift">Jornada / Turno *</label>
+                <select
+                  id="staff-shift"
+                  [value]="newShift()"
+                  (change)="newShift.set($any($event.target).value)"
+                >
+                  <option value="FULL_TIME">Full Time (Completa)</option>
+                  <option value="MAÑANA">Mañana (08:00 - 16:00 hs)</option>
+                  <option value="TARDE">Tarde (16:00 - 00:00 hs)</option>
+                  <option value="NOCHE">Noche (00:00 - 08:00 hs)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-foot">
+              <button type="button" class="btn btn-secondary" (click)="setTab('list')">Cancelar</button>
+              <button type="submit" class="btn btn-primary">Dar de Alta Empleado</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    }
+  }
+</div>

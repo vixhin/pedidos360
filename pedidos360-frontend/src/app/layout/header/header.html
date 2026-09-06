@@ -1,4 +1,18 @@
 <header class="site-header">
+  <!-- Toast Notificación Activa en Vivo -->
+  @if (notifications.activeToast()) {
+    <div class="live-toast-banner" (click)="notifications.closeToast()">
+      <div class="live-toast-content">
+        <app-icon name="bell" size="18" />
+        <div>
+          <strong>{{ notifications.activeToast()?.title }}</strong>
+          <p>{{ notifications.activeToast()?.message }}</p>
+        </div>
+      </div>
+      <button type="button" class="live-toast-close" (click)="notifications.closeToast(); $event.stopPropagation()">✕</button>
+    </div>
+  }
+
   <div class="info-bar">
     <div class="container info-bar__inner">
       <span class="info-bar__item"><app-icon name="clock" size="14" /> Entrega estimada: 25-40 min</span>
@@ -16,35 +30,183 @@
         <span class="brand__name">Pedidos<strong>360</strong></span>
       </a>
 
-      <button type="button" class="location">
+      <!-- Botón de Mapa de Cobertura -->
+      <button type="button" class="location" (click)="openMapModal()" title="Cambiar dirección en el mapa de cobertura">
         <app-icon name="map-pin" size="16" />
         <span class="location__text">
           <small>Entregar en</small>
-          Santiago Centro
+          {{ currentLocation() }}
         </span>
         <app-icon name="chevron-down" size="14" />
       </button>
 
-      <div class="search">
+      <!-- Barra de Búsqueda 100% Funcional con Desplegable en Vivo -->
+      <div class="search" (click)="$event.stopPropagation()">
         <app-icon name="search" size="18" />
-        <input type="text" placeholder="Busca productos, marcas o una necesidad..." />
+        <input
+          #searchInput
+          type="text"
+          [value]="catalog.searchQuery()"
+          placeholder="Busca productos (ej: leche, chela, asado, pan, detergente)..."
+          (input)="onSearch($event)"
+          (focus)="searchFocused.set(true)"
+        />
+        @if (catalog.searchQuery()) {
+          <button type="button" class="clear-btn" (click)="clearSearch(); searchInput.value=''" aria-label="Limpiar búsqueda">
+            ✕
+          </button>
+        }
+
+        <!-- Desplegable de Resultados de Búsqueda -->
+        @if (catalog.searchQuery().trim() && searchFocused()) {
+          <div class="search-dropdown-results">
+            <div class="search-results-head">
+              <small>Coincidencias del Catálogo ({{ catalog.products().length }})</small>
+            </div>
+            @if (catalog.products().length === 0) {
+              <div class="search-empty">
+                <p>No encontramos productos para "{{ catalog.searchQuery() }}"</p>
+                <small>Intenta buscar por categorías como <em>leche, cerveza, asado, pan, detergente</em></small>
+              </div>
+            } @else {
+              <div class="search-results-list">
+                @for (prod of catalog.products().slice(0, 6); track prod.id) {
+                  <div class="search-result-item" (click)="selectSearchProduct(prod)">
+                    <span class="search-item-icon">{{ prod.icon }}</span>
+                    <div class="search-item-info">
+                      <strong>{{ prod.name }}</strong>
+                      <small>{{ prod.brand }} · SKU: {{ prod.sku }}</small>
+                    </div>
+                    <div class="search-item-action">
+                      <span class="search-item-price">${{ prod.price | number }}</span>
+                      <span class="btn-mini-cart">+ Carrito</span>
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
       </div>
 
-      <div class="actions">
-        <button type="button" class="icon-btn icon-btn--light" aria-label="Favoritos">
-          <app-icon name="heart" size="20" />
-        </button>
+      <!-- NAVEGACIÓN AUTÉNTICA SEGÚN EL ROL DE LA CUENTA -->
+      <nav class="nav-shortcuts">
+        @if (auth.isAdmin()) {
+          <a routerLink="/analitica" routerLinkActive="active" class="nav-shortcut-link" title="Dashboard Financiero">
+            Analítica
+          </a>
+          <a routerLink="/vendedor" routerLinkActive="active" class="nav-shortcut-link" title="Gestión de Tienda & Productos">
+            Vendedor
+          </a>
+          <a routerLink="/personal" routerLinkActive="active" class="nav-shortcut-link" title="Gestión & Alta de Personal">
+            Personal
+          </a>
+          <a routerLink="/cliente" routerLinkActive="active" class="nav-shortcut-link" title="Portal Cliente & Seguimiento">
+            Portal Cliente
+          </a>
+        } @else if (auth.isVendedor()) {
+          <a routerLink="/vendedor" routerLinkActive="active" class="nav-shortcut-link" title="Gestión de Productos & Pedidos">
+            Productos & Pedidos Entrantes
+          </a>
+          <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" class="nav-shortcut-link">
+            Tienda
+          </a>
+        } @else {
+          <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" class="nav-shortcut-link">
+            Catálogo
+          </a>
+          @if (auth.isLoggedIn()) {
+            <a routerLink="/cliente" routerLinkActive="active" class="nav-shortcut-link" title="Seguimiento de Mi Pedido">
+              Dónde está mi pedido
+            </a>
+          }
+        }
+      </nav>
 
+      <div class="actions">
+        <!-- Panel de Favoritos -->
+        <div class="dropdown-wrap">
+          <button
+            type="button"
+            class="icon-btn icon-btn--light"
+            aria-label="Favoritos"
+            (click)="toggleFavorites()"
+            title="Mis Productos Favoritos"
+          >
+            <app-icon name="heart" size="20" />
+            @if (favorites.favoriteCount() > 0) {
+              <span class="badge badge--float">{{ favorites.favoriteCount() }}</span>
+            }
+          </button>
+
+          @if (favoritesOpen()) {
+            <div class="overlay" (click)="closeMenus()"></div>
+            <div class="panel panel--notif">
+              <div class="panel__head">
+                <div>
+                  <h3>Mis Favoritos <span class="pill-count">{{ favorites.favoriteCount() }} guardados</span></h3>
+                  <p>Tus productos preferidos para comprar rápidamente.</p>
+                </div>
+              </div>
+
+              @if (favorites.favoriteCount() === 0) {
+                <div class="notif-empty">
+                  <app-icon name="heart" size="32" />
+                  <p style="margin-top: 8px;">Aún no tienes productos guardados en favoritos.</p>
+                  <small>Haz clic en el corazón de cualquier producto en el catálogo.</small>
+                </div>
+              } @else {
+                <div class="panel__list">
+                  @for (item of favorites.favorites(); track item.id) {
+                    <div class="notif-item">
+                      <div class="notif-item__icon">
+                        <app-icon name="package" size="16" />
+                      </div>
+                      <div class="notif-item__content">
+                        <div class="notif-item__head">
+                          <strong>{{ item.name }}</strong>
+                          <span class="notif-item__time" style="font-weight: 800; color: #0b7a5c;">${{ item.price | number }}</span>
+                        </div>
+                        <p>{{ item.brand }}</p>
+                        <div style="display: flex; gap: 6px; margin-top: 6px;">
+                          <button
+                            type="button"
+                            class="btn btn-primary btn-sm"
+                            style="font-size: 0.72rem; padding: 3px 8px;"
+                            (click)="selectSearchProduct(item); favoritesOpen.set(false)"
+                          >
+                            Al Carrito
+                          </button>
+                          <button
+                            type="button"
+                            class="btn btn-secondary btn-sm"
+                            style="font-size: 0.72rem; padding: 3px 8px; color: #ef4444;"
+                            (click)="favorites.removeFavorite(item.id)"
+                          >
+                            Quitar
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          }
+        </div>
+
+        <!-- Panel de Notificaciones -->
         <div class="dropdown-wrap">
           <button
             type="button"
             class="icon-btn icon-btn--light"
             aria-label="Notificaciones"
             (click)="toggleNotifications()"
+            title="Notificaciones Activas"
           >
             <app-icon name="bell" size="20" />
             @if (notifications.unreadCount() > 0) {
-              <span class="badge badge--float">{{ notifications.unreadCount() }}</span>
+              <span class="badge badge--float badge--pulse">{{ notifications.unreadCount() }}</span>
             }
           </button>
 
@@ -53,67 +215,46 @@
             <div class="panel panel--notif">
               <div class="panel__head">
                 <div>
-                  <h3>Notificaciones <span class="pill-count">{{ notifications.unreadCount() }} nuevas</span></h3>
-                  <p>Mantente al día con tus pedidos y beneficios.</p>
+                  <h3>Notificaciones Activas <span class="pill-count">{{ notifications.unreadCount() }} nuevas</span></h3>
+                  <p>Avisos en vivo de tu pedido, ofertas y despacho.</p>
                 </div>
                 <app-icon name="settings" size="18" />
               </div>
 
-              <button type="button" class="link-btn" (click)="notifications.markAllRead()">
-                Marcar todo como leído
-              </button>
-
-              <div class="tabs">
-                @for (tab of notifTabs; track tab.key) {
+              <div class="panel__tabs">
+                @for (t of notifTabs; track t.key) {
                   <button
                     type="button"
-                    class="tab"
-                    [class.tab--active]="activeTab() === tab.key"
-                    (click)="setTab(tab.key)"
+                    class="panel__tab"
+                    [class.active]="activeTab() === t.key"
+                    (click)="activeTab.set(t.key)"
                   >
-                    {{ tab.label }}
+                    {{ t.label }}
                   </button>
                 }
               </div>
 
-              <div class="notif-list">
-                @for (n of filteredNotifications(); track n.id) {
-                  <div class="notif-card" [class.notif-card--unread]="!n.read">
-                    <div class="notif-card__icon">
-                      <app-icon
-                        [name]="n.category === 'pedidos' ? 'truck' : n.category === 'ofertas' ? 'gift' : n.category === 'productos' ? 'package' : 'shield'"
-                        size="18"
-                      />
+              <div class="panel__list">
+                @for (item of filteredNotifications(); track item.id) {
+                  <div class="notif-item" [class.notif-item--unread]="!item.read" (click)="notifications.markRead(item.id)">
+                    <div class="notif-item__icon">
+                      <app-icon name="bell" size="16" />
                     </div>
-                    <div class="notif-card__body">
-                      <p class="notif-card__title">{{ n.title }}</p>
-                      <p class="notif-card__msg">{{ n.message }}</p>
-                      <div class="notif-card__foot">
-                        <span>{{ n.time }}</span>
-                        @if (n.actionLabel) {
-                          <button type="button" class="link-btn">{{ n.actionLabel }}</button>
-                        }
+                    <div class="notif-item__content">
+                      <div class="notif-item__head">
+                        <strong>{{ item.title }}</strong>
+                        <span class="notif-item__time">{{ item.time }}</span>
                       </div>
+                      <p>{{ item.message }}</p>
                     </div>
-                    @if (!n.read) {
-                      <span class="dot"></span>
-                    }
                   </div>
-                } @empty {
-                  <p class="notif-empty">No tienes notificaciones en esta categoría.</p>
                 }
-              </div>
-
-              <div class="panel__foot">
-                <button type="button" class="btn btn-secondary btn-sm btn-block" (click)="goToNotifications()">
-                  Ver todas las notificaciones
-                </button>
               </div>
             </div>
           }
         </div>
 
-        <a routerLink="/carrito" class="icon-btn icon-btn--light" aria-label="Carrito" (click)="closeMenus()">
+        <a routerLink="/carrito" class="cart-btn" (click)="closeMenus()">
           <app-icon name="cart" size="20" />
           @if (cart.itemCount() > 0) {
             <span class="badge badge--float">{{ cart.itemCount() }}</span>
@@ -134,13 +275,27 @@
                   <div>
                     <p class="profile-name">{{ auth.user()?.name }}</p>
                     <p class="profile-email">{{ auth.user()?.email }}</p>
+                    <span class="role-badge">{{ auth.roleLabel() }}</span>
                   </div>
                 </div>
-                <a routerLink="/cuenta" class="profile-link" (click)="closeMenus()">
-                  <app-icon name="user" size="16" /> Mi cuenta
+                <a routerLink="/perfil" class="profile-link" (click)="closeMenus()">
+                  <app-icon name="user" size="16" /> Mi Perfil & Configuración
                 </a>
-                <a routerLink="/cuenta" class="profile-link" (click)="closeMenus()">
-                  <app-icon name="package" size="16" /> Mis pedidos
+                @if (auth.isAdmin()) {
+                  <a routerLink="/analitica" class="profile-link" (click)="closeMenus()">
+                    <app-icon name="edit" size="16" /> Analítica Financiera
+                  </a>
+                  <a routerLink="/personal" class="profile-link" (click)="closeMenus()">
+                    <app-icon name="user" size="16" /> Gestión de Personal
+                  </a>
+                }
+                @if (auth.isVendedor() || auth.isAdmin()) {
+                  <a routerLink="/vendedor" class="profile-link" (click)="closeMenus()">
+                    <app-icon name="package" size="16" /> Panel del Vendedor
+                  </a>
+                }
+                <a routerLink="/cliente" class="profile-link" (click)="closeMenus()">
+                  <app-icon name="package" size="16" /> Mis pedidos & Seguimiento
                 </a>
                 <button type="button" class="profile-link profile-link--danger" (click)="logout()">
                   <app-icon name="logout" size="16" /> Cerrar sesión
@@ -155,3 +310,11 @@
     </div>
   </div>
 </header>
+
+<!-- Modal del Mapa Interactivo de Cobertura -->
+@if (mapOpen()) {
+  <app-map-modal
+    (close)="mapOpen.set(false)"
+    (selectLocation)="onSelectLocation($event)"
+  />
+}

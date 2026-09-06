@@ -219,6 +219,14 @@
   align-items: center;
   justify-content: center;
   color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.product-card__fav:hover,
+.product-card__fav--active {
+  background: #fee2e2;
+  color: #ef4444;
 }
 
 .product-card__img {

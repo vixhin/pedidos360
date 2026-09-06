@@ -1,0 +1,257 @@
+<div class="seller-page container">
+  @if (auth.isCliente()) {
+    <!-- AVISO DE ACCESO RESTRINGIDO PARA CLIENTES -->
+    <div style="text-align: center; padding: 4rem 1.5rem; background: #ffffff; border-radius: 20px; border: 1px solid #cbd5e1; box-shadow: 0 4px 12px rgba(0,0,0,0.05); max-width: 650px; margin: 3rem auto;">
+      <h2 style="font-size: 1.6rem; font-weight: 800; color: #0f172a; margin-bottom: 0.5rem;">Panel Exclusivo para Vendedores y Tiendas</h2>
+      <p style="color: #64748b; margin-bottom: 1.5rem; line-height: 1.6;">
+        El módulo de <strong>Gestión de Inventario y Procesamiento de Pedidos</strong> está reservado para cuentas de <strong>Vendedor (VENDEDOR)</strong> y <strong>Administrador (ADMIN)</strong>.
+      </p>
+      <div style="display: flex; justify-content: center; gap: 12px; flex-wrap: wrap;">
+        <a routerLink="/login" class="btn btn-primary">
+          <app-icon name="user" size="16" /> Iniciar Sesión con Cuenta Vendedor
+        </a>
+        <a routerLink="/" class="btn btn-secondary">
+          <app-icon name="cart" size="16" /> Ir al Catálogo de Productos
+        </a>
+      </div>
+    </div>
+  } @else {
+    <!-- PANEL DE ADMINISTRACIÓN DEL VENDEDOR -->
+    <div class="page-head">
+      <div>
+        <span class="badge badge--seller">Panel del Vendedor & Gestión de Catálogo</span>
+        <h1>Panel de Administración del Vendedor</h1>
+        <p>Administra inventarios en PostgreSQL, procesa pedidos entrantes y añade nuevos productos.</p>
+      </div>
+      <div class="seller-actions">
+        <button type="button" class="btn btn-primary" (click)="setTab('new-product')">
+          <app-icon name="plus" size="16" /> Agregar Nuevo Producto
+        </button>
+      </div>
+    </div>
+
+    <!-- Notificación Toast -->
+    @if (statusMessage()) {
+      <div class="toast-banner">
+        <app-icon name="check" size="18" /> {{ statusMessage() }}
+      </div>
+    }
+
+    <!-- Navegación por pestañas -->
+    <div class="tab-nav">
+      <button type="button" [class.active]="activeTab() === 'inventory'" (click)="setTab('inventory')">
+        Inventario & Productos ({{ catalog.products().length }})
+      </button>
+      <button type="button" [class.active]="activeTab() === 'orders'" (click)="setTab('orders')">
+        Pedidos Entrantes ({{ incomingOrders().length }})
+      </button>
+      <button type="button" [class.active]="activeTab() === 'new-product'" (click)="setTab('new-product')">
+        Publicar Producto
+      </button>
+    </div>
+
+    <!-- PESTAÑA 1: INVENTARIO & PRODUCTOS -->
+    @if (activeTab() === 'inventory') {
+      <div class="tab-content">
+        <!-- Alerta de Stock Crítico -->
+        @if (lowStockProducts().length > 0) {
+          <div class="alert-box alert-box--warning">
+            <strong>Alerta de Stock Bajo:</strong> Hay {{ lowStockProducts().length }} productos con menos de 50 unidades disponibles.
+          </div>
+        }
+
+        <div class="card section-card">
+          <div class="card__head flex-between">
+            <div>
+              <h2>Inventario Activo en PostgreSQL</h2>
+              <p>Lista de productos disponibles en el catálogo de Pedidos360.</p>
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" (click)="catalog.cargarProductosDeBackend()">
+              Sincronizar con BD
+            </button>
+          </div>
+
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Producto</th>
+                  <th>SKU</th>
+                  <th>Categoría</th>
+                  <th>Precio</th>
+                  <th>Stock</th>
+                  <th>Estado</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (p of catalog.products(); track p.id) {
+                  <tr>
+                    <td>
+                      <div class="product-cell">
+                        <span class="product-icon">{{ p.icon }}</span>
+                        <div>
+                          <strong>{{ p.name }}</strong>
+                          <small>{{ p.brand }}</small>
+                        </div>
+                      </div>
+                    </td>
+                    <td><code>{{ p.sku }}</code></td>
+                    <td>{{ p.categoria }}</td>
+                    <td class="font-bold">${{ p.price | number }}</td>
+                    <td>
+                      <span [class.text-danger]="(p.stock || 0) < 50" [class.font-bold]="(p.stock || 0) < 50">
+                        {{ p.stock || 0 }} un.
+                      </span>
+                    </td>
+                    <td>
+                      @if ((p.stock || 0) > 50) {
+                        <span class="badge badge--success">En Stock</span>
+                      } @else {
+                        <span class="badge badge--danger">Stock Bajo</span>
+                      }
+                    </td>
+                    <td>
+                      <button type="button" class="icon-btn icon-btn--light" title="Editar precio/stock">
+                        <app-icon name="settings" size="16" />
+                      </button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- PESTAÑA 2: PEDIDOS ENTRANTES -->
+    @if (activeTab() === 'orders') {
+      <div class="tab-content">
+        <div class="card section-card">
+          <div class="card__head">
+            <h2>Gestión de Pedidos Entrantes</h2>
+            <p>Cambia el estado de los pedidos asignados a tu tienda para informar al cliente en tiempo real.</p>
+          </div>
+
+          <div class="orders-list">
+            @for (order of incomingOrders(); track order.id) {
+              <div class="order-seller-card card">
+                <div class="order-seller-card__head">
+                  <div>
+                    <h3><code>{{ order.id }}</code> - {{ order.customerName }}</h3>
+                    <p><app-icon name="map-pin" size="14" /> {{ order.address }}</p>
+                  </div>
+                  <div class="text-right">
+                    <span class="font-bold font-large">${{ order.total | number }}</span>
+                    <small>{{ order.itemsCount }} artículos | {{ order.time }}</small>
+                  </div>
+                </div>
+
+                <div class="order-seller-card__status">
+                  <span>Estado Actual:</span>
+                  <span
+                    class="badge"
+                    [class.badge--warning]="order.status === 'PENDIENTE'"
+                    [class.badge--primary]="order.status === 'EN_PREPARACION'"
+                    [class.badge--success]="order.status === 'EN_CAMINO' || order.status === 'ENTREGADO'"
+                  >
+                    {{ order.status }}
+                  </span>
+                </div>
+
+                <div class="order-seller-card__actions">
+                  <button
+                    type="button"
+                    class="btn btn-secondary btn-sm"
+                    [disabled]="order.status === 'EN_PREPARACION'"
+                    (click)="updateOrderStatus(order.id, 'EN_PREPARACION')"
+                  >
+                    En Preparación
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-primary btn-sm"
+                    [disabled]="order.status === 'EN_CAMINO'"
+                    (click)="updateOrderStatus(order.id, 'EN_CAMINO')"
+                  >
+                    En Camino (Despachado)
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-success btn-sm"
+                    [disabled]="order.status === 'ENTREGADO'"
+                    (click)="updateOrderStatus(order.id, 'ENTREGADO')"
+                  >
+                    Marcar Entregado
+                  </button>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- PESTAÑA 3: FORMULARIO NUEVO PRODUCTO -->
+    @if (activeTab() === 'new-product') {
+      <div class="tab-content">
+        <div class="card section-card form-card">
+          <div class="card__head">
+            <h2>Publicar Nuevo Producto en el Catálogo</h2>
+            <p>Agrega productos a la base de datos PostgreSQL de Pedidos360.</p>
+          </div>
+
+          <form (ngSubmit)="createProduct()" class="product-form">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="sku">Código SKU *</label>
+                <input id="sku" type="text" [value]="newSku()" (input)="newSku.set($any($event.target).value)" placeholder="ej: SUP-BEB-009" required />
+              </div>
+
+              <div class="form-group">
+                <label for="name">Nombre del Producto *</label>
+                <input id="name" type="text" [value]="newName()" (input)="newName.set($any($event.target).value)" placeholder="ej: Cerveza Kunstmann Torobayo 6x330cc" required />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="category">Categoría *</label>
+                <select id="category" [value]="newCategory()" (change)="newCategory.set($any($event.target).value)">
+                  <option value="LACTEOS_Y_HUEVOS">Lácteos y Huevos</option>
+                  <option value="ABARROTES">Abarrotes</option>
+                  <option value="BEBIDAS">Bebidas y Licores</option>
+                  <option value="FRUTAS_Y_VERDURAS">Frutas y Verduras</option>
+                  <option value="CARNES_Y_PESCADOS">Carnes y Pescados</option>
+                  <option value="PANADERIA">Panadería</option>
+                  <option value="LIMPIEZA">Limpieza y Hogar</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="price">Precio (CLP $) *</label>
+                <input id="price" type="number" [value]="newPrice()" (input)="newPrice.set($any($event.target).value)" placeholder="1990" required />
+              </div>
+
+              <div class="form-group">
+                <label for="stock">Stock Disponible *</label>
+                <input id="stock" type="number" [value]="newStock()" (input)="newStock.set($any($event.target).value)" placeholder="100" required />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="description">Descripción Corta</label>
+              <textarea id="description" rows="3" [value]="newDescription()" (input)="newDescription.set($any($event.target).value)" placeholder="Ingresa detalles de formato, contenido o características del producto..."></textarea>
+            </div>
+
+            <div class="form-foot">
+              <button type="button" class="btn btn-secondary" (click)="setTab('inventory')">Cancelar</button>
+              <button type="submit" class="btn btn-primary">Publicar Producto en PostgreSQL</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    }
+  }
+</div>

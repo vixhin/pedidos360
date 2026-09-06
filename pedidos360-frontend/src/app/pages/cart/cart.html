@@ -1,4 +1,23 @@
 <div class="container cart-page">
+
+  @if (orderSuccess()) {
+    <!-- PANTALLA DE CONFIRMACIÓN DE PEDIDO -->
+    <div class="order-success-screen">
+      <div class="order-success-card card">
+        <div class="order-success-icon">
+          <app-icon name="check" size="48" />
+        </div>
+        <h2>¡Pedido confirmado!</h2>
+        <p>Tu pedido <code>{{ confirmedOrderId() }}</code> fue registrado con éxito en nuestra base de datos.</p>
+        <p class="order-success-eta">Tiempo estimado de entrega: <strong>20-35 minutos</strong></p>
+        <div class="order-success-actions">
+          <a routerLink="/cliente" class="btn btn-primary">Ver seguimiento de mi pedido</a>
+          <a routerLink="/" class="btn btn-secondary">Seguir comprando</a>
+        </div>
+      </div>
+    </div>
+  } @else {
+
   <div class="cart-page__head">
     <h1>Tu pedido inteligente</h1>
     <p>Revisamos los productos, agrupamos tu compra y calculamos la entrega más rápida para ti.</p>
@@ -105,8 +124,17 @@
           <button type="button" class="btn btn-secondary btn-sm" (click)="applyCoupon()">Aplicar</button>
         </div>
 
-        <button type="button" class="btn btn-primary btn-block" [disabled]="cart.itemCount() === 0">
-          Continuar al pago <app-icon name="arrow-right" size="16" />
+        <button
+          type="button"
+          class="btn btn-primary btn-block"
+          [disabled]="cart.itemCount() === 0 || pedidoSvc.isSubmitting()"
+          (click)="confirmarPedido()"
+        >
+          @if (pedidoSvc.isSubmitting()) {
+            Procesando pedido...
+          } @else {
+            Confirmar pedido <app-icon name="arrow-right" size="16" />
+          }
         </button>
         <p class="summary-secure"><app-icon name="shield" size="13" /> Pago seguro y protegido</p>
       </div>
@@ -154,4 +182,5 @@
     </aside>
     }
   </div>
+  }
 </div>

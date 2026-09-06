@@ -23,7 +23,167 @@
   </aside>
 
   <main class="account-content">
+    @if (statusToast()) {
+      <div class="toast-alert" [class.toast-alert--error]="statusToastType() === 'error'">
+        <app-icon [name]="statusToastType() === 'error' ? 'x' : 'check'" size="18" />
+        {{ statusToast() }}
+      </div>
+    }
+
     @switch (activeSection()) {
+      @case ('perfil') {
+        <div class="profile-section-head">
+          <div>
+            <h1>Configuración de Perfil</h1>
+            <p>Administra tu información personal, correo y seguridad de cuenta en Pedidos360.</p>
+          </div>
+        </div>
+
+        <div class="card profile-form-card">
+          <h2><app-icon name="user" size="20" /> Datos Personales & Contacto</h2>
+          <form (ngSubmit)="saveProfileData()" class="profile-form">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="prof-nombre">Nombre Completo *</label>
+                <input
+                  id="prof-nombre"
+                  type="text"
+                  [ngModel]="editNombre()"
+                  (ngModelChange)="editNombre.set($event)"
+                  name="editNombre"
+                  placeholder="Tu nombre completo"
+                  required
+                />
+              </div>
+
+              <div class="form-group">
+                <label for="prof-email">Correo Electrónico *</label>
+                <input
+                  id="prof-email"
+                  type="email"
+                  [ngModel]="editEmail()"
+                  (ngModelChange)="editEmail.set($event)"
+                  name="editEmail"
+                  placeholder="tu@correo.cl"
+                  required
+                />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="prof-phone">Teléfono de Contacto</label>
+                <input
+                  id="prof-phone"
+                  type="text"
+                  [ngModel]="editTelefono()"
+                  (ngModelChange)="editTelefono.set($event)"
+                  name="editTelefono"
+                  placeholder="+56 9 1234 5678"
+                />
+              </div>
+
+              <div class="form-group">
+                <label for="prof-address">Dirección Predeterminada</label>
+                <input
+                  id="prof-address"
+                  type="text"
+                  [ngModel]="editDireccion()"
+                  (ngModelChange)="editDireccion.set($event)"
+                  name="editDireccion"
+                  placeholder="Dirección de entrega habitual"
+                />
+              </div>
+            </div>
+
+            <div class="form-foot">
+              <button type="submit" class="btn btn-primary">
+                Guardar Datos Personales
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div class="card profile-form-card" style="margin-top: 1.5rem;">
+          <h2><app-icon name="lock" size="20" /> Cambiar Contraseña</h2>
+          <form (ngSubmit)="changePassword()" class="profile-form">
+            <div class="form-group">
+              <label for="pass-curr">Contraseña Actual *</label>
+              <div class="password-input-wrap">
+                <input
+                  id="pass-curr"
+                  [type]="showCurrentPassword() ? 'text' : 'password'"
+                  [ngModel]="currentPassword()"
+                  (ngModelChange)="currentPassword.set($event)"
+                  name="currentPassword"
+                  placeholder="••••••••"
+                />
+                <button
+                  type="button"
+                  class="password-toggle-btn"
+                  (click)="showCurrentPassword.set(!showCurrentPassword())"
+                  [title]="showCurrentPassword() ? 'Ocultar contraseña' : 'Mostrar contraseña'"
+                >
+                  <app-icon [name]="showCurrentPassword() ? 'eye-off' : 'eye'" size="18" />
+                </button>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="pass-new">Nueva Contraseña *</label>
+                <div class="password-input-wrap">
+                  <input
+                    id="pass-new"
+                    [type]="showNewPassword() ? 'text' : 'password'"
+                    [ngModel]="newPassword()"
+                    (ngModelChange)="newPassword.set($event)"
+                    name="newPassword"
+                    placeholder="Mínimo 6 caracteres"
+                  />
+                  <button
+                    type="button"
+                    class="password-toggle-btn"
+                    (click)="showNewPassword.set(!showNewPassword())"
+                    [title]="showNewPassword() ? 'Ocultar contraseña' : 'Mostrar contraseña'"
+                  >
+                    <app-icon [name]="showNewPassword() ? 'eye-off' : 'eye'" size="18" />
+                  </button>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="pass-conf">Confirmar Nueva Contraseña *</label>
+                <div class="password-input-wrap">
+                  <input
+                    id="pass-conf"
+                    [type]="showConfirmPassword() ? 'text' : 'password'"
+                    [ngModel]="confirmPassword()"
+                    (ngModelChange)="confirmPassword.set($event)"
+                    name="confirmPassword"
+                    placeholder="Repite la contraseña"
+                  />
+                  <button
+                    type="button"
+                    class="password-toggle-btn"
+                    (click)="showConfirmPassword.set(!showConfirmPassword())"
+                    [title]="showConfirmPassword() ? 'Ocultar contraseña' : 'Mostrar contraseña'"
+                  >
+                    <app-icon [name]="showConfirmPassword() ? 'eye-off' : 'eye'" size="18" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-foot">
+              <button type="submit" class="btn btn-secondary">
+                Actualizar Contraseña
+              </button>
+            </div>
+          </form>
+        </div>
+      }
+
       @case ('resumen') {
         <h1>Resumen</h1>
         <div class="stat-grid">
@@ -121,7 +281,7 @@
       @case ('favoritos') {
         <h1>Favoritos</h1>
         <div class="fav-grid">
-          @for (p of catalog.products.slice(0, 4); track p.id) {
+          @for (p of catalog.products().slice(0, 4); track p.id) {
             <div class="card fav-card">
               <div class="fav-card__img">{{ p.icon }}</div>
               <p class="fav-card__name">{{ p.name }}</p>

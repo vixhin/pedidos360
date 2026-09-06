@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import { Icon } from '../../shared/icon/icon';
 import { CatalogService } from '../../core/services/catalog.service';
 import { CartService } from '../../core/services/cart.service';
+import { FavoritesService } from '../../core/services/favorites.service';
 import { Product } from '../../core/models/catalog.model';
 
 @Component({
@@ -22,7 +23,24 @@ export class Home {
     { icon: 'home' as const, title: 'Recibe rápidamente', text: 'Entrega en la puerta de tu casa sin perder tiempo.' },
   ];
 
-  constructor(readonly catalog: CatalogService, readonly cart: CartService) {}
+  constructor(
+    readonly catalog: CatalogService,
+    readonly cart: CartService,
+    readonly favorites: FavoritesService
+  ) {}
+
+  filterByCategory(categoryId: string): void {
+    this.catalog.selectCategory(categoryId);
+  }
+
+  showAllProducts(): void {
+    this.catalog.selectCategory('TODAS');
+    this.catalog.setSearchQuery('');
+  }
+
+  clearSearch(): void {
+    this.catalog.setSearchQuery('');
+  }
 
   addToCart(product: Product): void {
     this.cart.add(product);

@@ -4,7 +4,7 @@
       <span class="brand__mark">360</span>
       <span class="brand__name">Pedidos<strong>360</strong></span>
     </a>
-    <div class="login__illustration" aria-hidden="true">🛵📦</div>
+    <div class="login__illustration" aria-hidden="true"><app-icon name="package" size="64" /></div>
     <h1>Pedidos360: tu entrega en 360 grados.</h1>
     <p>Rápido, seguro, confiable. Tus compras a domicilio, siempre a tiempo.</p>
   </div>
@@ -43,14 +43,25 @@
           </label>
           <label class="field">
             <span>Contraseña</span>
-            <input
-              type="password"
-              required
-              [ngModel]="loginPassword()"
-              (ngModelChange)="loginPassword.set($event)"
-              name="loginPassword"
-              placeholder="••••••••"
-            />
+            <div class="password-input-wrap">
+              <input
+                [type]="showLoginPassword() ? 'text' : 'password'"
+                required
+                [ngModel]="loginPassword()"
+                (ngModelChange)="loginPassword.set($event)"
+                name="loginPassword"
+                placeholder="••••••••"
+              />
+              <button
+                type="button"
+                class="password-toggle-btn"
+                (click)="toggleShowLoginPassword()"
+                [title]="showLoginPassword() ? 'Ocultar contraseña' : 'Mostrar contraseña'"
+                aria-label="Alternar visibilidad de contraseña"
+              >
+                <app-icon [name]="showLoginPassword() ? 'eye-off' : 'eye'" size="18" />
+              </button>
+            </div>
           </label>
 
           <button type="submit" class="btn btn-secondary btn-block" [disabled]="loading()">
@@ -95,15 +106,26 @@
           </label>
           <label class="field">
             <span>Contraseña</span>
-            <input
-              type="password"
-              required
-              minlength="6"
-              [ngModel]="registerPassword()"
-              (ngModelChange)="registerPassword.set($event)"
-              name="registerPassword"
-              placeholder="Mínimo 6 caracteres"
-            />
+            <div class="password-input-wrap">
+              <input
+                [type]="showRegisterPassword() ? 'text' : 'password'"
+                required
+                minlength="6"
+                [ngModel]="registerPassword()"
+                (ngModelChange)="registerPassword.set($event)"
+                name="registerPassword"
+                placeholder="Mínimo 6 caracteres"
+              />
+              <button
+                type="button"
+                class="password-toggle-btn"
+                (click)="toggleShowRegisterPassword()"
+                [title]="showRegisterPassword() ? 'Ocultar contraseña' : 'Mostrar contraseña'"
+                aria-label="Alternar visibilidad de contraseña"
+              >
+                <app-icon [name]="showRegisterPassword() ? 'eye-off' : 'eye'" size="18" />
+              </button>
+            </div>
           </label>
 
           <button type="submit" class="btn btn-primary btn-block" [disabled]="loading()">

@@ -5,12 +5,12 @@
       <p>Descubre, combina y recibe productos de distintas categorías en un solo pedido.</p>
       <div class="hero__actions">
         <a routerLink="/carrito" class="btn btn-primary">Explorar mi pedido</a>
-        <button type="button" class="btn btn-secondary">Ver cómo funciona</button>
+        <button type="button" class="btn btn-secondary" (click)="showAllProducts()">Ver todo el catálogo</button>
       </div>
     </div>
     <div class="hero__art" aria-hidden="true">
       <div class="hero__blob">
-        <span>🎧</span><span>🥤</span><span>🍌</span><span>📦</span>
+        <app-icon name="package" size="32" /><app-icon name="cart" size="32" />
       </div>
     </div>
   </div>
@@ -35,11 +35,16 @@
 <section class="container section">
   <div class="section__head">
     <h2>Categorías principales</h2>
-    <a href="javascript:void(0)" class="link">Ver todas las categorías</a>
+    <a href="javascript:void(0)" class="link" (click)="showAllProducts()">Ver todas las categorías</a>
   </div>
   <div class="category-grid">
     @for (cat of catalog.categories; track cat.id) {
-      <button type="button" class="category-card">
+      <button
+        type="button"
+        class="category-card"
+        [class.active]="catalog.selectedCategory() === cat.id"
+        (click)="filterByCategory(cat.id)"
+      >
         <span class="category-card__icon">{{ cat.icon }}</span>
         {{ cat.name }}
       </button>
@@ -60,34 +65,73 @@
   </div>
 </section>
 
-<section class="container section">
+<section class="container section" id="catalogo">
   <div class="section__head">
-    <h2>Selección 360 para ti</h2>
-    <a href="javascript:void(0)" class="link">Ver todo</a>
+    <div>
+      <h2>Catálogo de Productos 360</h2>
+      <p style="margin-top: 4px; color: #666; font-size: 0.95rem;">
+        Mostrando {{ catalog.products().length }} productos disponibles en supermercado (PostgreSQL)
+      </p>
+    </div>
+    <div style="display: flex; gap: 8px; align-items: center;">
+      @if (catalog.searchQuery()) {
+        <span style="background: #e4e6ff; color: #1e3a8a; padding: 4px 10px; border-radius: 16px; font-size: 0.85rem; font-weight: 500;">
+          Búsqueda: "{{ catalog.searchQuery() }}"
+          <button type="button" style="background: none; border: none; cursor: pointer; margin-left: 4px;" (click)="clearSearch()">✕</button>
+        </span>
+      }
+      <a href="javascript:void(0)" class="link" (click)="showAllProducts()">Restablecer filtros</a>
+    </div>
   </div>
-  <div class="product-grid">
-    @for (product of catalog.products; track product.id) {
-      <div class="product-card card">
-        <button type="button" class="product-card__fav" aria-label="Agregar a favoritos">
-          <app-icon name="heart" size="16" />
-        </button>
-        <div class="product-card__img">{{ product.icon }}</div>
-        <p class="product-card__brand">{{ product.brand }}</p>
-        <p class="product-card__name">{{ product.name }}</p>
-        <div class="product-card__rating">
-          <app-icon name="star" size="13" /> {{ product.rating }}
-          <span class="dot-sep"></span>
-          <app-icon name="clock" size="13" /> {{ product.deliveryMinutes }} min
-        </div>
-        <div class="product-card__foot">
-          <span class="product-card__price">${{ product.price | number }}</span>
-          <button type="button" class="btn btn-primary btn-sm" (click)="addToCart(product)">
-            <app-icon name="plus" size="14" /> Agregar
+
+  @if (catalog.isLoading()) {
+    <div style="text-align: center; padding: 3rem; color: #666;">
+      <p>Cargando catálogo actualizado de productos...</p>
+    </div>
+  } @else if (catalog.products().length === 0) {
+    <div style="text-align: center; padding: 3rem; background: #f8fafc; border-radius: 12px; border: 1px dashed #cbd5e1; margin-top: 1rem;">
+      <div style="margin-bottom: 0.5rem;"><app-icon name="search" size="40" /></div>
+      <h3 style="margin-bottom: 0.5rem;">No encontramos coincidencias para "{{ catalog.searchQuery() }}"</h3>
+      <p style="color: #64748b; max-width: 500px; margin: 0 auto 1.5rem auto;">
+        Intenta buscar términos populares como: <strong>leche</strong>, <strong>chela</strong>, <strong>asado</strong>, <strong>pan</strong>, <strong>detergente</strong> o <strong>arroz</strong>.
+      </p>
+      <button type="button" class="btn btn-primary" (click)="showAllProducts()">Ver todos los productos</button>
+    </div>
+  } @else {
+    <div class="product-grid">
+      @for (product of catalog.products(); track product.id) {
+        <div class="product-card card">
+          <button
+            type="button"
+            class="product-card__fav"
+            [class.product-card__fav--active]="favorites.isFavorite(product.id)"
+            (click)="favorites.toggleFavorite(product)"
+            [title]="favorites.isFavorite(product.id) ? 'Quitar de favoritos' : 'Guardar en favoritos'"
+            aria-label="Agregar a favoritos"
+          >
+            <app-icon name="heart" size="16" />
           </button>
+          <div class="product-card__img">{{ product.icon }}</div>
+          <p class="product-card__brand">{{ product.brand }}</p>
+          <p class="product-card__name">{{ product.name }}</p>
+          <p style="font-size: 0.8rem; color: #64748b; margin-top: 2px;">{{ product.descripcion }}</p>
+          <div class="product-card__rating">
+            <app-icon name="star" size="13" /> {{ product.rating }}
+            <span class="dot-sep"></span>
+            <app-icon name="clock" size="13" /> {{ product.deliveryMinutes }} min
+            <span class="dot-sep"></span>
+            <small style="color: #16a34a; font-weight: 600;">Stock: {{ product.stock }}</small>
+          </div>
+          <div class="product-card__foot">
+            <span class="product-card__price">${{ product.price | number }}</span>
+            <button type="button" class="btn btn-primary btn-sm" (click)="addToCart(product)">
+              <app-icon name="plus" size="14" /> Agregar
+            </button>
+          </div>
         </div>
-      </div>
-    }
-  </div>
+      }
+    </div>
+  }
 </section>
 
 <section class="steps-section">

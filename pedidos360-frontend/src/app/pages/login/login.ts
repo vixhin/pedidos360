@@ -24,12 +24,22 @@ export class Login {
 
   readonly loginEmail = signal('');
   readonly loginPassword = signal('');
+  readonly showLoginPassword = signal(false);
 
   readonly registerNombre = signal('');
   readonly registerEmail = signal('');
   readonly registerPassword = signal('');
+  readonly showRegisterPassword = signal(false);
 
   constructor(private auth: AuthService, private router: Router) {}
+
+  toggleShowLoginPassword(): void {
+    this.showLoginPassword.update((v) => !v);
+  }
+
+  toggleShowRegisterPassword(): void {
+    this.showRegisterPassword.update((v) => !v);
+  }
 
   readonly azureAdConfigured = isAzureAdConfigured();
 
@@ -59,7 +69,7 @@ export class Login {
     this.auth.loginWithCredentials(this.loginEmail(), this.loginPassword()).subscribe({
       next: () => {
         this.loading.set(false);
-        this.router.navigate(['/']);
+        this.redirectByRole();
       },
       error: (err: HttpErrorResponse) => {
         this.loading.set(false);
@@ -76,7 +86,7 @@ export class Login {
         this.auth.loginWithCredentials(this.registerEmail(), this.registerPassword()).subscribe({
           next: () => {
             this.loading.set(false);
-            this.router.navigate(['/']);
+            this.redirectByRole();
           },
           error: () => {
             this.loading.set(false);
@@ -90,6 +100,17 @@ export class Login {
         this.error.set(this.extractMessage(err, 'No se pudo crear la cuenta.'));
       },
     });
+  }
+
+  private redirectByRole(): void {
+    const role = this.auth.activeRole();
+    if (role === 'ADMIN') {
+      this.router.navigate(['/analitica']);
+    } else if (role === 'VENDEDOR') {
+      this.router.navigate(['/vendedor']);
+    } else {
+      this.router.navigate(['/']);
+    }
   }
 
   private extractMessage(err: HttpErrorResponse, fallback: string): string {

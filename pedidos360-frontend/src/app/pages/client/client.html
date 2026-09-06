@@ -1,0 +1,320 @@
+<div class="client-page container">
+  <!-- Encabezado del Portal Cliente -->
+  <div class="page-head">
+    <div>
+      <span class="badge badge--client">Portal del Cliente & Mis Pedidos</span>
+      <h1>Hola, {{ auth.user()?.name || 'Cliente Preferencial' }}</h1>
+      <p>Revisa el seguimiento en vivo de tu pedido y gestiona tus compras anteriores.</p>
+    </div>
+    <div>
+      <a routerLink="/carrito" class="btn btn-primary">
+        Ir a mi Carrito ({{ cart.itemCount() }})
+      </a>
+    </div>
+  </div>
+
+  @if (toastMessage()) {
+    <div class="toast-banner">
+      <app-icon name="check" size="18" /> {{ toastMessage() }}
+      <a routerLink="/carrito" class="link-bold">Ver carrito →</a>
+    </div>
+  }
+
+  <!-- Pestañas del Portal -->
+  <div class="tab-nav">
+    <button type="button" [class.active]="activeTab() === 'active-order'" (click)="setTab('active-order')">
+      Pedido Activo en Vivo
+    </button>
+    <button type="button" [class.active]="activeTab() === 'history'" (click)="setTab('history')">
+      Historial de Compras ({{ pedidoSvc.pedidos().length || pastOrders().length }})
+    </button>
+    <button type="button" [class.active]="activeTab() === 'addresses'" (click)="setTab('addresses')">
+      Mis Direcciones & Datos
+    </button>
+  </div>
+
+  <!-- PESTAÑA 1: SEGUIMIENTO DE PEDIDO ACTIVO -->
+  @if (activeTab() === 'active-order') {
+    <div class="tab-content">
+      <div class="card active-order-card">
+        <div class="active-order-card__head">
+          <div>
+            <span class="badge badge--live">● EN VIVO</span>
+            <h2>Pedido <code>{{ activeOrder().id }}</code></h2>
+            <p>{{ activeOrder().date }}</p>
+          </div>
+          <div class="eta-box">
+            <small>Tiempo Estimado</small>
+            <strong>{{ activeOrder().deliveryEta }}</strong>
+          </div>
+        </div>
+
+        <!-- BARRA DE SEGUIMIENTO EN 4 ETAPAS -->
+        <div class="tracker-stepper">
+          <div class="step-item" [class.completed]="activeOrder().statusStep >= 1" [class.active]="activeOrder().statusStep === 1">
+            <div class="step-circle">1</div>
+            <span>Pedido Recibido</span>
+          </div>
+
+          <div class="step-line" [class.completed]="activeOrder().statusStep >= 2"></div>
+
+          <div class="step-item" [class.completed]="activeOrder().statusStep >= 2" [class.active]="activeOrder().statusStep === 2">
+            <div class="step-circle">2</div>
+            <span>En Preparación</span>
+          </div>
+
+          <div class="step-line" [class.completed]="activeOrder().statusStep >= 3"></div>
+
+          <div class="step-item" [class.completed]="activeOrder().statusStep >= 3" [class.active]="activeOrder().statusStep === 3">
+            <div class="step-circle">3</div>
+            <span>En Camino</span>
+          </div>
+
+          <div class="step-line" [class.completed]="activeOrder().statusStep >= 4"></div>
+
+          <div class="step-item" [class.completed]="activeOrder().statusStep >= 4" [class.active]="activeOrder().statusStep === 4">
+            <div class="step-circle">4</div>
+            <span>Entregado</span>
+          </div>
+        </div>
+
+        <div class="courier-banner">
+          <div class="courier-info">
+            <span class="courier-avatar"><app-icon name="user" size="18" /></span>
+            <div>
+              <strong>Repartidor asignado: {{ activeOrder().courierName }}</strong>
+              <p>Estado: {{ activeOrder().statusLabel }}</p>
+            </div>
+          </div>
+          <a [href]="'tel:' + activeOrder().courierPhone" class="btn btn-secondary btn-sm">
+            Llamar Repartidor
+          </a>
+        </div>
+
+        <!-- ITEMS DEL PEDIDO ACTIVO -->
+        <div class="order-items-list">
+          <h3>Productos en este pedido:</h3>
+          @for (item of activeOrder().items; track item.name) {
+            <div class="order-item-row">
+              <span>{{ item.icon }} {{ item.quantity }}x <strong>{{ item.name }}</strong></span>
+              <span>${{ item.price * item.quantity | number }}</span>
+            </div>
+          }
+          <div class="order-total-row">
+            <strong>Total Pagado:</strong>
+            <strong>${{ activeOrder().total | number }}</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- PESTAÑA 2: HISTORIAL DE COMPRAS -->
+  @if (activeTab() === 'history') {
+    <div class="tab-content">
+
+      <!-- Loading state -->
+      @if (pedidoSvc.isLoading()) {
+        <div style="text-align:center; padding: 3rem; color: #64748b;">
+          <app-icon name="package" size="32" />
+          <p style="margin-top: 1rem;">Cargando tus pedidos...</p>
+        </div>
+      } @else {
+
+        <!-- Orders from DB -->
+        @if (pedidoSvc.pedidos().length > 0) {
+          <div class="history-list">
+            @for (order of pedidoSvc.pedidos(); track order.id) {
+              <div class="card history-card">
+                <div class="history-card__head">
+                  <div>
+                    <h3>Pedido <code>{{ order.id }}</code></h3>
+                    <p>{{ order.date }} | <span class="badge badge--success">{{ order.statusLabel }}</span></p>
+                  </div>
+                  @if (order.statusStep === 4) {
+                    <button type="button" class="btn btn-primary btn-sm" (click)="repeatOrder(order)">
+                      Repetir Pedido
+                    </button>
+                  }
+                </div>
+                <div class="order-items-list">
+                  @if (order.items.length > 0) {
+                    @for (item of order.items; track item.name) {
+                      <div class="order-item-row">
+                        <span>{{ item.icon }} {{ item.quantity }}x {{ item.name }}</span>
+                        <span>${{ item.price * item.quantity | number }}</span>
+                      </div>
+                    }
+                  } @else {
+                    <div class="order-item-row">
+                      <span>Pedido realizado</span>
+                      <span></span>
+                    </div>
+                  }
+                  <div class="order-total-row">
+                    <span>Total de la compra:</span>
+                    <strong>${{ order.total | number }}</strong>
+                  </div>
+                </div>
+              </div>
+            }
+          </div>
+
+        } @else {
+          <!-- Fallback: hardcoded past orders -->
+          <div class="history-list">
+            @for (order of pastOrders(); track order.id) {
+              <div class="card history-card">
+                <div class="history-card__head">
+                  <div>
+                    <h3>Pedido <code>{{ order.id }}</code></h3>
+                    <p>{{ order.date }} | <span class="badge badge--success">{{ order.statusLabel }}</span></p>
+                  </div>
+                  <button type="button" class="btn btn-primary btn-sm" (click)="repeatOrder(order)">
+                    Repetir Pedido (1 Clic)
+                  </button>
+                </div>
+
+                <div class="order-items-list">
+                  @for (item of order.items; track item.name) {
+                    <div class="order-item-row">
+                      <span>{{ item.icon }} {{ item.quantity }}x {{ item.name }}</span>
+                      <span>${{ item.price * item.quantity | number }}</span>
+                    </div>
+                  }
+                  <div class="order-total-row">
+                    <span>Total de la compra:</span>
+                    <strong>${{ order.total | number }}</strong>
+                  </div>
+                </div>
+              </div>
+            }
+            @if (pastOrders().length === 0) {
+              <div class="card" style="text-align: center; padding: 2.5rem; color: #64748b;">
+                <app-icon name="package" size="32" />
+                <p style="margin-top: 1rem;">No tienes pedidos anteriores aún. ¡Haz tu primera compra!</p>
+                <a routerLink="/" class="btn btn-primary" style="margin-top: 1rem;">Explorar productos</a>
+              </div>
+            }
+          </div>
+        }
+      }
+    </div>
+  }
+
+  <!-- PESTAÑA 3: MIS DIRECCIONES -->
+  @if (activeTab() === 'addresses') {
+    <div class="tab-content">
+      <div class="card section-card">
+        <div class="card__head flex-between">
+          <div>
+            <h2>Dirección de Entrega Guardada</h2>
+            <p>Ubicación predeterminada para el despacho exprés de tus pedidos.</p>
+          </div>
+          <button type="button" class="btn btn-primary btn-sm" (click)="toggleAddAddressModal()">
+            <app-icon name="plus" size="14" /> Agregar Dirección
+          </button>
+        </div>
+
+        <!-- FORMULARIO / MODAL AGREGAR NUEVA DIRECCIÓN -->
+        @if (showAddAddressModal()) {
+          <div class="card" style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 14px; padding: 1.5rem; margin-bottom: 1.5rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+              <h3 style="margin: 0; font-size: 1.2rem; color: #0f172a;">Agregar Nueva Dirección de Entrega</h3>
+              <button type="button" class="icon-btn-outline" (click)="toggleAddAddressModal()">✕</button>
+            </div>
+
+            <form (ngSubmit)="saveNewAddress()" style="display: flex; flex-direction: column; gap: 12px;">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <label class="field">
+                  <span style="font-size: 0.85rem; font-weight: 600; color: #334155;">Nombre / Alias de la Dirección</span>
+                  <input
+                    type="text"
+                    [ngModel]="newAddressTitle()"
+                    (ngModelChange)="newAddressTitle.set($event)"
+                    name="newAddressTitle"
+                    placeholder="ej: Departamento Las Condes, Casa Mamá"
+                  />
+                </label>
+
+                <label class="field">
+                  <span style="font-size: 0.85rem; font-weight: 600; color: #334155;">Comuna *</span>
+                  <select
+                    [ngModel]="newAddressComuna()"
+                    (ngModelChange)="newAddressComuna.set($event)"
+                    name="newAddressComuna"
+                    style="padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1;"
+                  >
+                    <option value="Santiago Centro">Santiago Centro</option>
+                    <option value="Providencia">Providencia</option>
+                    <option value="Las Condes">Las Condes</option>
+                    <option value="Ñuñoa">Ñuñoa</option>
+                    <option value="San Miguel">San Miguel</option>
+                    <option value="Maipú">Maipú</option>
+                    <option value="La Florida">La Florida</option>
+                  </select>
+                </label>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 12px;">
+                <label class="field">
+                  <span style="font-size: 0.85rem; font-weight: 600; color: #334155;">Calle y Número *</span>
+                  <input
+                    type="text"
+                    required
+                    [ngModel]="newAddressStreet()"
+                    (ngModelChange)="newAddressStreet.set($event)"
+                    name="newAddressStreet"
+                    placeholder="ej: Av. Apoquindo 4500"
+                  />
+                </label>
+
+                <label class="field">
+                  <span style="font-size: 0.85rem; font-weight: 600; color: #334155;">Depto / Oficina (Opcional)</span>
+                  <input
+                    type="text"
+                    [ngModel]="newAddressDepto()"
+                    (ngModelChange)="newAddressDepto.set($event)"
+                    name="newAddressDepto"
+                    placeholder="ej: Depto 502"
+                  />
+                </label>
+              </div>
+
+              <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
+                <button type="button" class="btn btn-secondary btn-sm" (click)="toggleAddAddressModal()">Cancelar</button>
+                <button type="submit" class="btn btn-primary btn-sm">Guardar Dirección</button>
+              </div>
+            </form>
+          </div>
+        }
+
+        <!-- LISTA DE DIRECCIONES -->
+        <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 1rem;">
+          @for (addr of addresses(); track addr.id) {
+            <div
+              class="address-box"
+              [style.border-color]="addr.isPrimary ? '#10b981' : '#cbd5e1'"
+              [style.background]="addr.isPrimary ? '#f0fdf4' : '#ffffff'"
+              (click)="setPrimaryAddress(addr.id)"
+              style="cursor: pointer;"
+            >
+              <div class="address-box__icon"><app-icon name="map-pin" size="20" /></div>
+              <div style="flex: 1;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <strong>{{ addr.title }}</strong>
+                  @if (addr.isPrimary) {
+                    <span class="badge badge--success">✓ Dirección activa</span>
+                  } @else {
+                    <button type="button" class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 2px 8px;">Seleccionar</button>
+                  }
+                </div>
+                <p style="margin-top: 4px; color: #475569;">{{ addr.detail }}</p>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  }
+</div>
