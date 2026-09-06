@@ -103,8 +103,37 @@ public class ProductoService {
 
     @Transactional(readOnly = true)
     public List<ProductoResponseDTO> buscarPorNombre(String nombre) {
-        log.info("[PRODUCTOS-SERVICE] Searching products by name={}", nombre);
-        return productoRepository.findByNombreContainingIgnoreCase(nombre).stream()
+        log.info("[PRODUCTOS-SERVICE] Searching products by term={}", nombre);
+        if (nombre == null || nombre.trim().isEmpty()) {
+            return obtenerTodos();
+        }
+
+        String rawTerm = nombre.trim().toLowerCase();
+        String term = rawTerm;
+
+        // Mapeo semántico de sinónimos habituales a categorías y términos
+        if (rawTerm.contains("chela") || rawTerm.contains("gaseosa") || rawTerm.contains("refresco") || rawTerm.contains("bebida") || rawTerm.contains("jugo") || rawTerm.contains("cerveza")) {
+            term = "BEBIDAS";
+        } else if (rawTerm.contains("leche") || rawTerm.contains("queso") || rawTerm.contains("yogurt") || rawTerm.contains("huevo") || rawTerm.contains("lacteo")) {
+            term = "LACTEOS";
+        } else if (rawTerm.contains("carne") || rawTerm.contains("pollo") || rawTerm.contains("vacuno") || rawTerm.contains("asado") || rawTerm.contains("pescado")) {
+            term = "CARNES";
+        } else if (rawTerm.contains("pan") || rawTerm.contains("hallulla") || rawTerm.contains("marraqueta")) {
+            term = "PANADERIA";
+        } else if (rawTerm.contains("limpieza") || rawTerm.contains("cloro") || rawTerm.contains("detergente") || rawTerm.contains("aseo") || rawTerm.contains("papel")) {
+            term = "LIMPIEZA";
+        } else if (rawTerm.contains("fruta") || rawTerm.contains("verdura") || rawTerm.contains("tomate") || rawTerm.contains("manzana") || rawTerm.contains("platano")) {
+            term = "FRUTAS";
+        } else if (rawTerm.contains("arroz") || rawTerm.contains("fideos") || rawTerm.contains("aceite") || rawTerm.contains("harina") || rawTerm.contains("abarrotes")) {
+            term = "ABARROTES";
+        }
+
+        List<Producto> resultados = productoRepository.buscarPorTermino(term);
+        if (resultados.isEmpty() && !term.equals(rawTerm)) {
+            resultados = productoRepository.buscarPorTermino(rawTerm);
+        }
+
+        return resultados.stream()
                 .map(ProductoResponseDTO::fromEntity)
                 .collect(Collectors.toList());
     }

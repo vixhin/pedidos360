@@ -50,6 +50,54 @@ public class UsuarioService {
             usuarioRepository.save(admin);
             log.info("[USER-SERVICE] Seeded mock admin user: admin@pedidos360.cl");
         }
+
+        if (usuarioRepository.findByEmail("vendedor@pedidos360.cl").isEmpty()) {
+            Usuario vendedor = new Usuario(
+                    null,
+                    "Vendedor Gonzalo Silva",
+                    "vendedor@pedidos360.cl",
+                    passwordEncoder.encode("chupalovixo"),
+                    Rol.VENDEDOR
+            );
+            usuarioRepository.save(vendedor);
+            log.info("[USER-SERVICE] Seeded mock seller user: vendedor@pedidos360.cl");
+        }
+
+        if (usuarioRepository.findByEmail("cliente@pedidos360.cl").isEmpty()) {
+            Usuario cliente = new Usuario(
+                    null,
+                    "Cliente Camila Silva",
+                    "cliente@pedidos360.cl",
+                    passwordEncoder.encode("chupalovixo"),
+                    Rol.CLIENTE
+            );
+            usuarioRepository.save(cliente);
+            log.info("[USER-SERVICE] Seeded mock customer user: cliente@pedidos360.cl");
+        }
+
+        if (usuarioRepository.findByEmail("rodrigo.morales@pedidos360.cl").isEmpty()) {
+            Usuario repartidor = new Usuario(
+                    null,
+                    "Rodrigo Morales (Repartidor)",
+                    "rodrigo.morales@pedidos360.cl",
+                    passwordEncoder.encode("chupalovixo"),
+                    Rol.VENDEDOR
+            );
+            usuarioRepository.save(repartidor);
+            log.info("[USER-SERVICE] Seeded mock courier user: rodrigo.morales@pedidos360.cl");
+        }
+
+        if (usuarioRepository.findByEmail("camila.reyes@pedidos360.cl").isEmpty()) {
+            Usuario soporte = new Usuario(
+                    null,
+                    "Camila Reyes (Soporte Cliente)",
+                    "camila.reyes@pedidos360.cl",
+                    passwordEncoder.encode("chupalovixo"),
+                    Rol.VENDEDOR
+            );
+            usuarioRepository.save(soporte);
+            log.info("[USER-SERVICE] Seeded mock support user: camila.reyes@pedidos360.cl");
+        }
     }
 
     @Transactional(readOnly = true)
