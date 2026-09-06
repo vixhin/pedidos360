@@ -168,11 +168,8 @@ public class ProxyController {
         // Construir el path downstream mapeando de /api/bff/xxx a /api/xxx
         String requestUri  = request.getRequestURI();
         String relativePath = requestUri.replace(bffPathPrefix, "");
-        // Los microservicios usan /api/productos, /api/pedidos, etc.
-        String serviceBasePath = "/api/" + serviceName
-                .replace("-service", "")
-                .replace("usuario", "usuarios")
-                .replace("notificacion", "notificacion");
+        // Los microservicios usan /api/productos, /api/pedidos, /api/usuario (singular), etc.
+        String serviceBasePath = "/api/" + serviceName.replace("-service", "");
         String downstreamPath = serviceBasePath + relativePath;
 
         String queryString = request.getQueryString();
