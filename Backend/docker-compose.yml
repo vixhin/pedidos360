@@ -129,16 +129,15 @@ services:
   # Puerto: 8090
   # Valida JWT de Microsoft Entra ID y actúa como proxy hacia microservicios.
   #
-  # Para configurar Azure, crea un archivo .env en la carpeta Backend/ con:
-  #   AZURE_TENANT_ID=tu-tenant-id
-  #   AZURE_API_CLIENT_ID=tu-api-client-id
+  # tenant y api-client-id son identificadores públicos (aparecen en cada token),
+  # no son secretos. Se pueden sobrescribir con un Backend/.env si hace falta.
   bff:
     build: ./bff
     container_name: pedidos360-bff
     restart: unless-stopped
     environment:
-      AZURE_TENANT_ID: ${AZURE_TENANT_ID:-PLACEHOLDER_TENANT_ID}
-      AZURE_API_CLIENT_ID: ${AZURE_API_CLIENT_ID:-PLACEHOLDER_API_CLIENT_ID}
+      AZURE_TENANT_ID: ${AZURE_TENANT_ID:-a50f6528-499a-4d94-bcad-ed9b200f7c7b}
+      AZURE_API_CLIENT_ID: ${AZURE_API_CLIENT_ID:-5febc8e2-ee14-4452-8914-7d237eb5a6f5}
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:4200}
       # Nombres Docker de los microservicios (no localhost)
       USUARIO_SERVICE_URL: http://usuario:8081

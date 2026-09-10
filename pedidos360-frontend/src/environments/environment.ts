@@ -21,14 +21,14 @@ export const environment = {
   //  Reemplaza PLACEHOLDER_* con los valores reales
   // ──────────────────────────────────────────────
   azure: {
-    /** Application (client) ID del App Registration SPA */
-    clientId: 'PLACEHOLDER_SPA_CLIENT_ID',
+    /** Application (client) ID del App Registration SPA (Pedidos360-SPA) */
+    clientId: '6c20ed27-9d26-4615-9cc8-c7aaef529ffb',
 
     /** Directory (tenant) ID */
-    tenantId: 'PLACEHOLDER_TENANT_ID',
+    tenantId: 'a50f6528-499a-4d94-bcad-ed9b200f7c7b',
 
-    /** Application (client) ID del App Registration de la API/BFF */
-    apiClientId: 'PLACEHOLDER_API_CLIENT_ID',
+    /** Application (client) ID del App Registration de la API/BFF (Pedidos360-API) */
+    apiClientId: '5febc8e2-ee14-4452-8914-7d237eb5a6f5',
 
     /** Scope expuesto por la API: api://<apiClientId>/access_as_user */
     get apiScope(): string {

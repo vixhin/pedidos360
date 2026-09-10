@@ -70,22 +70,39 @@ export class AuthService {
 
   /**
    * Sincroniza la sesión desde MSAL tras el redirect de Microsoft.
-   * Lee los roles del claim "roles" del ID Token.
-   * Mantiene compatibilidad con login local existente.
+   *
+   * Los roles de aplicación (ADMIN/VENDEDOR/CLIENTE) están definidos en el
+   * App Registration de la API, no en el del SPA, por lo que NO aparecen en el
+   * ID Token sino en el Access Token de la API. Por eso:
+   *   1. Se intenta leer "roles" del ID Token.
+   *   2. Si no hay, se pide el Access Token de la API vía acquireTokenSilent
+   *      y se decodifica su claim "roles" (solo para UX; el BFF valida de verdad).
    */
-  syncFromMsal(): void {
+  async syncFromMsal(): Promise<void> {
     const account = this.msal.instance.getAllAccounts()[0];
     if (!account) return;
+    this.msal.instance.setActiveAccount(account);
 
-    // Leer roles desde el claim "roles" del ID Token
-    // (requiere que los roles de aplicación estén configurados en Azure y asignados al usuario)
-    const claims = account.idTokenClaims as Record<string, unknown>;
-    const tokenRoles: string[] = Array.isArray(claims?.['roles'])
-      ? (claims['roles'] as string[])
-      : [];
+    let tokenRoles: string[] = [];
 
-    // Determinar rol para UX
-    let assignedRole: UserRole = this.resolveRoleFromClaims(tokenRoles, account.username);
+    const idClaims = account.idTokenClaims as Record<string, unknown> | undefined;
+    if (Array.isArray(idClaims?.['roles'])) {
+      tokenRoles = idClaims!['roles'] as string[];
+    }
+
+    if (tokenRoles.length === 0 && AZURE_AD_CONFIG.apiScope) {
+      try {
+        const result = await this.msal.instance.acquireTokenSilent({
+          account,
+          scopes: [AZURE_AD_CONFIG.apiScope],
+        });
+        tokenRoles = this.rolesFromJwt(result.accessToken);
+      } catch {
+        // Sin consentimiento aún o token no disponible: se usa el fallback.
+      }
+    }
+
+    const assignedRole: UserRole = this.resolveRoleFromClaims(tokenRoles, account.username);
 
     this.setSession(
       {
@@ -97,6 +114,17 @@ export class AuthService {
       },
       null // El Access Token lo maneja MSAL, no lo almacenamos manualmente
     );
+  }
+
+  /** Decodifica el payload de un JWT (sin verificar) y devuelve el claim "roles". */
+  private rolesFromJwt(jwt: string): string[] {
+    try {
+      const payload = jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      const decoded = JSON.parse(atob(payload)) as { roles?: unknown };
+      return Array.isArray(decoded.roles) ? (decoded.roles as string[]) : [];
+    } catch {
+      return [];
+    }
   }
 
   // ─────────────────────────────────────────────────
