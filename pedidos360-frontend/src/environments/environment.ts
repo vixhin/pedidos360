@@ -58,8 +58,10 @@ export const environment = {
   },
 
   /**
-   * Cuando true, los servicios Angular usan el BFF (con autenticación MSAL).
-   * Cuando false, llaman directo a los microservicios (modo desarrollo sin Azure).
+   * Cuando true, los usuarios autenticados con Microsoft Entra ID consumen los
+   * datos a través del BFF (que valida el JWT de Azure). Los usuarios con
+   * cuenta de BD y los anónimos siguen llamando directo a los microservicios.
+   * La decisión por-recurso la toma BackendUrlService.
    */
-  useBff: false,
+  useBff: true,
 };

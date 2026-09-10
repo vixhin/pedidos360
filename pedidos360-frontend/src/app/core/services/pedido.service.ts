@@ -1,7 +1,7 @@
 import { Injectable, signal, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { catchError, of, tap } from 'rxjs';
-import { API_CONFIG } from '../config/api.config';
+import { BackendUrlService } from './backend-url.service';
 import { AuthService } from './auth.service';
 import { CartService } from './cart.service';
 import { NotificationsService } from './notifications.service';
@@ -38,6 +38,7 @@ export class PedidoService {
   private readonly auth = inject(AuthService);
   private readonly cart = inject(CartService);
   private readonly notifSvc = inject(NotificationsService);
+  private readonly urls = inject(BackendUrlService);
 
   readonly pedidos = signal<ClientOrderFromDB[]>([]);
   readonly isLoading = signal(false);
@@ -87,7 +88,7 @@ export class PedidoService {
 
     this.isLoading.set(true);
     this.http
-      .get<PedidoBackend[]>(`${API_CONFIG.pedidos}/pedidos/usuario/${user.id}`)
+      .get<PedidoBackend[]>(`${this.urls.base('pedidos')}/usuario/${user.id}`)
       .pipe(
         catchError((err) => {
           console.warn('[PedidoService] No se pudieron cargar pedidos del backend:', err);
@@ -116,7 +117,7 @@ export class PedidoService {
 
     this.isSubmitting.set(true);
     this.http
-      .post<PedidoBackend>(`${API_CONFIG.pedidos}/pedidos`, payload)
+      .post<PedidoBackend>(`${this.urls.base('pedidos')}`, payload)
       .pipe(
         tap((created) => {
           const mapped: ClientOrderFromDB = {

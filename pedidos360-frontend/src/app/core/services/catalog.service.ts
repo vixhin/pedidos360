@@ -1,7 +1,7 @@
-import { Injectable, computed, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { catchError, of } from 'rxjs';
-import { API_CONFIG } from '../config/api.config';
+import { BackendUrlService } from './backend-url.service';
 import { BackendProductDTO, Category, NeedShortcut, Product, Promotion } from '../models/catalog.model';
 
 export interface ApiResponse<T> {
@@ -139,6 +139,8 @@ export class CatalogService {
     { id: 'p4', title: 'Compra 2 y obtén un precio especial en bebidas', tag: 'Termina hoy', color: '#ffe3e6' },
   ];
 
+  private readonly urls = inject(BackendUrlService);
+
   constructor(private http: HttpClient) {
     this.cargarProductosDeBackend();
   }
@@ -147,7 +149,7 @@ export class CatalogService {
     this._searchQuery.set(query);
     if (query.trim()) {
       this.http
-        .get<ApiResponse<BackendProductDTO[]>>(`${API_CONFIG.productos}/productos/buscar?nombre=${encodeURIComponent(query)}`)
+        .get<ApiResponse<BackendProductDTO[]>>(`${this.urls.base('productos')}/buscar?nombre=${encodeURIComponent(query)}`)
         .pipe(catchError(() => of(null)))
         .subscribe((res) => {
           if (res?.success && res.data && res.data.length > 0) {
@@ -165,7 +167,7 @@ export class CatalogService {
   cargarProductosDeBackend(): void {
     this._isLoading.set(true);
     this.http
-      .get<ApiResponse<BackendProductDTO[]>>(`${API_CONFIG.productos}/productos`)
+      .get<ApiResponse<BackendProductDTO[]>>(`${this.urls.base('productos')}`)
       .pipe(
         catchError((error) => {
           console.warn('[CatalogService] Fallo conectando a productos. Usando catálogo local.', error);

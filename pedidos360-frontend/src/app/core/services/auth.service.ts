@@ -1,6 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, tap } from 'rxjs';
+import { Observable, firstValueFrom, tap } from 'rxjs';
 import { MsalService } from '@azure/msal-angular';
 import { API_CONFIG } from '../config/api.config';
 import { AZURE_AD_CONFIG, isAzureAdConfigured } from '../config/auth.config';
@@ -103,12 +103,31 @@ export class AuthService {
     }
 
     const assignedRole: UserRole = this.resolveRoleFromClaims(tokenRoles, account.username);
+    const displayName = account.name || account.username;
+    const email = account.username;
+
+    // Provisioning JIT: crear/buscar el usuario en usuario_db y obtener su id
+    // numérico (identidad que usan carrito, pedidos y notificación).
+    let dbId: number | undefined;
+    try {
+      const res = await firstValueFrom(
+        this.http.post<ApiResponse<{ id: number }>>(`${API_CONFIG.usuario}/auth/entra-sync`, {
+          email,
+          nombre: displayName,
+          rol: assignedRole,
+        })
+      );
+      dbId = res?.data?.id;
+    } catch {
+      // Si falla la sincronización, el usuario entra igual pero sin carrito/pedidos persistentes.
+    }
 
     this.setSession(
       {
-        name:          account.name || account.username,
-        email:         account.username,
-        avatarInitial: (account.name || account.username).charAt(0).toUpperCase(),
+        id:            dbId,
+        name:          displayName,
+        email,
+        avatarInitial: displayName.charAt(0).toUpperCase(),
         rol:           assignedRole,
         provider:      'microsoft',
       },

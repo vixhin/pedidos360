@@ -2,7 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { catchError, of } from 'rxjs';
 import { Product } from '../models/catalog.model';
-import { API_CONFIG } from '../config/api.config';
+import { BackendUrlService } from './backend-url.service';
 
 export interface CartLine {
   product: Product;
@@ -21,6 +21,7 @@ interface CarritoItemDB {
 @Injectable({ providedIn: 'root' })
 export class CartService {
   private readonly http = inject(HttpClient);
+  private readonly urls = inject(BackendUrlService);
   private readonly _lines = signal<CartLine[]>([]);
   private _usuarioId: number | null = null;
 
@@ -49,7 +50,7 @@ export class CartService {
 
   cargarCarritoDesdeBackend(usuarioId: number, productos: Product[]): void {
     this.http
-      .get<CarritoItemDB[]>(`${API_CONFIG.carrito}/carrito/usuario/${usuarioId}`)
+      .get<CarritoItemDB[]>(`${this.urls.base('carrito')}/usuario/${usuarioId}`)
       .pipe(catchError(() => of([] as CarritoItemDB[])))
       .subscribe((items) => {
         if (!items || items.length === 0) return;
@@ -77,7 +78,7 @@ export class CartService {
     // Sincronizar con backend si hay usuario
     if (this._usuarioId) {
       this.http
-        .post<CarritoItemDB>(`${API_CONFIG.carrito}/carrito`, {
+        .post<CarritoItemDB>(`${this.urls.base('carrito')}`, {
           usuarioId: this._usuarioId,
           productoId: Number(product.id),
           cantidad: 1,
@@ -115,7 +116,7 @@ export class CartService {
     // Eliminar del backend si tiene ID
     if (this._usuarioId && line?.backendId) {
       this.http
-        .delete(`${API_CONFIG.carrito}/carrito/${line.backendId}`)
+        .delete(`${this.urls.base('carrito')}/${line.backendId}`)
         .pipe(catchError(() => of(null)))
         .subscribe();
     }
@@ -126,7 +127,7 @@ export class CartService {
     // Vaciar carrito en el backend
     if (this._usuarioId) {
       this.http
-        .delete(`${API_CONFIG.carrito}/carrito/usuario/${this._usuarioId}`)
+        .delete(`${this.urls.base('carrito')}/usuario/${this._usuarioId}`)
         .pipe(catchError(() => of(null)))
         .subscribe();
     }

@@ -2,8 +2,8 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { catchError, of } from 'rxjs';
 import { AppNotification } from '../models/notification.model';
-import { API_CONFIG } from '../config/api.config';
 import { AuthService } from './auth.service';
+import { BackendUrlService } from './backend-url.service';
 
 export interface NotificacionDB {
   id: number;
@@ -17,6 +17,7 @@ export interface NotificacionDB {
 export class NotificationsService {
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
+  private readonly urls = inject(BackendUrlService);
 
   private readonly _items = signal<AppNotification[]>([]);
   private readonly _activeToast = signal<AppNotification | null>(null);
@@ -39,7 +40,7 @@ export class NotificationsService {
     }
 
     this.http
-      .get<NotificacionDB[]>(`${API_CONFIG.notificacion}/notificacion/usuario/${user.id}`)
+      .get<NotificacionDB[]>(`${this.urls.base('notificacion')}/usuario/${user.id}`)
       .pipe(
         catchError(() => {
           return of([] as NotificacionDB[]);
@@ -64,7 +65,7 @@ export class NotificationsService {
   enviarNotificacion(usuarioId: number, mensaje: string, canal: string): void {
     const payload = { usuarioId, mensaje, canal };
     this.http
-      .post<NotificacionDB>(`${API_CONFIG.notificacion}/notificacion`, payload)
+      .post<NotificacionDB>(`${this.urls.base('notificacion')}`, payload)
       .pipe(catchError(() => of(null)))
       .subscribe((created) => {
         if (created) {
