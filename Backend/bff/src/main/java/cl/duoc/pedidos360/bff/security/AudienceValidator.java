@@ -34,7 +34,7 @@ public class AudienceValidator implements OAuth2TokenValidator<Jwt> {
     );
 
     @Value("${bff.azure.api-audience}")
-    private String expectedAudience;
+    private String expectedAudience; // p.ej. api://<clientId>
 
     @Override
     public OAuth2TokenValidatorResult validate(Jwt jwt) {
@@ -44,8 +44,14 @@ public class AudienceValidator implements OAuth2TokenValidator<Jwt> {
             return OAuth2TokenValidatorResult.failure(INVALID_AUDIENCE);
         }
 
+        // Azure puede emitir "aud" como "api://<clientId>" (token v2) o solo
+        // "<clientId>" (token v1). Aceptamos ambas formas.
+        String bareId = expectedAudience.startsWith("api://")
+                ? expectedAudience.substring("api://".length())
+                : expectedAudience;
+
         boolean valid = audiences.stream()
-                .anyMatch(aud -> aud.equals(expectedAudience));
+                .anyMatch(aud -> aud.equals(expectedAudience) || aud.equals(bareId));
 
         if (!valid) {
             return OAuth2TokenValidatorResult.failure(INVALID_AUDIENCE);
