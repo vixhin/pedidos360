@@ -7,7 +7,7 @@ test.describe('Pruebas de Caja Negra - Autenticación y Registro', () => {
   });
 
   test('TC-01: Formulario vacio de login no debe permitir envio invalido', async ({ page }) => {
-    const submitBtn = page.locator('button[type="submit"]', { hasText: 'Iniciar sesión' });
+    const submitBtn = page.locator('form button[type="submit"]');
     await expect(submitBtn).toBeVisible();
 
     // Intentar enviar sin rellenar campos
@@ -22,7 +22,8 @@ test.describe('Pruebas de Caja Negra - Autenticación y Registro', () => {
   test('TC-02: Login con credenciales erroneas muestra mensaje de error', async ({ page }) => {
     const emailInput = page.locator('input[name="loginEmail"]');
     const passwordInput = page.locator('input[name="loginPassword"]');
-    const submitBtn = page.locator('button[type="submit"]', { hasText: 'Iniciar sesión' });
+    const submitBtn = page.locator('form button[type="submit"]');
+
 
     // Ingresar datos totalmente erróneos
     await emailInput.fill('usuario.inexistente@pedidos360.cl');

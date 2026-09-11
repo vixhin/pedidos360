@@ -1,6 +1,8 @@
 import { Injectable, inject } from '@angular/core';
 import { MsalService } from '@azure/msal-angular';
 import { AccountInfo } from '@azure/msal-browser';
+import { AZURE_AD_CONFIG } from '../config/auth.config';
+
 
 /**
  * Claims del ID Token / Access Token de Microsoft Entra ID.
@@ -184,4 +186,26 @@ export class TokenClaimsService {
   hasActiveSession(): boolean {
     return this.getActiveAccount() !== null;
   }
+
+  /**
+   * Obtiene los claims del Access Token de la API mediante acquireTokenSilent (solo para UX).
+   * Los scopes y roles de la API están contenidos en el Access Token de la API, no en el ID Token.
+   */
+  async getApiAccessTokenClaims(): Promise<AzureTokenClaims | null> {
+    const account = this.getActiveAccount();
+    if (!account || !AZURE_AD_CONFIG.apiScope) return null;
+
+    try {
+      const result = await this.msal.instance.acquireTokenSilent({
+        account,
+        scopes: [AZURE_AD_CONFIG.apiScope],
+      });
+      if (!result?.accessToken) return null;
+      const payload = result.accessToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      return JSON.parse(atob(payload)) as AzureTokenClaims;
+    } catch {
+      return null;
+    }
+  }
 }
+
