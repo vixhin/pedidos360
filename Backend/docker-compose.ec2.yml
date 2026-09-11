@@ -40,6 +40,10 @@ services:
     environment:
       FRONTEND_ORIGIN: ${PUBLIC_URL}
 
+  usuario:
+    environment:
+      FRONTEND_ORIGIN: ${PUBLIC_URL}
+
 volumes:
   caddy_data:
   caddy_config:
