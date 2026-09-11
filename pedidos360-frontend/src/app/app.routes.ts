@@ -1,38 +1,22 @@
 import { Routes } from '@angular/router';
-import { MsalGuard } from '@azure/msal-angular';
 import { roleGuard } from './core/guards/role.guard';
-import { isAzureAdConfigured } from './core/config/auth.config';
 
 /**
  * Rutas de la aplicación Pedidos360.
  *
- * Protección de rutas:
- * - MsalGuard: verifica que el usuario esté autenticado con Microsoft Entra ID.
- *   Si no está autenticado, redirige al flujo de login de Microsoft.
- * - roleGuard: verifica que el usuario tenga el rol requerido (data.roles).
+ * Protección de rutas: se usa únicamente `roleGuard` (guard propio), que:
+ * - Redirige a /login si no hay sesión activa (auth.isLoggedIn()).
+ * - Funciona con AMBOS métodos de login: cuenta de BD (provider 'db') y
+ *   Microsoft Entra ID (provider 'microsoft').
+ * - Valida el rol requerido desde route.data['roles'].
  *
- * NOTA IMPORTANTE:
- * MsalGuard solo se activa cuando Azure AD está configurado (isAzureAdConfigured() === true).
- * Durante desarrollo local sin Azure, las rutas funcionan sin restricción de MSAL,
- * pero el roleGuard sigue validando el rol del AuthService (login local).
+ * No se usa MsalGuard directamente porque forzaría el login de Microsoft
+ * incluso a usuarios que entraron con cuenta de la base de datos.
+ * La validación criptográfica real de los JWT de Entra ID ocurre en el BFF
+ * (Spring Security OAuth2 Resource Server).
  *
- * Rutas públicas (sin guard):
- * - / (home)
- * - /login
- *
- * Rutas protegidas (requieren autenticación):
- * - /cuenta, /perfil
- * - /carrito
- * - /notificaciones
- * - /cliente
- * - /analitica (solo ADMIN)
- * - /vendedor (VENDEDOR o ADMIN)
- * - /personal (solo ADMIN)
+ * Rutas públicas: / (home), /login
  */
-
-// Usamos los guards de MSAL solo cuando Azure está configurado
-// para no bloquear el desarrollo local sin credenciales Azure.
-const msalGuards = isAzureAdConfigured() ? [MsalGuard] : [];
 
 export const routes: Routes = [
   // ─── PÚBLICAS ─────────────────────────────────────
@@ -48,25 +32,25 @@ export const routes: Routes = [
   // ─── USUARIO AUTENTICADO (cualquier rol) ──────────
   {
     path: 'cuenta',
-    canActivate: [...msalGuards, roleGuard],
+    canActivate: [roleGuard],
     data: { roles: ['ADMIN', 'VENDEDOR', 'CLIENTE'] },
     loadComponent: () => import('./pages/account/account').then((m) => m.Account),
   },
   {
     path: 'perfil',
-    canActivate: [...msalGuards, roleGuard],
+    canActivate: [roleGuard],
     data: { roles: ['ADMIN', 'VENDEDOR', 'CLIENTE'] },
     loadComponent: () => import('./pages/account/account').then((m) => m.Account),
   },
   {
     path: 'carrito',
-    canActivate: [...msalGuards, roleGuard],
+    canActivate: [roleGuard],
     data: { roles: ['CLIENTE', 'ADMIN'] },
     loadComponent: () => import('./pages/cart/cart').then((m) => m.Cart),
   },
   {
     path: 'notificaciones',
-    canActivate: [...msalGuards, roleGuard],
+    canActivate: [roleGuard],
     data: { roles: ['ADMIN', 'VENDEDOR', 'CLIENTE'] },
     loadComponent: () => import('./pages/notifications/notifications').then((m) => m.Notifications),
   },
@@ -74,7 +58,7 @@ export const routes: Routes = [
   // ─── CLIENTE ──────────────────────────────────────
   {
     path: 'cliente',
-    canActivate: [...msalGuards, roleGuard],
+    canActivate: [roleGuard],
     data: { roles: ['CLIENTE', 'ADMIN'] },
     loadComponent: () => import('./pages/client/client').then((m) => m.Client),
   },
@@ -82,7 +66,7 @@ export const routes: Routes = [
   // ─── VENDEDOR ─────────────────────────────────────
   {
     path: 'vendedor',
-    canActivate: [...msalGuards, roleGuard],
+    canActivate: [roleGuard],
     data: { roles: ['VENDEDOR', 'ADMIN'] },
     loadComponent: () => import('./pages/seller/seller').then((m) => m.Seller),
   },
@@ -90,13 +74,13 @@ export const routes: Routes = [
   // ─── ADMIN ────────────────────────────────────────
   {
     path: 'analitica',
-    canActivate: [...msalGuards, roleGuard],
+    canActivate: [roleGuard],
     data: { roles: ['ADMIN'] },
     loadComponent: () => import('./pages/analytics/analytics').then((m) => m.Analytics),
   },
   {
     path: 'personal',
-    canActivate: [...msalGuards, roleGuard],
+    canActivate: [roleGuard],
     data: { roles: ['ADMIN'] },
     loadComponent: () => import('./pages/staff/staff').then((m) => m.Staff),
   },

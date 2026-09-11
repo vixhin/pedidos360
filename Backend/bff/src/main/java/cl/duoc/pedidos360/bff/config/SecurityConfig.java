@@ -136,6 +136,10 @@ public class SecurityConfig {
 
             // ── OAuth2 Resource Server (JWT) ──────────────────────────────
             .oauth2ResourceServer(oauth2 -> oauth2
+                // El resource server usa su propio entry point por defecto;
+                // lo forzamos al nuestro para que loguee el motivo del rechazo.
+                .authenticationEntryPoint(exceptionHandler)
+                .accessDeniedHandler(exceptionHandler)
                 .jwt(jwt -> jwt
                     .decoder(jwtDecoder())
                     .jwtAuthenticationConverter(jwtAuthConverter)));
@@ -144,26 +148,32 @@ public class SecurityConfig {
     }
 
     /**
-     * JwtDecoder configurado con validadores adicionales:
-     * 1. JwtTimestampValidator (exp, nbf) — automático
-     * 2. JwtIssuerValidator   (iss)       — automático via issuerUri
-     * 3. AudienceValidator    (aud)       — custom
+     * JwtDecoder con validadores:
+     * 1. JwtTimestampValidator (exp, nbf)
+     * 2. Issuer: acepta tanto el issuer v2 (login.microsoftonline.com/{tenant}/v2.0)
+     *    como el v1 (sts.windows.net/{tenant}/), porque si la app registration de
+     *    la API no tiene accessTokenAcceptedVersion=2, Azure emite tokens v1.
+     * 3. AudienceValidator (aud) — custom
      *
-     * Spring descarga el JWKS desde Microsoft automáticamente.
-     * NO se almacenan claves públicas manualmente.
+     * El JWKS se descarga del discovery v2; las claves de firma de Microsoft
+     * cubren ambas versiones de token.
      */
     @Bean
     public JwtDecoder jwtDecoder() {
-        // NimbusJwtDecoder descarga las claves públicas desde:
-        // https://login.microsoftonline.com/{tenantId}/v2.0/.well-known/openid-configuration
         NimbusJwtDecoder decoder = JwtDecoders.fromIssuerLocation(issuerUri);
 
-        // Combinar validadores: los de Spring + el nuestro de audience
-        OAuth2TokenValidator<Jwt> withIssuer    = JwtValidators.createDefaultWithIssuer(issuerUri);
-        OAuth2TokenValidator<Jwt> withAudience  = new DelegatingOAuth2TokenValidator<>(
-                withIssuer, audienceValidator);
+        String tenantId = issuerUri
+                .replace("https://login.microsoftonline.com/", "")
+                .replace("/v2.0", "");
+        String issuerV1 = "https://sts.windows.net/" + tenantId + "/";
 
-        decoder.setJwtValidator(withAudience);
+        OAuth2TokenValidator<Jwt> issuers = new JwtClaimValidator<String>("iss",
+                iss -> iss != null && (iss.equals(issuerUri) || iss.equals(issuerV1)));
+
+        OAuth2TokenValidator<Jwt> validator = new DelegatingOAuth2TokenValidator<>(
+                new JwtTimestampValidator(), issuers, audienceValidator);
+
+        decoder.setJwtValidator(validator);
         return decoder;
     }
 }

@@ -14,7 +14,9 @@ import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -64,11 +66,33 @@ public class BffSecurityExceptionHandler
                          AuthenticationException authException)
             throws IOException, ServletException {
 
-        log.warn("[BFF][AUTH] 401 Unauthorized | uri={} | reason={}",
+        // Diagnóstico: claims no verificados del token (aud/iss/ver) — NUNCA la firma
+        String authHeader = request.getHeader("Authorization");
+        String tokenPeek = "sin-Authorization";
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            tokenPeek = peekClaims(authHeader.substring(7));
+        }
+
+        log.warn("[BFF][AUTH] 401 Unauthorized | uri={} | reason={} | token[{}]",
                 request.getRequestURI(),
-                authException.getMessage()); // Solo mensaje, nunca el token
+                authException.getMessage(), // Solo mensaje, nunca el token
+                tokenPeek);
 
         writeError(response, 401, "UNAUTHORIZED", "Token inválido, expirado o ausente");
+    }
+
+    /** Decodifica (sin verificar) el payload del JWT y devuelve aud/iss/ver para diagnóstico. */
+    private String peekClaims(String jwt) {
+        try {
+            String[] parts = jwt.split("\\.");
+            if (parts.length < 2) return "no-jwt";
+            String json = new String(Base64.getUrlDecoder().decode(parts[1]), StandardCharsets.UTF_8);
+            Map<?, ?> claims = objectMapper.readValue(json, Map.class);
+            return "aud=" + claims.get("aud") + " iss=" + claims.get("iss") + " ver=" + claims.get("ver")
+                    + " appid=" + claims.get("appid") + " scp=" + claims.get("scp");
+        } catch (Exception e) {
+            return "no-decodificable";
+        }
     }
 
     // ── 403 Forbidden ────────────────────────────────────────────────────────

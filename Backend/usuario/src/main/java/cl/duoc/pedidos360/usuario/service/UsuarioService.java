@@ -116,6 +116,47 @@ public class UsuarioService {
         return new AuthResponse(token, usuario.getId(), usuario.getNombre(), usuario.getEmail(), usuario.getRol());
     }
 
+    /**
+     * Provisioning JIT para usuarios que inician sesión con Microsoft Entra ID.
+     * Si el email no existe en usuario_db lo crea (con contraseña aleatoria
+     * inutilizable, ya que estos usuarios se autentican vía Entra, no localmente).
+     * Si ya existe, actualiza nombre y rol (Entra es la fuente de verdad del rol
+     * para usuarios externos).
+     */
+    @Transactional
+    public UsuarioResponseDTO sincronizarUsuarioExterno(String email, String nombre, String rolNombre) {
+        Rol rol = parseRol(rolNombre);
+        Usuario usuario = usuarioRepository.findByEmail(email).orElse(null);
+
+        if (usuario == null) {
+            usuario = new Usuario(
+                    null,
+                    (nombre != null && !nombre.isBlank()) ? nombre : email,
+                    email,
+                    passwordEncoder.encode(java.util.UUID.randomUUID().toString()),
+                    rol
+            );
+            log.info("[USER-SERVICE] Provisioning JIT (Entra ID) — nuevo usuario: {}", email);
+        } else {
+            usuario.setRol(rol);
+            if (nombre != null && !nombre.isBlank()) {
+                usuario.setNombre(nombre);
+            }
+            log.info("[USER-SERVICE] Provisioning JIT (Entra ID) — usuario existente: {} ID={}", email, usuario.getId());
+        }
+
+        return UsuarioResponseDTO.fromEntity(usuarioRepository.save(usuario));
+    }
+
+    private Rol parseRol(String nombre) {
+        if (nombre == null) return Rol.CLIENTE;
+        try {
+            return Rol.valueOf(nombre.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return Rol.CLIENTE;
+        }
+    }
+
     @Transactional
     public UsuarioResponseDTO crearUsuario(UsuarioCreateDTO dto) {
         log.info("[USER-SERVICE] Creating user: {}", dto.getEmail());

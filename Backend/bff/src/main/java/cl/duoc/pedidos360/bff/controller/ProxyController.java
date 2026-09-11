@@ -178,9 +178,11 @@ public class ProxyController {
         // Método HTTP
         HttpMethod method = HttpMethod.valueOf(request.getMethod());
 
-        // Log (sin token)
-        String userSub   = jwt != null ? jwt.getSubject() : "anonymous";
-        String userRoles = jwt != null ? String.valueOf(jwt.getClaim("roles")) : "[]";
+        // Log (sin token). getClaimAsStringList evita el ClassCastException que
+        // provoca String.valueOf(jwt.getClaim(...)) por inferencia de tipos.
+        String userSub = jwt != null ? jwt.getSubject() : "anonymous";
+        java.util.List<String> roles = (jwt != null) ? jwt.getClaimAsStringList("roles") : null;
+        String userRoles = (roles != null) ? roles.toString() : "[]";
         log.info("[BFF][PROXY] {} {} | user={} | target={}{}", method, requestUri, userSub, serviceName, fullPath);
 
         try {

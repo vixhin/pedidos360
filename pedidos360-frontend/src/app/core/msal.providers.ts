@@ -31,6 +31,8 @@ function msalInstanceFactory(): IPublicClientApplication {
       authority:             `https://login.microsoftonline.com/${AZURE_AD_CONFIG.tenantId || 'common'}`,
       redirectUri:           AZURE_AD_CONFIG.redirectUri,
       postLogoutRedirectUri: AZURE_AD_CONFIG.postLogoutRedirectUri,
+      // Tras el login, quedarse en redirectUri ('/') en vez de volver a '/login'.
+      navigateToLoginRequestUrl: false,
     },
     cache: {
       cacheLocation:         BrowserCacheLocation.LocalStorage,

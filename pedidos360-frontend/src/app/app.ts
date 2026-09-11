@@ -51,7 +51,13 @@ export class App implements OnInit {
     if (!isAzureAdConfigured()) return;
     // Procesa la respuesta del redirect de Microsoft Entra ID (OIDC) al volver a la app.
     this.msal.handleRedirectObservable().subscribe({
-      next: () => this.auth.syncFromMsal(),
+      next: async (result) => {
+        await this.auth.syncFromMsal();
+        // Si el redirect trajo una sesión y seguimos en /login, ir al home.
+        if (result && this.auth.isLoggedIn() && this.router.url.startsWith('/login')) {
+          this.router.navigate(['/']);
+        }
+      },
       error: (err) => console.error('[MSAL] Error procesando el redirect', err),
     });
   }

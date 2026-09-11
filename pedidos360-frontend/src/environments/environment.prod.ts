@@ -7,9 +7,9 @@ export const environment = {
   production: true,
 
   azure: {
-    clientId: process.env['AZURE_SPA_CLIENT_ID'] || 'PLACEHOLDER_SPA_CLIENT_ID',
-    tenantId: process.env['AZURE_TENANT_ID'] || 'PLACEHOLDER_TENANT_ID',
-    apiClientId: process.env['AZURE_API_CLIENT_ID'] || 'PLACEHOLDER_API_CLIENT_ID',
+    clientId: process.env['AZURE_SPA_CLIENT_ID'] || '6c20ed27-9d26-4615-9cc8-c7aaef529ffb',
+    tenantId: process.env['AZURE_TENANT_ID'] || 'a50f6528-499a-4d94-bcad-ed9b200f7c7b',
+    apiClientId: process.env['AZURE_API_CLIENT_ID'] || '5febc8e2-ee14-4452-8914-7d237eb5a6f5',
 
     get apiScope(): string {
       return `api://${this.apiClientId}/access_as_user`;
