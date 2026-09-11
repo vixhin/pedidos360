@@ -126,9 +126,14 @@ public class SecurityConfig {
                 .requestMatchers("/api/bff/analitica/**")
                     .hasRole("ADMIN")
 
+                // ── AUTH / ENTRA SYNC ─────────────────────────────
+                .requestMatchers("/api/bff/auth/entra-sync")
+                    .hasAuthority("SCOPE_access_as_user")
+
                 // Todo lo demás bajo /api/bff/** requiere autenticación
                 .requestMatchers("/api/bff/**")
                     .authenticated()
+
 
                 // Todo lo demás: permitido (health checks, actuator, etc.)
                 .anyRequest().permitAll()

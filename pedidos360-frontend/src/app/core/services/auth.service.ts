@@ -102,24 +102,29 @@ export class AuthService {
       }
     }
 
-    const assignedRole: UserRole = this.resolveRoleFromClaims(tokenRoles, account.username);
-    const displayName = account.name || account.username;
-    const email = account.username;
-
-    // Provisioning JIT: crear/buscar el usuario en usuario_db y obtener su id
-    // numérico (identidad que usan carrito, pedidos y notificación).
     let dbId: number | undefined;
+    let assignedRole: UserRole = this.resolveRoleFromClaims(tokenRoles, account.username);
+    let displayName = account.name || account.username;
+    let email = account.username;
+
+
+    // Provisioning JIT vía BFF: El BFF extrae la identidad del JWT validado
+    // y la sincroniza de forma segura con usuario-service.
     try {
       const res = await firstValueFrom(
-        this.http.post<ApiResponse<{ id: number }>>(`${API_CONFIG.usuario}/auth/entra-sync`, {
-          email,
-          nombre: displayName,
-          rol: assignedRole,
-        })
+        this.http.post<ApiResponse<{ id: number; nombre: string; email: string; rol: UserRole }>>(
+          `${API_CONFIG.bff}/auth/entra-sync`,
+          {}
+        )
       );
-      dbId = res?.data?.id;
+      if (res?.data) {
+        dbId = res.data.id;
+        if (res.data.rol) assignedRole = res.data.rol as UserRole;
+        if (res.data.nombre) displayName = res.data.nombre;
+        if (res.data.email) email = res.data.email;
+      }
     } catch {
-      // Si falla la sincronización, el usuario entra igual pero sin carrito/pedidos persistentes.
+      // Si falla la sincronización, se usa el rol del token de Microsoft y entra sin carrito/pedidos persistentes.
     }
 
     this.setSession(
@@ -131,9 +136,10 @@ export class AuthService {
         rol:           assignedRole,
         provider:      'microsoft',
       },
-      null // El Access Token lo maneja MSAL, no lo almacenamos manualmente
+      null // El Access Token lo maneja MSAL
     );
   }
+
 
   /** Decodifica el payload de un JWT (sin verificar) y devuelve el claim "roles". */
   private rolesFromJwt(jwt: string): string[] {
@@ -221,22 +227,20 @@ export class AuthService {
 
   /**
    * Resuelve el rol UX desde los claims del token de Microsoft.
-   * Prioridad: claims "roles" → email heurístico (solo si no hay roles en token).
+   * PROHIBIDO usar heurística de email para Microsoft Entra ID.
    */
-  private resolveRoleFromClaims(tokenRoles: string[], email: string): UserRole {
+  private resolveRoleFromClaims(tokenRoles: string[], _email: string): UserRole {
     if (tokenRoles.length > 0) {
       if (tokenRoles.some((r) => r.toUpperCase() === 'ADMIN'))    return 'ADMIN';
       if (tokenRoles.some((r) => r.toUpperCase() === 'VENDEDOR')) return 'VENDEDOR';
       if (tokenRoles.some((r) => r.toUpperCase() === 'CLIENTE'))  return 'CLIENTE';
     }
-    // Fallback: heurística por email (mantenida para retrocompatibilidad)
-    return this.determineRoleFromEmail(email);
+    return 'CLIENTE';
   }
 
   /**
-   * Determina el rol basándose en el email.
-   * Se usa como fallback cuando el token no tiene claim "roles".
-   * Para Microsoft Entra, los roles deben configurarse en Azure Portal.
+   * Determina el rol basándose en el email (SOLO para login local DB / retrocompatibilidad local).
+   * PROHIBIDO su uso para usuarios de Microsoft.
    */
   private determineRoleFromEmail(email?: string): UserRole {
     if (!email) return 'CLIENTE';
@@ -247,7 +251,8 @@ export class AuthService {
   }
 
   private setSession(user: AppUser, token: string | null): void {
-    const role: UserRole = (user.rol as UserRole) || this.determineRoleFromEmail(user.email);
+    const role: UserRole = (user.rol as UserRole) || (user.provider === 'microsoft' ? 'CLIENTE' : this.determineRoleFromEmail(user.email));
+
     this._user.set({ ...user, rol: role });
     this._token.set(token);
     this._isLoggedIn.set(true);
