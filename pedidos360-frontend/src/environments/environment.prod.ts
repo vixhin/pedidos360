@@ -1,15 +1,24 @@
 /**
- * Environment de PRODUCCIÓN.
- * Los valores son inyectados en tiempo de build mediante variables de entorno
- * o mediante un archivo de reemplazo en la pipeline CI/CD.
+ * Environment de PRODUCCIÓN (build con `ng build --configuration production`).
+ *
+ * __PUBLIC_URL__ es un marcador que el Dockerfile del frontend reemplaza en
+ * tiempo de build por la URL pública real (build-arg PUBLIC_URL), p.ej.
+ * https://34-207-191-208.nip.io
+ *
+ * Caddy enruta en esa URL:
+ *   /api/bff/*  → BFF (8090)
+ *   /api/*      → microservicios (auth/usuario→8081, carrito→8083, etc.)
+ *   resto       → este frontend (nginx)
  */
+const PUBLIC_URL = '__PUBLIC_URL__';
+
 export const environment = {
   production: true,
 
   azure: {
-    clientId: process.env['AZURE_SPA_CLIENT_ID'] || '6c20ed27-9d26-4615-9cc8-c7aaef529ffb',
-    tenantId: process.env['AZURE_TENANT_ID'] || 'a50f6528-499a-4d94-bcad-ed9b200f7c7b',
-    apiClientId: process.env['AZURE_API_CLIENT_ID'] || '5febc8e2-ee14-4452-8914-7d237eb5a6f5',
+    clientId: '6c20ed27-9d26-4615-9cc8-c7aaef529ffb',
+    tenantId: 'a50f6528-499a-4d94-bcad-ed9b200f7c7b',
+    apiClientId: '5febc8e2-ee14-4452-8914-7d237eb5a6f5',
 
     get apiScope(): string {
       return `api://${this.apiClientId}/access_as_user`;
@@ -18,18 +27,18 @@ export const environment = {
       return `api://${this.apiClientId}`;
     },
 
-    redirectUri: process.env['FRONTEND_URL'] || 'https://pedidos360.cl',
-    postLogoutRedirectUri: process.env['FRONTEND_URL'] || 'https://pedidos360.cl',
+    redirectUri: PUBLIC_URL,
+    postLogoutRedirectUri: PUBLIC_URL,
   },
 
   api: {
-    bff: process.env['BFF_URL'] || 'https://api.pedidos360.cl/api/bff',
-    usuario: 'http://usuario:8081/api',
-    productos: 'http://productos:8085/api',
-    pedidos: 'http://pedidos:8082/api',
-    carrito: 'http://carrito:8083/api',
-    notificacion: 'http://notificacion:8086/api',
-    analitica: 'http://analitica:8084/api',
+    bff: `${PUBLIC_URL}/api/bff`,
+    usuario: `${PUBLIC_URL}/api`,
+    productos: `${PUBLIC_URL}/api`,
+    pedidos: `${PUBLIC_URL}/api`,
+    carrito: `${PUBLIC_URL}/api`,
+    notificacion: `${PUBLIC_URL}/api`,
+    analitica: `${PUBLIC_URL}/api`,
   },
 
   useBff: true,

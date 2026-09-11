@@ -1,0 +1,45 @@
+# Overlay para desplegar en EC2 con HTTPS (nip.io/sslip.io + Caddy).
+#
+# Uso (desde la carpeta Backend/, con PUBLIC_URL y PUBLIC_DOMAIN exportados
+# o en un archivo .env):
+#   docker compose -f docker-compose.yml -f docker-compose.ec2.yml up -d --build
+#
+# Variables requeridas:
+#   PUBLIC_DOMAIN = 34-207-191-208.nip.io          (sin esquema)
+#   PUBLIC_URL    = https://34-207-191-208.nip.io  (con esquema)
+
+services:
+  frontend:
+    build:
+      context: ../pedidos360-frontend
+      args:
+        PUBLIC_URL: ${PUBLIC_URL}
+    container_name: pedidos360-frontend
+    restart: unless-stopped
+    depends_on:
+      - bff
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: pedidos360-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - bff
+
+  bff:
+    environment:
+      FRONTEND_ORIGIN: ${PUBLIC_URL}
+
+volumes:
+  caddy_data:
+  caddy_config:
