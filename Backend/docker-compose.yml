@@ -39,6 +39,7 @@ services:
       DB_NAME: usuario_db
       DB_USER: postgres
       DB_PASSWORD: postgres
+      BFF_INTERNAL_KEY: ${BFF_INTERNAL_KEY}
     ports:
       - "8081:8081"
     depends_on:
@@ -139,6 +140,7 @@ services:
       AZURE_TENANT_ID: ${AZURE_TENANT_ID:-a50f6528-499a-4d94-bcad-ed9b200f7c7b}
       AZURE_API_CLIENT_ID: ${AZURE_API_CLIENT_ID:-5febc8e2-ee14-4452-8914-7d237eb5a6f5}
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:4200}
+      BFF_INTERNAL_KEY: ${BFF_INTERNAL_KEY}
       # Nombres Docker de los microservicios (no localhost)
       USUARIO_SERVICE_URL: http://usuario:8081
       PEDIDOS_SERVICE_URL: http://pedidos:8082

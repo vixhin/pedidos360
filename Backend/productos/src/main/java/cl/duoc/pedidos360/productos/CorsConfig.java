@@ -1,4 +1,4 @@
-package cl.duoc.pedidos360.pedidos;
+package cl.duoc.pedidos360.productos;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -12,7 +12,7 @@ import java.util.List;
 @Configuration
 public class CorsConfig {
 
-    @Value("${pedidos.frontend-origin:http://localhost:4200}")
+    @Value("${productos.frontend-origin:http://localhost:4200}")
     private String frontendOrigin;
 
     @Bean

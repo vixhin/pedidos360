@@ -31,7 +31,7 @@ public class InternalController {
 
     public InternalController(
             UsuarioService usuarioService,
-            @Value("${bff.internal-key:pedidos360-internal-secret-key-2026}") String internalKey) {
+            @Value("${bff.internal-key}") String internalKey) {
         this.usuarioService = usuarioService;
         this.internalKey = internalKey;
     }

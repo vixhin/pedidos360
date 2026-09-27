@@ -1,0 +1,21 @@
+# Environment files
+.env
+.env.*
+!.env.example
+
+# IDEs & OS
+.idea/
+.vscode/
+*.swp
+*.DS_Store
+Thumbs.db
+
+# Build outputs
+target/
+dist/
+node_modules/
+
+# Playwright artifacts
+playwright-report/
+playwright-report-ec2/
+test-results/

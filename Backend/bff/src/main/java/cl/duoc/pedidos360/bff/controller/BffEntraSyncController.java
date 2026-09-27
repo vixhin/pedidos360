@@ -40,7 +40,7 @@ public class BffEntraSyncController {
 
     public BffEntraSyncController(
             @Qualifier("usuarioClient") WebClient usuarioClient,
-            @Value("${bff.internal-key:pedidos360-internal-secret-key-2026}") String internalKey) {
+            @Value("${bff.internal-key}") String internalKey) {
         this.usuarioClient = usuarioClient;
         this.internalKey = internalKey;
     }
