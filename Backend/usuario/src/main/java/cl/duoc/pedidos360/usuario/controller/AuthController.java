@@ -35,8 +35,8 @@ public class AuthController {
     }
 
     @PostMapping("/forgot-password")
-    public ResponseEntity<ApiResponse<String>> forgotPassword(@RequestParam String email) {
-        String token = usuarioService.solicitarRecuperacionPassword(email);
-        return ResponseEntity.ok(ApiResponse.ok("Solicitud de recuperación procesada correctamente", token));
+    public ResponseEntity<ApiResponse<Void>> forgotPassword(@RequestParam String email) {
+        usuarioService.solicitarRecuperacionPassword(email);
+        return ResponseEntity.ok(ApiResponse.ok("Si el correo existe, se enviaron instrucciones para restablecer la contraseña.", null));
     }
 }

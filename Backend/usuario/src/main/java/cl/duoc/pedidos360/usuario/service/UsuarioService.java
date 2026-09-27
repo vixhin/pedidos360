@@ -262,11 +262,16 @@ public class UsuarioService {
     }
 
     @Transactional
-    public String solicitarRecuperacionPassword(String email) {
+    public void solicitarRecuperacionPassword(String email) {
         log.info("[USER-SERVICE] Password reset requested for email: {}", email);
-        Usuario usuario = usuarioRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado con email: " + email));
+        java.util.Optional<Usuario> usuarioOpt = usuarioRepository.findByEmail(email);
 
+        if (usuarioOpt.isEmpty()) {
+            log.info("[USER-SERVICE] Password reset requested for non-existent email: {}", email);
+            return;
+        }
+
+        Usuario usuario = usuarioOpt.get();
         String resetToken = java.util.UUID.randomUUID().toString();
 
         if (rabbitTemplate != null) {
@@ -287,8 +292,6 @@ public class UsuarioService {
                 log.warn("[USER-SERVICE] Failed to publish password reset event for email={}: {}", email, ex.getMessage());
             }
         }
-
-        return resetToken;
     }
 
     @Transactional

@@ -38,12 +38,40 @@ services:
 
   bff:
     environment:
+      SPRING_PROFILES_ACTIVE: prod
       FRONTEND_ORIGIN: ${PUBLIC_URL}
 
   usuario:
     environment:
+      SPRING_PROFILES_ACTIVE: prod
+      FRONTEND_ORIGIN: ${PUBLIC_URL}
+
+  productos:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      FRONTEND_ORIGIN: ${PUBLIC_URL}
+
+  pedidos:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      FRONTEND_ORIGIN: ${PUBLIC_URL}
+
+  carrito:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      FRONTEND_ORIGIN: ${PUBLIC_URL}
+
+  notificacion:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      FRONTEND_ORIGIN: ${PUBLIC_URL}
+
+  analitica:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
       FRONTEND_ORIGIN: ${PUBLIC_URL}
 
 volumes:
   caddy_data:
   caddy_config:
+

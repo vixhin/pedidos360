@@ -220,17 +220,26 @@ class UsuarioServiceTest {
     }
 
     @Test
-    @DisplayName("solicitarRecuperacionPassword - genera token y publica evento usuario.password.reset")
+    @DisplayName("solicitarRecuperacionPassword - email existente publica evento usuario.password.reset")
     void testSolicitarRecuperacionPasswordPublicaEvento() {
         when(usuarioRepository.findByEmail("test@pedidos360.cl")).thenReturn(Optional.of(mockUsuario));
 
-        String token = usuarioService.solicitarRecuperacionPassword("test@pedidos360.cl");
+        usuarioService.solicitarRecuperacionPassword("test@pedidos360.cl");
 
-        assertThat(token).isNotBlank();
         verify(rabbitTemplate).convertAndSend(
                 eq(RabbitMQConfig.EXCHANGE_EVENTS),
                 eq(RabbitMQConfig.ROUTING_KEY_PASSWORD_RESET),
                 any(cl.duoc.pedidos360.usuario.event.PasswordResetSolicitadoEvent.class)
         );
+    }
+
+    @Test
+    @DisplayName("solicitarRecuperacionPassword - email inexistente finaliza en silencio sin publicar evento")
+    void testSolicitarRecuperacionPasswordEmailInexistente() {
+        when(usuarioRepository.findByEmail("noexiste@pedidos360.cl")).thenReturn(Optional.empty());
+
+        usuarioService.solicitarRecuperacionPassword("noexiste@pedidos360.cl");
+
+        verifyNoInteractions(rabbitTemplate);
     }
 }
