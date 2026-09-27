@@ -33,4 +33,10 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.ok("Usuario registrado correctamente", response));
     }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<ApiResponse<String>> forgotPassword(@RequestParam String email) {
+        String token = usuarioService.solicitarRecuperacionPassword(email);
+        return ResponseEntity.ok(ApiResponse.ok("Solicitud de recuperación procesada correctamente", token));
+    }
 }

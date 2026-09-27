@@ -10,6 +10,11 @@ import cl.duoc.pedidos360.usuario.repository.UsuarioRepository;
 import cl.duoc.pedidos360.usuario.security.JwtUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import cl.duoc.pedidos360.usuario.config.RabbitMQConfig;
+import cl.duoc.pedidos360.usuario.event.UsuarioLoginExitosoEvent;
+import cl.duoc.pedidos360.usuario.event.UsuarioLoginFallidoEvent;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -27,13 +32,16 @@ public class UsuarioService {
     private final UsuarioRepository usuarioRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
+    private final RabbitTemplate rabbitTemplate;
 
     public UsuarioService(UsuarioRepository usuarioRepository,
                           PasswordEncoder passwordEncoder,
-                          JwtUtil jwtUtil) {
+                          JwtUtil jwtUtil,
+                          @Autowired(required = false) RabbitTemplate rabbitTemplate) {
         this.usuarioRepository = usuarioRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
+        this.rabbitTemplate = rabbitTemplate;
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -103,17 +111,49 @@ public class UsuarioService {
     @Transactional(readOnly = true)
     public AuthResponse autenticar(AuthRequest request) {
         log.info("[USER-SERVICE] Login attempt for: {}", request.getEmail());
-        Usuario usuario = usuarioRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new RuntimeException("Credenciales inválidas: Usuario no encontrado"));
+        Usuario usuario = usuarioRepository.findByEmail(request.getEmail()).orElse(null);
+
+        if (usuario == null) {
+            publicarLoginFallido(request.getEmail(), "Usuario no encontrado");
+            throw new RuntimeException("Credenciales inválidas: Usuario no encontrado");
+        }
 
         if (!passwordEncoder.matches(request.getPassword(), usuario.getPasswordHash())) {
             log.warn("[USER-SERVICE] Invalid password attempt for: {}", request.getEmail());
+            publicarLoginFallido(request.getEmail(), "Contraseña incorrecta");
             throw new RuntimeException("Credenciales inválidas: Contraseña incorrecta");
         }
 
         String token = jwtUtil.generateToken(usuario.getEmail(), usuario.getRol());
         log.info("[USER-SERVICE] Login successful for: {} ID={}", usuario.getEmail(), usuario.getId());
+        publicarLoginExitoso(usuario);
         return new AuthResponse(token, usuario.getId(), usuario.getNombre(), usuario.getEmail(), usuario.getRol());
+    }
+
+    private void publicarLoginExitoso(Usuario usuario) {
+        if (rabbitTemplate == null) return;
+        try {
+            UsuarioLoginExitosoEvent event = new UsuarioLoginExitosoEvent(
+                    usuario.getId(),
+                    usuario.getEmail(),
+                    usuario.getRol() != null ? usuario.getRol().name() : "CLIENTE"
+            );
+            rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE_EVENTS, RabbitMQConfig.ROUTING_KEY_LOGIN_EXITOSO, event);
+            log.info("[USER-SERVICE] Published login success event: eventId={} email={}", event.getEventId(), event.getEmail());
+        } catch (Exception ex) {
+            log.warn("[USER-SERVICE] Failed to publish login success event for email={}: {}", usuario.getEmail(), ex.getMessage());
+        }
+    }
+
+    private void publicarLoginFallido(String email, String motivo) {
+        if (rabbitTemplate == null) return;
+        try {
+            UsuarioLoginFallidoEvent event = new UsuarioLoginFallidoEvent(email, motivo);
+            rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE_EVENTS, RabbitMQConfig.ROUTING_KEY_LOGIN_FALLIDO, event);
+            log.info("[USER-SERVICE] Published login failure event: eventId={} email={}", event.getEventId(), email);
+        } catch (Exception ex) {
+            log.warn("[USER-SERVICE] Failed to publish login failure event for email={}: {}", email, ex.getMessage());
+        }
     }
 
     /**
@@ -219,6 +259,36 @@ public class UsuarioService {
         Usuario actualizado = usuarioRepository.save(usuario);
         log.info("[USER-SERVICE] User updated successfully ID={}", actualizado.getId());
         return UsuarioResponseDTO.fromEntity(actualizado);
+    }
+
+    @Transactional
+    public String solicitarRecuperacionPassword(String email) {
+        log.info("[USER-SERVICE] Password reset requested for email: {}", email);
+        Usuario usuario = usuarioRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado con email: " + email));
+
+        String resetToken = java.util.UUID.randomUUID().toString();
+
+        if (rabbitTemplate != null) {
+            try {
+                cl.duoc.pedidos360.usuario.event.PasswordResetSolicitadoEvent event =
+                        new cl.duoc.pedidos360.usuario.event.PasswordResetSolicitadoEvent(
+                                usuario.getId(),
+                                usuario.getEmail(),
+                                resetToken
+                        );
+                rabbitTemplate.convertAndSend(
+                        RabbitMQConfig.EXCHANGE_EVENTS,
+                        RabbitMQConfig.ROUTING_KEY_PASSWORD_RESET,
+                        event
+                );
+                log.info("[USER-SERVICE] Published password reset event: eventId={} email={}", event.getEventId(), email);
+            } catch (Exception ex) {
+                log.warn("[USER-SERVICE] Failed to publish password reset event for email={}: {}", email, ex.getMessage());
+            }
+        }
+
+        return resetToken;
     }
 
     @Transactional

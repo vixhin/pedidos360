@@ -26,6 +26,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
+import cl.duoc.pedidos360.usuario.config.RabbitMQConfig;
+import cl.duoc.pedidos360.usuario.event.UsuarioLoginExitosoEvent;
+import cl.duoc.pedidos360.usuario.event.UsuarioLoginFallidoEvent;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+
 @ExtendWith(MockitoExtension.class)
 class UsuarioServiceTest {
 
@@ -38,6 +43,9 @@ class UsuarioServiceTest {
     @Mock
     private JwtUtil jwtUtil;
 
+    @Mock
+    private RabbitTemplate rabbitTemplate;
+
     @InjectMocks
     private UsuarioService usuarioService;
 
@@ -49,7 +57,7 @@ class UsuarioServiceTest {
     }
 
     @Test
-    @DisplayName("autenticar - éxito con credenciales válidas")
+    @DisplayName("autenticar - éxito con credenciales válidas y publica evento")
     void testAutenticarExito() {
         AuthRequest request = new AuthRequest("test@pedidos360.cl", "password123");
         when(usuarioRepository.findByEmail("test@pedidos360.cl")).thenReturn(Optional.of(mockUsuario));
@@ -62,10 +70,15 @@ class UsuarioServiceTest {
         assertThat(response.getToken()).isEqualTo("fake-jwt-token");
         assertThat(response.getEmail()).isEqualTo("test@pedidos360.cl");
         assertThat(response.getRol()).isEqualTo(Rol.CLIENTE);
+        verify(rabbitTemplate).convertAndSend(
+                eq(RabbitMQConfig.EXCHANGE_EVENTS),
+                eq(RabbitMQConfig.ROUTING_KEY_LOGIN_EXITOSO),
+                any(UsuarioLoginExitosoEvent.class)
+        );
     }
 
     @Test
-    @DisplayName("autenticar - lanza excepción por usuario no encontrado")
+    @DisplayName("autenticar - lanza excepción por usuario no encontrado y publica evento fallido")
     void testAutenticarUsuarioNoEncontrado() {
         AuthRequest request = new AuthRequest("desconocido@pedidos360.cl", "pass");
         when(usuarioRepository.findByEmail("desconocido@pedidos360.cl")).thenReturn(Optional.empty());
@@ -74,10 +87,15 @@ class UsuarioServiceTest {
                 () -> usuarioService.autenticar(request));
 
         assertThat(exception.getMessage()).contains("Credenciales inválidas");
+        verify(rabbitTemplate).convertAndSend(
+                eq(RabbitMQConfig.EXCHANGE_EVENTS),
+                eq(RabbitMQConfig.ROUTING_KEY_LOGIN_FALLIDO),
+                any(UsuarioLoginFallidoEvent.class)
+        );
     }
 
     @Test
-    @DisplayName("autenticar - lanza excepción por contraseña incorrecta")
+    @DisplayName("autenticar - lanza excepción por contraseña incorrecta y publica evento fallido")
     void testAutenticarPasswordIncorrecta() {
         AuthRequest request = new AuthRequest("test@pedidos360.cl", "wrongpass");
         when(usuarioRepository.findByEmail("test@pedidos360.cl")).thenReturn(Optional.of(mockUsuario));
@@ -87,6 +105,11 @@ class UsuarioServiceTest {
                 () -> usuarioService.autenticar(request));
 
         assertThat(exception.getMessage()).contains("Contraseña incorrecta");
+        verify(rabbitTemplate).convertAndSend(
+                eq(RabbitMQConfig.EXCHANGE_EVENTS),
+                eq(RabbitMQConfig.ROUTING_KEY_LOGIN_FALLIDO),
+                any(UsuarioLoginFallidoEvent.class)
+        );
     }
 
     @Test
@@ -194,5 +217,20 @@ class UsuarioServiceTest {
         usuarioService.initDefaultUsers();
 
         verify(usuarioRepository, times(5)).save(any(Usuario.class));
+    }
+
+    @Test
+    @DisplayName("solicitarRecuperacionPassword - genera token y publica evento usuario.password.reset")
+    void testSolicitarRecuperacionPasswordPublicaEvento() {
+        when(usuarioRepository.findByEmail("test@pedidos360.cl")).thenReturn(Optional.of(mockUsuario));
+
+        String token = usuarioService.solicitarRecuperacionPassword("test@pedidos360.cl");
+
+        assertThat(token).isNotBlank();
+        verify(rabbitTemplate).convertAndSend(
+                eq(RabbitMQConfig.EXCHANGE_EVENTS),
+                eq(RabbitMQConfig.ROUTING_KEY_PASSWORD_RESET),
+                any(cl.duoc.pedidos360.usuario.event.PasswordResetSolicitadoEvent.class)
+        );
     }
 }

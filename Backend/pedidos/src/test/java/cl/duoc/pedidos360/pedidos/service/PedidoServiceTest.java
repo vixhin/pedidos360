@@ -1,6 +1,8 @@
 package cl.duoc.pedidos360.pedidos.service;
 
+import cl.duoc.pedidos360.pedidos.config.RabbitMQConfig;
 import cl.duoc.pedidos360.pedidos.entity.Pedido;
+import cl.duoc.pedidos360.pedidos.event.PedidoCreadoEvent;
 import cl.duoc.pedidos360.pedidos.repository.PedidoRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -9,12 +11,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -22,6 +26,9 @@ class PedidoServiceTest {
 
     @Mock
     private PedidoRepository pedidoRepository;
+
+    @Mock
+    private RabbitTemplate rabbitTemplate;
 
     @InjectMocks
     private PedidoService pedidoService;
@@ -69,14 +76,19 @@ class PedidoServiceTest {
     }
 
     @Test
-    @DisplayName("guardar - guarda pedido correctamente")
-    void testGuardar() {
+    @DisplayName("guardar - guarda pedido y publica evento pedido.creado")
+    void testGuardarPublicaEvento() {
         when(pedidoRepository.save(any(Pedido.class))).thenReturn(mockPedido);
 
         Pedido guardado = pedidoService.guardar(mockPedido);
 
         assertThat(guardado.getId()).isEqualTo(1L);
         verify(pedidoRepository).save(mockPedido);
+        verify(rabbitTemplate).convertAndSend(
+                eq(RabbitMQConfig.EXCHANGE_EVENTS),
+                eq(RabbitMQConfig.ROUTING_KEY_PEDIDO_CREADO),
+                any(PedidoCreadoEvent.class)
+        );
     }
 
     @Test
@@ -87,5 +99,38 @@ class PedidoServiceTest {
         pedidoService.eliminar(1L);
 
         verify(pedidoRepository).deleteById(1L);
+    }
+
+    @Test
+    @DisplayName("actualizarEstado - actualiza estado y publica evento pedido.estado.actualizado")
+    void testActualizarEstadoPublicaEvento() {
+        when(pedidoRepository.findById(1L)).thenReturn(Optional.of(mockPedido));
+        when(pedidoRepository.save(any(Pedido.class))).thenReturn(mockPedido);
+
+        Pedido actualizado = pedidoService.actualizarEstado(1L, "ENTREGADO");
+
+        assertThat(actualizado.getEstado()).isEqualTo("ENTREGADO");
+        verify(rabbitTemplate).convertAndSend(
+                eq(RabbitMQConfig.EXCHANGE_EVENTS),
+                eq(RabbitMQConfig.ROUTING_KEY_PEDIDO_ESTADO_ACTUALIZADO),
+                any(cl.duoc.pedidos360.pedidos.event.PedidoEstadoActualizadoEvent.class)
+        );
+    }
+
+    @Test
+    @DisplayName("asignarRepartidor - asigna repartidor y publica evento pedido.repartidor.asignado")
+    void testAsignarRepartidorPublicaEvento() {
+        when(pedidoRepository.findById(1L)).thenReturn(Optional.of(mockPedido));
+        when(pedidoRepository.save(any(Pedido.class))).thenReturn(mockPedido);
+
+        Pedido actualizado = pedidoService.asignarRepartidor(1L, 99L, "Carlos Repartidor");
+
+        assertThat(actualizado.getRepartidorId()).isEqualTo(99L);
+        assertThat(actualizado.getEstado()).isEqualTo("EN_CAMINO");
+        verify(rabbitTemplate).convertAndSend(
+                eq(RabbitMQConfig.EXCHANGE_EVENTS),
+                eq(RabbitMQConfig.ROUTING_KEY_REPARTIDOR_ASIGNADO),
+                any(cl.duoc.pedidos360.pedidos.event.RepartidorAsignadoEvent.class)
+        );
     }
 }

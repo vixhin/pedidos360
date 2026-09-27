@@ -39,6 +39,18 @@ public class PedidoController {
         return ResponseEntity.ok(pedidoService.guardar(pedido));
     }
 
+    @PutMapping("/{id}/estado")
+    public ResponseEntity<Pedido> actualizarEstado(@PathVariable Long id, @RequestParam String nuevoEstado) {
+        return ResponseEntity.ok(pedidoService.actualizarEstado(id, nuevoEstado));
+    }
+
+    @PutMapping("/{id}/repartidor")
+    public ResponseEntity<Pedido> asignarRepartidor(@PathVariable Long id,
+                                                     @RequestParam Long repartidorId,
+                                                     @RequestParam(defaultValue = "Repartidor") String nombreRepartidor) {
+        return ResponseEntity.ok(pedidoService.asignarRepartidor(id, repartidorId, nombreRepartidor));
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> eliminar(@PathVariable Long id) {
         pedidoService.eliminar(id);

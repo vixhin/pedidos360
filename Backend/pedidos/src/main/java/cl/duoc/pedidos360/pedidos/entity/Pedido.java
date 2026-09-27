@@ -20,6 +20,9 @@ public class Pedido {
     @Column(nullable = false)
     private String estado;
 
+    @Column(name = "repartidor_id")
+    private Long repartidorId;
+
     @Column(name = "fecha_creacion")
     private LocalDateTime fechaCreacion;
 
@@ -65,6 +68,14 @@ public class Pedido {
 
     public void setEstado(String estado) {
         this.estado = estado;
+    }
+
+    public Long getRepartidorId() {
+        return repartidorId;
+    }
+
+    public void setRepartidorId(Long repartidorId) {
+        this.repartidorId = repartidorId;
     }
 
     public LocalDateTime getFechaCreacion() {

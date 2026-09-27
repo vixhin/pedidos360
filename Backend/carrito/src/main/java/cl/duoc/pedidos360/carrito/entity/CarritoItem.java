@@ -1,6 +1,7 @@
 package cl.duoc.pedidos360.carrito.entity;
 
 import jakarta.persistence.*;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "carrito_items")
@@ -22,7 +23,12 @@ public class CarritoItem {
     @Column(name = "precio_unitario", nullable = false)
     private Double precioUnitario;
 
-    public CarritoItem() {}
+    @Column(name = "ultima_actividad")
+    private LocalDateTime ultimaActividad;
+
+    public CarritoItem() {
+        this.ultimaActividad = LocalDateTime.now();
+    }
 
     public CarritoItem(Long id, Long usuarioId, Long productoId, Integer cantidad, Double precioUnitario) {
         this.id = id;
@@ -30,6 +36,7 @@ public class CarritoItem {
         this.productoId = productoId;
         this.cantidad = cantidad;
         this.precioUnitario = precioUnitario;
+        this.ultimaActividad = LocalDateTime.now();
     }
 
     public Long getId() {
@@ -70,5 +77,13 @@ public class CarritoItem {
 
     public void setPrecioUnitario(Double precioUnitario) {
         this.precioUnitario = precioUnitario;
+    }
+
+    public LocalDateTime getUltimaActividad() {
+        return ultimaActividad;
+    }
+
+    public void setUltimaActividad(LocalDateTime ultimaActividad) {
+        this.ultimaActividad = ultimaActividad;
     }
 }

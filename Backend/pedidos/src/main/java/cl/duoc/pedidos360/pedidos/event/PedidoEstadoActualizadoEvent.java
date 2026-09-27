@@ -1,0 +1,84 @@
+package cl.duoc.pedidos360.pedidos.event;
+
+import java.io.Serializable;
+import java.time.Instant;
+import java.util.UUID;
+
+public class PedidoEstadoActualizadoEvent implements Serializable {
+
+    private String eventId;
+    private String eventType;
+    private String timestamp;
+    private Long resourceId;
+    private Long usuarioId;
+    private String nuevoEstado;
+
+    public PedidoEstadoActualizadoEvent() {
+    }
+
+    public PedidoEstadoActualizadoEvent(Long pedidoId, Long usuarioId, String nuevoEstado) {
+        this.eventId = UUID.randomUUID().toString();
+        this.eventType = "PEDIDO_ESTADO_ACTUALIZADO";
+        this.timestamp = Instant.now().toString();
+        this.resourceId = pedidoId;
+        this.usuarioId = usuarioId;
+        this.nuevoEstado = nuevoEstado;
+    }
+
+    public PedidoEstadoActualizadoEvent(String eventId, String eventType, String timestamp, Long resourceId, Long usuarioId, String nuevoEstado) {
+        this.eventId = eventId;
+        this.eventType = eventType;
+        this.timestamp = timestamp;
+        this.resourceId = resourceId;
+        this.usuarioId = usuarioId;
+        this.nuevoEstado = nuevoEstado;
+    }
+
+    public String getEventId() {
+        return eventId;
+    }
+
+    public void setEventId(String eventId) {
+        this.eventId = eventId;
+    }
+
+    public String getEventType() {
+        return eventType;
+    }
+
+    public void setEventType(String eventType) {
+        this.eventType = eventType;
+    }
+
+    public String getTimestamp() {
+        return timestamp;
+    }
+
+    public void setTimestamp(String timestamp) {
+        this.timestamp = timestamp;
+    }
+
+    public Long getResourceId() {
+        return resourceId;
+    }
+
+    public void setResourceId(Long resourceId) {
+        this.resourceId = resourceId;
+    }
+
+    public Long getUsuarioId() {
+        return usuarioId;
+    }
+
+    public void setUsuarioId(Long usuarioId) {
+        this.usuarioId = usuarioId;
+    }
+
+    public String getNuevoEstado() {
+        return nuevoEstado;
+    }
+
+    public void setNuevoEstado(String nuevoEstado) {
+        this.nuevoEstado = nuevoEstado;
+    }
+}
