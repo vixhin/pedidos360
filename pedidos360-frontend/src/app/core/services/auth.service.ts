@@ -271,7 +271,11 @@ export class AuthService {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return;
       const { user, token } = JSON.parse(raw) as { user: AppUser; token: string | null };
-      const role = (user.rol as UserRole) || this.determineRoleFromEmail(user.email);
+      const role: UserRole =
+        (user.rol as UserRole) ||
+        (user.provider === 'microsoft'
+          ? 'CLIENTE'
+          : this.determineRoleFromEmail(user.email));
       this._user.set({ ...user, rol: role });
       this._token.set(token);
       this._isLoggedIn.set(true);
