@@ -13,7 +13,7 @@ export default defineConfig({
   workers: 1,
   reporter: [['list'], ['html', { outputFolder: 'playwright-report-ec2', open: 'never' }]],
   use: {
-    baseURL: 'https://34-227-113-89.sslip.io',
+    baseURL: 'https://3-92-44-37.sslip.io',
     trace: 'on-first-retry',
     screenshot: 'on',
     video: 'on-first-retry',

@@ -3,6 +3,9 @@
 .env.*
 !.env.example
 
+# Credenciales locales (nunca subir)
+CREDENCIALES_DEV_LOCAL.txt
+
 # IDEs & OS
 .idea/
 .vscode/
