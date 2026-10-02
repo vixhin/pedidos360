@@ -5,6 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { Icon } from '../../shared/icon/icon';
 import { AuthService } from '../../core/services/auth.service';
+import { BackendUrlService } from '../../core/services/backend-url.service';
 
 export interface StaffMember {
   id: string;
@@ -27,6 +28,7 @@ export interface StaffMember {
   styleUrl: './staff.css',
 })
 export class Staff implements OnInit {
+  private readonly urls = inject(BackendUrlService);
   private readonly http = inject(HttpClient);
   readonly auth = inject(AuthService);
 
@@ -64,23 +66,17 @@ export class Staff implements OnInit {
   }
 
   cargarPersonalDesdeDB(): void {
-    this.http.get<{ success: boolean; data: any[] }>('http://localhost:8081/api/usuario').subscribe({
+    this.http.get<{ success: boolean; data: any[] }>(`${this.urls.base('usuario')}`).subscribe({
       next: (res) => {
         if (res && res.data) {
           const mapped: StaffMember[] = res.data.map((u) => {
-            let role: StaffMember['role'] = u.rol || 'VENDEDOR';
-            if (u.nombre?.toLowerCase().includes('repartidor')) {
-              role = 'REPARTIDOR';
-            } else if (u.nombre?.toLowerCase().includes('soporte')) {
-              role = 'SOPORTE';
-            }
-
-            const rawDate = u.createdAt ? new Date(u.createdAt).toLocaleDateString('es-CL') : '01/01/2026';
+            const role: StaffMember['role'] = (u.rol as StaffMember['role']) || 'CLIENTE';
+            const rawDate = u.createdAt ? new Date(u.createdAt).toLocaleDateString('es-CL') : 'Fecha n/d';
             return {
               id: `EMP-${u.id}`,
               name: u.nombre,
               email: u.email,
-              phone: u.phone || '+56 9 8765 4321',
+              phone: u.phone || 'Sin teléfono',
               role: role,
               shift: role === 'ADMIN' ? 'FULL_TIME' : role === 'VENDEDOR' ? 'MAÑANA' : 'TARDE',
               status: 'ACTIVO',
@@ -92,13 +88,7 @@ export class Staff implements OnInit {
         }
       },
       error: () => {
-        // Fallback si no hay conexión
-        this.staffList.set([
-          { id: 'EMP-1', name: 'Administrador Vixo', email: 'admin@pedidos360.cl', phone: '+56 9 1234 5678', role: 'ADMIN', shift: 'FULL_TIME', status: 'ACTIVO', joinedDate: '01/01/2026', avatarInitial: 'A' },
-          { id: 'EMP-3', name: 'Vendedor Gonzalo Silva', email: 'vendedor@pedidos360.cl', phone: '+56 9 8765 4321', role: 'VENDEDOR', shift: 'MAÑANA', status: 'ACTIVO', joinedDate: '15/02/2026', avatarInitial: 'V' },
-          { id: 'EMP-7', name: 'Rodrigo Morales (Repartidor)', email: 'rodrigo.morales@pedidos360.cl', phone: '+56 9 5566 7788', role: 'REPARTIDOR', shift: 'FULL_TIME', status: 'ACTIVO', joinedDate: '10/03/2026', avatarInitial: 'R' },
-          { id: 'EMP-8', name: 'Camila Reyes (Soporte Cliente)', email: 'camila.reyes@pedidos360.cl', phone: '+56 9 9988 1122', role: 'SOPORTE', shift: 'MAÑANA', status: 'ACTIVO', joinedDate: '20/04/2026', avatarInitial: 'C' },
-        ]);
+        this.showToast('No se pudo cargar la información del personal desde el servidor.');
       },
     });
   }
@@ -130,17 +120,17 @@ export class Staff implements OnInit {
       nombre: this.newName(),
       email: this.newEmail(),
       password: 'Password123!',
-      rol: 'VENDEDOR',
+      rol: this.newRole(),
     };
 
-    this.http.post<{ success: boolean; data: any }>('http://localhost:8081/api/usuario', payload).subscribe({
+    this.http.post<{ success: boolean; data: any }>(`${this.urls.base('usuario')}`, payload).subscribe({
       next: (res) => {
         const created = res.data;
         const newEmp: StaffMember = {
-          id: `EMP-${created?.id || Math.floor(100 + Math.random() * 900)}`,
+          id: `EMP-${created?.id || 0}`,
           name: this.newName(),
           email: this.newEmail(),
-          phone: this.newPhone() || '+56 9 8877 6655',
+          phone: this.newPhone() || 'Sin teléfono',
           role: this.newRole(),
           shift: this.newShift(),
           status: 'ACTIVO',
@@ -153,23 +143,8 @@ export class Staff implements OnInit {
         this.resetForm();
         this.activeTab.set('list');
       },
-      error: () => {
-        // Local fallback if backend fails
-        const newEmp: StaffMember = {
-          id: `EMP-${Math.floor(100 + Math.random() * 900)}`,
-          name: this.newName(),
-          email: this.newEmail(),
-          phone: this.newPhone() || '+56 9 8877 6655',
-          role: this.newRole(),
-          shift: this.newShift(),
-          status: 'ACTIVO',
-          joinedDate: 'Hoy',
-          avatarInitial: this.newName().charAt(0).toUpperCase(),
-        };
-        this.staffList.update((list) => [newEmp, ...list]);
-        this.showToast(`¡Nuevo personal "${newEmp.name}" (${newEmp.role}) registrado!`);
-        this.resetForm();
-        this.activeTab.set('list');
+      error: (err) => {
+        alert('No se pudo registrar el personal en el backend. ' + (err.error?.message || 'Error de conexión'));
       },
     });
   }

@@ -22,4 +22,6 @@ export const API_CONFIG = {
   carrito:      environment.api.carrito,
   notificacion: environment.api.notificacion,
   analitica:    environment.api.analitica,
+  chat:         environment.api.chat,
+  chatWs:       environment.api.chatWs,
 };

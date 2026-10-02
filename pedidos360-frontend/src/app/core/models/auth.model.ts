@@ -1,4 +1,4 @@
-export type Rol = 'ADMIN' | 'VENDEDOR' | 'CLIENTE';
+export type Rol = 'ADMIN' | 'VENDEDOR' | 'REPARTIDOR' | 'CLIENTE';
 
 export interface AuthRequest {
   email: string;

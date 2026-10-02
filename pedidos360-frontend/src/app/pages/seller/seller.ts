@@ -9,6 +9,7 @@ import { CatalogService } from '../../core/services/catalog.service';
 import { AuthService } from '../../core/services/auth.service';
 import { Product } from '../../core/models/catalog.model';
 import { API_CONFIG } from '../../core/config/api.config';
+import { BackendUrlService } from '../../core/services/backend-url.service';
 
 export interface IncomingOrder {
   id: string;
@@ -37,6 +38,7 @@ interface PedidoRaw {
   styleUrl: './seller.css',
 })
 export class Seller implements OnInit {
+  private readonly urls = inject(BackendUrlService);
   private readonly http = inject(HttpClient);
   readonly catalog = inject(CatalogService);
   readonly auth = inject(AuthService);
@@ -70,14 +72,14 @@ export class Seller implements OnInit {
   cargarPedidos(): void {
     this.isLoadingOrders.set(true);
     this.http
-      .get<PedidoRaw[]>(`${API_CONFIG.pedidos}/pedidos`)
+      .get<PedidoRaw[]>(`${this.urls.base('pedidos')}`)
       .pipe(catchError(() => of([] as PedidoRaw[])))
       .subscribe((data) => {
         this.isLoadingOrders.set(false);
         const orders: IncomingOrder[] = (data || []).map((p) => ({
           id: `PED-${p.id}`,
           customerName: `Usuario #${p.usuarioId}`,
-          address: 'Dirección no disponible',
+          address: 'Dirección de entrega',
           itemsCount: 1,
           total: p.total,
           status: this.mapEstado(p.estado),
@@ -114,10 +116,26 @@ export class Seller implements OnInit {
   }
 
   updateOrderStatus(orderId: string, nextStatus: IncomingOrder['status']): void {
-    this.incomingOrders.update((orders) =>
-      orders.map((o) => (o.id === orderId ? { ...o, status: nextStatus } : o))
-    );
-    this.showToast(`Estado del pedido ${orderId} actualizado a ${nextStatus}`);
+    const rawId = orderId.replace('PED-', '');
+    const url = `${this.urls.base('pedidos')}/${rawId}/estado?nuevoEstado=${nextStatus}`;
+
+    this.http
+      .put(url, {})
+      .pipe(
+        catchError((err) => {
+          console.error('[Seller] Error actualizando estado en backend:', err);
+          alert('No se pudo actualizar el estado en el servidor.');
+          return of(null);
+        })
+      )
+      .subscribe((res) => {
+        if (res) {
+          this.incomingOrders.update((orders) =>
+            orders.map((o) => (o.id === orderId ? { ...o, status: nextStatus } : o))
+          );
+          this.showToast(`Estado del pedido ${orderId} actualizado a ${nextStatus} en PostgreSQL y RabbitMQ!`);
+        }
+      });
   }
 
   createProduct(): void {
@@ -136,7 +154,7 @@ export class Seller implements OnInit {
     };
 
     this.http
-      .post(`${API_CONFIG.productos}/productos`, payload)
+      .post(`${this.urls.base('productos')}`, payload)
       .pipe(catchError(() => of(null)))
       .subscribe(() => {
         this.catalog.cargarProductosDeBackend();

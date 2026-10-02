@@ -65,10 +65,12 @@ export class PedidoService {
     }
   }
 
-  private mapPedido(p: PedidoBackend): ClientOrderFromDB {
+  readonly errorMessage = signal<string | null>(null);
+
+  private mapPedido(p: PedidoBackend & { repartidorId?: number }): ClientOrderFromDB {
     const step = this.estadoToStep(p.estado);
     return {
-      id: `PED-360-${p.id}`,
+      id: `PED-${p.id}`,
       date: p.fechaCreacion
         ? new Date(p.fechaCreacion).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' })
         : 'Fecha no disponible',
@@ -76,9 +78,9 @@ export class PedidoService {
       total: p.total,
       statusStep: step,
       statusLabel: this.estadoToLabel(p.estado),
-      deliveryEta: step === 4 ? 'Completado' : '20-35 min',
-      courierName: 'Repartidor Pedidos360',
-      courierPhone: '+56 9 8765 0000',
+      deliveryEta: step === 4 ? 'Entregado' : 'Pendiente de entrega',
+      courierName: p.repartidorId ? `Repartidor #${p.repartidorId}` : 'Por asignar',
+      courierPhone: p.repartidorId ? `+56 9 8765 000${p.repartidorId}` : 'Sin teléfono',
     };
   }
 
@@ -87,11 +89,13 @@ export class PedidoService {
     if (!user?.id) return;
 
     this.isLoading.set(true);
+    this.errorMessage.set(null);
     this.http
       .get<PedidoBackend[]>(`${this.urls.base('pedidos')}/usuario/${user.id}`)
       .pipe(
         catchError((err) => {
-          console.warn('[PedidoService] No se pudieron cargar pedidos del backend:', err);
+          console.error('[PedidoService] No se pudieron cargar pedidos del backend:', err);
+          this.errorMessage.set('No se pudo cargar la información de pedidos desde el backend.');
           return of([] as PedidoBackend[]);
         })
       )
@@ -116,6 +120,7 @@ export class PedidoService {
     };
 
     this.isSubmitting.set(true);
+    this.errorMessage.set(null);
     this.http
       .post<PedidoBackend>(`${this.urls.base('pedidos')}`, payload)
       .pipe(
@@ -131,27 +136,14 @@ export class PedidoService {
           if (user?.id) {
             this.notifSvc.enviarNotificacion(
               user.id,
-              `Tu pedido ${mapped.id} fue recibido y está siendo preparado. Total: $${total.toLocaleString('es-CL')}`,
+              `Tu pedido #${created.id} fue recibido y está siendo preparado. Total: $${total.toLocaleString('es-CL')}`,
               'PEDIDOS'
             );
           }
         }),
         catchError((err) => {
           console.error('[PedidoService] Error al crear pedido:', err);
-          const fakeId = `PED-360-${Date.now()}`;
-          const mapped: ClientOrderFromDB = {
-            id: fakeId,
-            date: 'Hoy, ' + new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }) + ' hs',
-            items: cartLines,
-            total,
-            statusStep: 1,
-            statusLabel: 'Pedido recibido, esperando confirmación',
-            deliveryEta: '20-35 min',
-            courierName: 'Repartidor Pedidos360',
-            courierPhone: '+56 9 8765 0000',
-          };
-          this.lastOrderId.set(fakeId);
-          this.pedidos.update((list) => [mapped, ...list]);
+          this.errorMessage.set('No se pudo procesar la creación del pedido en el servidor. Intente nuevamente.');
           return of(null);
         })
       )

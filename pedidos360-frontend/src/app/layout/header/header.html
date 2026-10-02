@@ -101,6 +101,9 @@
           <a routerLink="/personal" routerLinkActive="active" class="nav-shortcut-link" title="Gestión & Alta de Personal">
             Personal
           </a>
+          <a routerLink="/repartidor" routerLinkActive="active" class="nav-shortcut-link" title="Portal de Entregas Repartidor">
+            Portal Repartidor
+          </a>
           <a routerLink="/cliente" routerLinkActive="active" class="nav-shortcut-link" title="Portal Cliente & Seguimiento">
             Portal Cliente
           </a>
@@ -110,6 +113,10 @@
           </a>
           <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" class="nav-shortcut-link">
             Tienda
+          </a>
+        } @else if (auth.isRepartidor()) {
+          <a routerLink="/repartidor" routerLinkActive="active" class="nav-shortcut-link" title="Portal Repartidor">
+            Panel Entregas Repartidor
           </a>
         } @else {
           <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" class="nav-shortcut-link">
@@ -292,6 +299,11 @@
                 @if (auth.isVendedor() || auth.isAdmin()) {
                   <a routerLink="/vendedor" class="profile-link" (click)="closeMenus()">
                     <app-icon name="package" size="16" /> Panel del Vendedor
+                  </a>
+                }
+                @if (auth.isRepartidor() || auth.isAdmin()) {
+                  <a routerLink="/repartidor" class="profile-link" (click)="closeMenus()">
+                    <app-icon name="truck" size="16" /> Panel del Repartidor
                   </a>
                 }
                 <a routerLink="/cliente" class="profile-link" (click)="closeMenus()">

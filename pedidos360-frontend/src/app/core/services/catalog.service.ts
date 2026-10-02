@@ -164,14 +164,18 @@ export class CatalogService {
     this._selectedCategory.set(categoryId);
   }
 
+  readonly errorMessage = signal<string | null>(null);
+
   cargarProductosDeBackend(): void {
     this._isLoading.set(true);
+    this.errorMessage.set(null);
     this.http
       .get<ApiResponse<BackendProductDTO[]>>(`${this.urls.base('productos')}`)
       .pipe(
         catchError((error) => {
-          console.warn('[CatalogService] Fallo conectando a productos. Usando catálogo local.', error);
-          return of({ success: false, message: 'Fallback', data: [] });
+          console.error('[CatalogService] Error al conectar con microservicio de productos:', error);
+          this.errorMessage.set('No se pudo cargar el catálogo de productos desde el servidor.');
+          return of({ success: false, message: 'Error de conexión', data: [] });
         })
       )
       .subscribe((res) => {
@@ -180,7 +184,10 @@ export class CatalogService {
           const mapped = res.data.map((dto) => this.mapDtoToProduct(dto));
           this._allProducts.set(mapped);
         } else {
-          this._allProducts.set(this.obtenerProductosFallback());
+          this._allProducts.set([]);
+          if (!res.success && res.message !== 'Error de conexión') {
+            this.errorMessage.set('No se encontraron productos en la base de datos.');
+          }
         }
       });
   }

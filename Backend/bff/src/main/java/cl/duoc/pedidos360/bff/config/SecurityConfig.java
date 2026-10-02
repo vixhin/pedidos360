@@ -100,9 +100,9 @@ public class SecurityConfig {
                     .hasAuthority("SCOPE_access_as_user")
                 .requestMatchers(HttpMethod.POST, "/api/bff/pedidos/**")
                     .hasAuthority("SCOPE_access_as_user")
-                // Actualización/eliminación: ADMIN
+                // Actualización: ADMIN, VENDEDOR o REPARTIDOR
                 .requestMatchers(HttpMethod.PUT, "/api/bff/pedidos/**")
-                    .hasRole("ADMIN")
+                    .hasAnyRole("ADMIN", "VENDEDOR", "REPARTIDOR")
                 .requestMatchers(HttpMethod.DELETE, "/api/bff/pedidos/**")
                     .hasRole("ADMIN")
 

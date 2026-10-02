@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, OnInit, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -28,10 +28,12 @@ export interface DeliveryAddress {
   isPrimary: boolean;
 }
 
+import { ChatComponent } from '../../shared/components/chat/chat.component';
+
 @Component({
   selector: 'app-client',
   standalone: true,
-  imports: [RouterLink, Icon, DecimalPipe, FormsModule],
+  imports: [RouterLink, Icon, DecimalPipe, FormsModule, ChatComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './client.html',
   styleUrl: './client.css',
@@ -39,64 +41,28 @@ export interface DeliveryAddress {
 export class Client implements OnInit {
   readonly activeTab = signal<'active-order' | 'history' | 'addresses'>('active-order');
 
-  // Pedido activo en seguimiento en vivo
-  readonly activeOrder = signal<ClientOrder>({
-    id: 'PED-360-9921',
-    date: 'Hoy, 13:40 hs',
-    items: [
-      { name: 'Leche Entera Colun 1L', icon: 'LAC', quantity: 2, price: 1190 },
-      { name: 'Coca-Cola Sabor Original 2.5L', icon: 'BEB', quantity: 1, price: 2490 },
-      { name: 'Arroz Grado 1 Tucapel 1kg', icon: 'ABA', quantity: 1, price: 1590 },
-    ],
-    total: 6460,
-    statusStep: 3, // En camino
-    statusLabel: 'Repartidor en camino a tu domicilio',
-    deliveryEta: '15-20 min',
-    courierName: 'Rodrigo M. (Moto)',
-    courierPhone: '+56 9 8765 4321',
+  // Pedido activo en seguimiento real desde PostgreSQL
+  readonly activeOrder = computed<ClientOrder | null>(() => {
+    const list = this.pedidoSvc.pedidos();
+    return list.find((p) => p.statusStep < 4) || null;
   });
 
-  // Historial de compras del cliente
-  readonly pastOrders = signal<ClientOrder[]>([
-    {
-      id: 'PED-360-8410',
-      date: '02/09/2026',
-      items: [
-        { name: 'Pechuga de Pollo Ariztía 1kg', icon: 'CAR', quantity: 1, price: 5990 },
-        { name: 'Pan Molde Blanco Ideal 560g', icon: 'PAN', quantity: 1, price: 2190 },
-      ],
-      total: 8180,
-      statusStep: 4,
-      statusLabel: 'Entregado exitosamente',
-      deliveryEta: 'Completado',
-      courierName: 'Carlos G.',
-      courierPhone: '+56 9 1122 3344',
-    },
-    {
-      id: 'PED-360-7812',
-      date: '28/08/2026',
-      items: [
-        { name: 'Detergente Líquido Omo 3L', icon: 'LIM', quantity: 1, price: 8990 },
-        { name: 'Papel Higiénico Elite 8 Rollos', icon: 'LIM', quantity: 1, price: 4590 },
-      ],
-      total: 13580,
-      statusStep: 4,
-      statusLabel: 'Entregado exitosamente',
-      deliveryEta: 'Completado',
-      courierName: 'Andrea P.',
-      courierPhone: '+56 9 9988 7766',
-    },
-  ]);
+  // Historial de compras reales del cliente
+  readonly pastOrders = computed<ClientOrder[]>(() => {
+    return this.pedidoSvc.pedidos().filter((p) => p.statusStep === 4);
+  });
 
-  // Lista de direcciones guardadas
-  readonly addresses = signal<DeliveryAddress[]>([
-    { id: 'ADDR-1', title: 'Santiago Centro - Casa Principal', detail: 'Av. Providencia 1240, Departamento 402, Santiago', comuna: 'Santiago Centro', isPrimary: true },
-    { id: 'ADDR-2', title: 'Oficina Providencia', detail: 'Av. Andrés Bello 2451, Piso 8, Providencia', comuna: 'Providencia', isPrimary: false },
-  ]);
+  // Lista de direcciones guardadas por el cliente
+  readonly addresses = signal<DeliveryAddress[]>([]);
 
   // Modal para agregar dirección
   readonly showAddAddressModal = signal(false);
   readonly newAddressTitle = signal('');
+
+  parseNumericId(idStr?: string): number {
+    if (!idStr) return 0;
+    return Number(idStr.replace(/[^0-9]/g, '')) || 0;
+  }
   readonly newAddressStreet = signal('');
   readonly newAddressDepto = signal('');
   readonly newAddressComuna = signal('Santiago Centro');

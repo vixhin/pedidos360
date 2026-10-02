@@ -1,0 +1,84 @@
+<div class="chat-widget">
+  <!-- CABECERA DE CHAT -->
+  <header class="chat-header">
+    <div class="chat-header-info">
+      <div class="status-indicator" [class.is-closed]="chatSvc.conversacionActiva()?.estado === 'CERRADO'"></div>
+      <div>
+        <h3 class="chat-title">Chat Pedido #{{ pedidoId() }}</h3>
+        <p class="chat-subtitle">
+          @if (chatSvc.conversacionActiva()?.estado === 'CERRADO') {
+            Conversación Cerrada
+          } @else {
+            Canal Directo Seguro
+          }
+        </p>
+      </div>
+    </div>
+  </header>
+
+  <!-- CONTENEDOR DE MENSAJES -->
+  <div #scrollContainer class="chat-messages">
+    @if (chatSvc.isLoading()) {
+      <div class="chat-state-box">
+        <div class="mini-spinner"></div>
+        <span>Cargando mensajes del servidor...</span>
+      </div>
+    } @else if (chatSvc.errorMessage()) {
+      <div class="chat-state-box error-box">
+        <app-icon name="help-circle"></app-icon>
+        <span>{{ chatSvc.errorMessage() }}</span>
+      </div>
+    } @else if (chatSvc.mensajes().length === 0) {
+      <div class="chat-state-box empty-box">
+        <app-icon name="package"></app-icon>
+        <span>No hay mensajes todavía. Escribe un mensaje para comenzar.</span>
+      </div>
+    } @else {
+      @for (msg of chatSvc.mensajes(); track msg.id) {
+        <div
+          class="message-bubble"
+          [class.msg-own]="msg.remitenteId === auth.user()?.id"
+          [class.msg-other]="msg.remitenteId !== auth.user()?.id"
+        >
+          <div class="msg-sender-tag">{{ msg.tipoRemitente }}</div>
+          <div class="msg-content">{{ msg.contenido }}</div>
+          <div class="msg-footer">
+            <span class="msg-time">{{ msg.fechaEnvio | date:'HH:mm' }}</span>
+            @if (msg.remitenteId === auth.user()?.id) {
+              <span class="msg-status" title="Enviado a servidor">✓</span>
+            }
+          </div>
+        </div>
+      }
+    }
+
+    @if (chatSvc.conversacionActiva()?.estado === 'CERRADO') {
+      <div class="banner-closed">
+        <app-icon name="lock" size="16"></app-icon>
+        <span>Esta conversación fue cerrada porque el pedido fue entregado.</span>
+      </div>
+    }
+  </div>
+
+  <!-- BARRA DE ESCRITURA INFERIOR RESPONSIVE -->
+  <footer class="chat-input-bar">
+    <input
+      type="text"
+      class="chat-input"
+      placeholder="Escribir mensaje..."
+      [ngModel]="nuevoMensaje()"
+      (ngModelChange)="nuevoMensaje.set($event)"
+      (keyup.enter)="enviar()"
+      [disabled]="chatSvc.conversacionActiva()?.estado === 'CERRADO' || chatSvc.isLoading()"
+    />
+    <button
+      type="button"
+      class="btn-send"
+      (click)="enviar()"
+      [disabled]="!nuevoMensaje().trim() || chatSvc.conversacionActiva()?.estado === 'CERRADO' || chatSvc.isLoading()"
+      title="Enviar Mensaje"
+    >
+      <app-icon name="arrow-right" size="18"></app-icon>
+    </button>
+  </footer>
+</div>

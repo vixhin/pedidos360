@@ -117,6 +117,9 @@ public class BffEntraSyncController {
                 if ("VENDEDOR".equalsIgnoreCase(r)) return "VENDEDOR";
             }
             for (String r : roles) {
+                if ("REPARTIDOR".equalsIgnoreCase(r)) return "REPARTIDOR";
+            }
+            for (String r : roles) {
                 if ("CLIENTE".equalsIgnoreCase(r)) return "CLIENTE";
             }
         }

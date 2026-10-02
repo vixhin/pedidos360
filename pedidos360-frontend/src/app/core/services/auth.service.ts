@@ -6,7 +6,7 @@ import { API_CONFIG } from '../config/api.config';
 import { AZURE_AD_CONFIG, isAzureAdConfigured } from '../config/auth.config';
 import { ApiResponse, AuthRequest, AuthResponse, RegisterRequest } from '../models/auth.model';
 
-export type UserRole = 'ADMIN' | 'VENDEDOR' | 'CLIENTE';
+export type UserRole = 'ADMIN' | 'VENDEDOR' | 'REPARTIDOR' | 'CLIENTE';
 
 export interface AppUser {
   id?: number;
@@ -29,21 +29,23 @@ export class AuthService {
   private readonly _token       = signal<string | null>(null);
   private readonly _activeRole  = signal<UserRole>('CLIENTE');
 
-  readonly isLoggedIn  = this._isLoggedIn.asReadonly();
-  readonly user        = this._user.asReadonly();
-  readonly token       = this._token.asReadonly();
-  readonly activeRole  = this._activeRole.asReadonly();
+  readonly isLoggedIn   = this._isLoggedIn.asReadonly();
+  readonly user         = this._user.asReadonly();
+  readonly token        = this._token.asReadonly();
+  readonly activeRole   = this._activeRole.asReadonly();
 
-  readonly isAdmin    = computed(() => this._isLoggedIn() && this._activeRole() === 'ADMIN');
-  readonly isVendedor = computed(() => this._isLoggedIn() && this._activeRole() === 'VENDEDOR');
-  readonly isCliente  = computed(() => !this._isLoggedIn() || this._activeRole() === 'CLIENTE');
+  readonly isAdmin      = computed(() => this._isLoggedIn() && this._activeRole() === 'ADMIN');
+  readonly isVendedor   = computed(() => this._isLoggedIn() && this._activeRole() === 'VENDEDOR');
+  readonly isRepartidor = computed(() => this._isLoggedIn() && this._activeRole() === 'REPARTIDOR');
+  readonly isCliente    = computed(() => !this._isLoggedIn() || this._activeRole() === 'CLIENTE');
 
   readonly roleLabel = computed(() => {
     switch (this._activeRole()) {
-      case 'ADMIN':    return 'Administrador';
-      case 'VENDEDOR': return 'Vendedor';
-      case 'CLIENTE':  return 'Cliente Comprador';
-      default:         return 'Usuario';
+      case 'ADMIN':      return 'Administrador';
+      case 'VENDEDOR':   return 'Vendedor';
+      case 'REPARTIDOR': return 'Repartidor';
+      case 'CLIENTE':    return 'Cliente Comprador';
+      default:           return 'Usuario';
     }
   });
 
@@ -231,9 +233,10 @@ export class AuthService {
    */
   private resolveRoleFromClaims(tokenRoles: string[], _email: string): UserRole {
     if (tokenRoles.length > 0) {
-      if (tokenRoles.some((r) => r.toUpperCase() === 'ADMIN'))    return 'ADMIN';
-      if (tokenRoles.some((r) => r.toUpperCase() === 'VENDEDOR')) return 'VENDEDOR';
-      if (tokenRoles.some((r) => r.toUpperCase() === 'CLIENTE'))  return 'CLIENTE';
+      if (tokenRoles.some((r) => r.toUpperCase() === 'ADMIN'))      return 'ADMIN';
+      if (tokenRoles.some((r) => r.toUpperCase() === 'VENDEDOR'))   return 'VENDEDOR';
+      if (tokenRoles.some((r) => r.toUpperCase() === 'REPARTIDOR')) return 'REPARTIDOR';
+      if (tokenRoles.some((r) => r.toUpperCase() === 'CLIENTE'))    return 'CLIENTE';
     }
     return 'CLIENTE';
   }
@@ -245,8 +248,9 @@ export class AuthService {
   private determineRoleFromEmail(email?: string): UserRole {
     if (!email) return 'CLIENTE';
     const lower = email.toLowerCase();
-    if (lower.includes('admin'))    return 'ADMIN';
-    if (lower.includes('vendedor')) return 'VENDEDOR';
+    if (lower.includes('admin'))      return 'ADMIN';
+    if (lower.includes('vendedor'))   return 'VENDEDOR';
+    if (lower.includes('repartidor')) return 'REPARTIDOR';
     return 'CLIENTE';
   }
 

@@ -53,6 +53,7 @@ public class ProxyController {
     private final WebClient notificacionClient;
     private final WebClient analiticaClient;
     private final WebClient usuarioClient;
+    private final WebClient chatClient;
 
     public ProxyController(
             @Qualifier("productosClient")    WebClient productosClient,
@@ -60,13 +61,28 @@ public class ProxyController {
             @Qualifier("carritoClient")      WebClient carritoClient,
             @Qualifier("notificacionClient") WebClient notificacionClient,
             @Qualifier("analiticaClient")    WebClient analiticaClient,
-            @Qualifier("usuarioClient")      WebClient usuarioClient) {
+            @Qualifier("usuarioClient")      WebClient usuarioClient,
+            @Qualifier("chatClient")         WebClient chatClient) {
         this.productosClient    = productosClient;
         this.pedidosClient      = pedidosClient;
         this.carritoClient      = carritoClient;
         this.notificacionClient = notificacionClient;
         this.analiticaClient    = analiticaClient;
         this.usuarioClient      = usuarioClient;
+        this.chatClient         = chatClient;
+    }
+
+    // ─── CHAT ───────────────────────────────────────────────────────────────
+
+    @RequestMapping(value = "/chat/**", method = {
+            RequestMethod.GET, RequestMethod.POST,
+            RequestMethod.PUT, RequestMethod.DELETE, RequestMethod.PATCH
+    })
+    public ResponseEntity<String> proxiarChat(
+            HttpServletRequest request,
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestBody(required = false) String body) {
+        return proxy(chatClient, request, jwt, body, "chat-service", "/api/bff/chat");
     }
 
     // ─── PRODUCTOS ──────────────────────────────────────────────────────────

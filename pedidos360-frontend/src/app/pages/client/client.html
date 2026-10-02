@@ -36,43 +36,44 @@
   <!-- PESTAÑA 1: SEGUIMIENTO DE PEDIDO ACTIVO -->
   @if (activeTab() === 'active-order') {
     <div class="tab-content">
-      <div class="card active-order-card">
-        <div class="active-order-card__head">
-          <div>
-            <span class="badge badge--live">● EN VIVO</span>
-            <h2>Pedido <code>{{ activeOrder().id }}</code></h2>
-            <p>{{ activeOrder().date }}</p>
+      @if (activeOrder(); as order) {
+        <div class="card active-order-card">
+          <div class="active-order-card__head">
+            <div>
+              <span class="badge badge--live">● EN VIVO</span>
+              <h2>Pedido <code>{{ order.id }}</code></h2>
+              <p>{{ order.date }}</p>
+            </div>
+            <div class="eta-box">
+              <small>Tiempo Estimado</small>
+              <strong>{{ order.deliveryEta }}</strong>
+            </div>
           </div>
-          <div class="eta-box">
-            <small>Tiempo Estimado</small>
-            <strong>{{ activeOrder().deliveryEta }}</strong>
-          </div>
-        </div>
 
         <!-- BARRA DE SEGUIMIENTO EN 4 ETAPAS -->
         <div class="tracker-stepper">
-          <div class="step-item" [class.completed]="activeOrder().statusStep >= 1" [class.active]="activeOrder().statusStep === 1">
+          <div class="step-item" [class.completed]="order.statusStep >= 1" [class.active]="order.statusStep === 1">
             <div class="step-circle">1</div>
             <span>Pedido Recibido</span>
           </div>
 
-          <div class="step-line" [class.completed]="activeOrder().statusStep >= 2"></div>
+          <div class="step-line" [class.completed]="order.statusStep >= 2"></div>
 
-          <div class="step-item" [class.completed]="activeOrder().statusStep >= 2" [class.active]="activeOrder().statusStep === 2">
+          <div class="step-item" [class.completed]="order.statusStep >= 2" [class.active]="order.statusStep === 2">
             <div class="step-circle">2</div>
             <span>En Preparación</span>
           </div>
 
-          <div class="step-line" [class.completed]="activeOrder().statusStep >= 3"></div>
+          <div class="step-line" [class.completed]="order.statusStep >= 3"></div>
 
-          <div class="step-item" [class.completed]="activeOrder().statusStep >= 3" [class.active]="activeOrder().statusStep === 3">
+          <div class="step-item" [class.completed]="order.statusStep >= 3" [class.active]="order.statusStep === 3">
             <div class="step-circle">3</div>
             <span>En Camino</span>
           </div>
 
-          <div class="step-line" [class.completed]="activeOrder().statusStep >= 4"></div>
+          <div class="step-line" [class.completed]="order.statusStep >= 4"></div>
 
-          <div class="step-item" [class.completed]="activeOrder().statusStep >= 4" [class.active]="activeOrder().statusStep === 4">
+          <div class="step-item" [class.completed]="order.statusStep >= 4" [class.active]="order.statusStep === 4">
             <div class="step-circle">4</div>
             <span>Entregado</span>
           </div>
@@ -82,11 +83,11 @@
           <div class="courier-info">
             <span class="courier-avatar"><app-icon name="user" size="18" /></span>
             <div>
-              <strong>Repartidor asignado: {{ activeOrder().courierName }}</strong>
-              <p>Estado: {{ activeOrder().statusLabel }}</p>
+              <strong>Repartidor asignado: {{ order.courierName }}</strong>
+              <p>Estado: {{ order.statusLabel }}</p>
             </div>
           </div>
-          <a [href]="'tel:' + activeOrder().courierPhone" class="btn btn-secondary btn-sm">
+          <a [href]="'tel:' + order.courierPhone" class="btn btn-secondary btn-sm">
             Llamar Repartidor
           </a>
         </div>
@@ -94,7 +95,7 @@
         <!-- ITEMS DEL PEDIDO ACTIVO -->
         <div class="order-items-list">
           <h3>Productos en este pedido:</h3>
-          @for (item of activeOrder().items; track item.name) {
+          @for (item of order.items; track item.name) {
             <div class="order-item-row">
               <span>{{ item.icon }} {{ item.quantity }}x <strong>{{ item.name }}</strong></span>
               <span>${{ item.price * item.quantity | number }}</span>
@@ -102,11 +103,28 @@
           }
           <div class="order-total-row">
             <strong>Total Pagado:</strong>
-            <strong>${{ activeOrder().total | number }}</strong>
+            <strong>${{ order.total | number }}</strong>
           </div>
         </div>
+
+        <!-- CHAT EN TIEMPO REAL CON REPARTIDOR -->
+        <div style="margin-top: 1.5rem;">
+          <app-chat
+            [pedidoId]="parseNumericId(order.id)"
+            [clienteId]="auth.user()?.id || 0"
+            [repartidorId]="parseNumericId(order.courierName) || 1"
+          ></app-chat>
+        </div>
       </div>
-    </div>
+    } @else {
+      <div class="card empty-card" style="text-align: center; padding: 3rem;">
+        <app-icon name="package" size="48" />
+        <h3 style="margin-top: 1rem;">No tienes ningún pedido activo en curso</h3>
+        <p style="color: #64748b;">Explora el catálogo y realiza tu pedido desde la tienda.</p>
+        <a routerLink="/" class="btn btn-primary" style="margin-top: 1rem; display: inline-block;">Ir al Catálogo</a>
+      </div>
+    }
+  </div>
   }
 
   <!-- PESTAÑA 2: HISTORIAL DE COMPRAS -->

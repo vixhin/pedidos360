@@ -32,8 +32,11 @@ public class WebClientConfig {
     @Value("${services.productos-url:http://localhost:8085}")
     private String productosUrl;
 
-    @Value("${services.notificacion-url:http://localhost:8086}")
+    @Value("${services.notificacion-url:${NOTIFICACION_SERVICE_URL:http://localhost:8086}}")
     private String notificacionUrl;
+
+    @Value("${services.chat-url:${CHAT_SERVICE_URL:http://localhost:8091}}")
+    private String chatUrl;
 
     @Bean(name = "usuarioClient")
     public WebClient usuarioClient() {
@@ -63,5 +66,10 @@ public class WebClientConfig {
     @Bean(name = "notificacionClient")
     public WebClient notificacionClient() {
         return WebClient.builder().baseUrl(notificacionUrl).build();
+    }
+
+    @Bean(name = "chatClient")
+    public WebClient chatClient() {
+        return WebClient.builder().baseUrl(chatUrl).build();
     }
 }

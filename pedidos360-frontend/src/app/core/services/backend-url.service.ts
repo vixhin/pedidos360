@@ -3,7 +3,7 @@ import { environment } from '../../../environments/environment';
 import { API_CONFIG } from '../config/api.config';
 import { AuthService } from './auth.service';
 
-type DirectResource = 'productos' | 'pedidos' | 'carrito' | 'notificacion' | 'analitica';
+type DirectResource = 'productos' | 'pedidos' | 'carrito' | 'notificacion' | 'analitica' | 'usuario' | 'chat';
 
 /**
  * Decide la URL base de cada recurso del backend:

@@ -1,0 +1,185 @@
+<div class="courier-container">
+  <!-- HEADER REPARTIDOR -->
+  <header class="courier-header">
+    <div class="header-main">
+      <div class="badge-role">
+        <app-icon name="user" class="role-icon"></app-icon>
+        <span>PORTAL REPARTIDOR</span>
+      </div>
+      <h1>Panel de Entregas y Pedidos</h1>
+      <p class="subtitle">Gestiona tus asignaciones, toma pedidos disponibles y comunícate con el cliente en tiempo real.</p>
+    </div>
+  </header>
+
+  <!-- ALERTAS -->
+  @if (errorMessage()) {
+    <div class="alert alert-error" role="alert">
+      <app-icon name="help-circle"></app-icon>
+      <span>{{ errorMessage() }}</span>
+      <button class="btn-retry" (click)="cargarPedidos()">Reintentar</button>
+    </div>
+  }
+
+  @if (successMessage()) {
+    <div class="alert alert-success" role="status">
+      <app-icon name="check"></app-icon>
+      <span>{{ successMessage() }}</span>
+    </div>
+  }
+
+  <!-- TABS DE NAVEGACIÓN RESPONSIVES -->
+  <nav class="courier-tabs" aria-label="Secciones de Repartidor">
+    <button
+      class="tab-btn"
+      [class.active]="activeTab() === 'available'"
+      (click)="activeTab.set('available')"
+    >
+      <app-icon name="package"></app-icon>
+      <span>Disponibles</span>
+      <span class="count-badge">{{ availableOrders().length }}</span>
+    </button>
+
+    <button
+      class="tab-btn"
+      [class.active]="activeTab() === 'active'"
+      (click)="activeTab.set('active')"
+    >
+      <app-icon name="truck"></app-icon>
+      <span>Pedido Activo</span>
+      @if (activeOrders().length > 0) {
+        <span class="count-badge active-badge">{{ activeOrders().length }}</span>
+      }
+    </button>
+
+    <button
+      class="tab-btn"
+      [class.active]="activeTab() === 'history'"
+      (click)="activeTab.set('history')"
+    >
+      <app-icon name="clock"></app-icon>
+      <span>Historial</span>
+    </button>
+  </nav>
+
+  <!-- CONTENIDO PRINCIPAL -->
+  <main class="tab-content">
+    @if (isLoading()) {
+      <div class="state-box loading-box">
+        <div class="spinner"></div>
+        <p>Cargando información real desde el backend...</p>
+      </div>
+    } @else {
+      <!-- TAB: PEDIDOS DISPONIBLES -->
+      @if (activeTab() === 'available') {
+        <section class="section-orders">
+          <h2>Pedidos Esperando Asignación</h2>
+          @if (availableOrders().length === 0) {
+            <div class="state-box empty-box">
+              <app-icon name="check" class="empty-icon"></app-icon>
+              <h3>No hay pedidos disponibles por ahora</h3>
+              <p>Revisa nuevamente en unos momentos.</p>
+            </div>
+          } @else {
+            <div class="orders-grid">
+              @for (pedido of availableOrders(); track pedido.id) {
+                <article class="order-card">
+                  <header class="card-header">
+                    <span class="order-id">Pedido #{{ pedido.id }}</span>
+                    <span class="status-pill status-pending">{{ pedido.estado }}</span>
+                  </header>
+                  <div class="card-body">
+                    <p class="order-detail"><strong>Cliente ID:</strong> Usuario #{{ pedido.usuarioId }}</p>
+                    <p class="order-detail"><strong>Fecha:</strong> {{ pedido.fechaCreacion | date:'short' }}</p>
+                    <p class="order-price"><strong>Total:</strong> {{ pedido.total | currency:'CLP':'symbol-narrow':'1.0-0' }}</p>
+                  </div>
+                  <footer class="card-actions">
+                    <button class="btn-action primary-btn" (click)="aceptarPedido(pedido.id)">
+                      <app-icon name="truck"></app-icon>
+                      Aceptar Pedido
+                    </button>
+                  </footer>
+                </article>
+              }
+            </div>
+          }
+        </section>
+      }
+
+      <!-- TAB: PEDIDO ACTIVO -->
+      @if (activeTab() === 'active') {
+        <section class="section-orders">
+          <h2>Tus Entregas en Curso</h2>
+          @if (activeOrders().length === 0) {
+            <div class="state-box empty-box">
+              <app-icon name="truck" class="empty-icon"></app-icon>
+              <h3>No tienes ningún pedido activo asignado</h3>
+              <p>Acepta un pedido disponible para comenzar la entrega.</p>
+            </div>
+          } @else {
+            <div class="orders-grid">
+              @for (pedido of activeOrders(); track pedido.id) {
+                <article class="order-card active-card">
+                  <header class="card-header">
+                    <span class="order-id">Pedido #{{ pedido.id }}</span>
+                    <span class="status-pill status-active">EN CAMINO</span>
+                  </header>
+                  <div class="card-body">
+                    <p class="order-detail"><strong>Cliente ID:</strong> Usuario #{{ pedido.usuarioId }}</p>
+                    <p class="order-detail"><strong>Total Pedido:</strong> {{ pedido.total | currency:'CLP':'symbol-narrow':'1.0-0' }}</p>
+                    <div class="delivery-badge" style="margin-bottom: 1rem;">
+                      <app-icon name="map-pin"></app-icon>
+                      <span>Ruta activa a domicilio de entrega</span>
+                    </div>
+
+                    <!-- CHAT CON CLIENTE -->
+                    <app-chat
+                      [pedidoId]="pedido.id"
+                      [clienteId]="pedido.usuarioId"
+                      [repartidorId]="auth.user()?.id || 0"
+                    ></app-chat>
+                  </div>
+                  <footer class="card-actions">
+                    <button class="btn-action success-btn" (click)="marcarEntregado(pedido.id)">
+                      <app-icon name="check"></app-icon>
+                      Marcar Entregado
+                    </button>
+                  </footer>
+                </article>
+              }
+            </div>
+          }
+        </section>
+      }
+
+      <!-- TAB: HISTORIAL -->
+      @if (activeTab() === 'history') {
+        <section class="section-orders">
+          <h2>Historial de Entregas Completadas</h2>
+          @if (historyOrders().length === 0) {
+            <div class="state-box empty-box">
+              <app-icon name="clock" class="empty-icon"></app-icon>
+
+              <h3>Historial vacío</h3>
+              <p>Las entregas que completes aparecerán en esta sección.</p>
+            </div>
+          } @else {
+            <div class="orders-grid">
+              @for (pedido of historyOrders(); track pedido.id) {
+                <article class="order-card history-card">
+                  <header class="card-header">
+                    <span class="order-id">Pedido #{{ pedido.id }}</span>
+                    <span class="status-pill status-delivered">ENTREGADO</span>
+                  </header>
+                  <div class="card-body">
+                    <p class="order-detail"><strong>Cliente ID:</strong> Usuario #{{ pedido.usuarioId }}</p>
+                    <p class="order-price"><strong>Total:</strong> {{ pedido.total | currency:'CLP':'symbol-narrow':'1.0-0' }}</p>
+                  </div>
+                </article>
+              }
+            </div>
+          }
+        </section>
+      }
+    }
+  </main>
+</div>

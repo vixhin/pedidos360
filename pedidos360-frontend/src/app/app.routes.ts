@@ -27,13 +27,13 @@ export const routes: Routes = [
   {
     path: 'cuenta',
     canActivate: [hybridAuthGuard, roleGuard],
-    data: { roles: ['ADMIN', 'VENDEDOR', 'CLIENTE'] },
+    data: { roles: ['ADMIN', 'VENDEDOR', 'REPARTIDOR', 'CLIENTE'] },
     loadComponent: () => import('./pages/account/account').then((m) => m.Account),
   },
   {
     path: 'perfil',
     canActivate: [hybridAuthGuard, roleGuard],
-    data: { roles: ['ADMIN', 'VENDEDOR', 'CLIENTE'] },
+    data: { roles: ['ADMIN', 'VENDEDOR', 'REPARTIDOR', 'CLIENTE'] },
     loadComponent: () => import('./pages/account/account').then((m) => m.Account),
   },
   {
@@ -45,7 +45,7 @@ export const routes: Routes = [
   {
     path: 'notificaciones',
     canActivate: [hybridAuthGuard, roleGuard],
-    data: { roles: ['ADMIN', 'VENDEDOR', 'CLIENTE'] },
+    data: { roles: ['ADMIN', 'VENDEDOR', 'REPARTIDOR', 'CLIENTE'] },
     loadComponent: () => import('./pages/notifications/notifications').then((m) => m.Notifications),
   },
 
@@ -63,6 +63,14 @@ export const routes: Routes = [
     canActivate: [hybridAuthGuard, roleGuard],
     data: { roles: ['VENDEDOR', 'ADMIN'] },
     loadComponent: () => import('./pages/seller/seller').then((m) => m.Seller),
+  },
+
+  // ─── REPARTIDOR ───────────────────────────────────
+  {
+    path: 'repartidor',
+    canActivate: [hybridAuthGuard, roleGuard],
+    data: { roles: ['REPARTIDOR', 'ADMIN'] },
+    loadComponent: () => import('./pages/courier/courier').then((m) => m.Courier),
   },
 
   // ─── ADMIN ────────────────────────────────────────

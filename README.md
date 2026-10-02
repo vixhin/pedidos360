@@ -1,176 +1,111 @@
-# Pedidos360 — Sistema de Gestión de Pedidos
+# Pedidos360 — Sistema de Gestión de Pedidos & Repartidor con Chat en Tiempo Real
 
-Plataforma de e-commerce para gestión de pedidos, productos, carrito y analítica, con autenticación mediante **Microsoft Entra ID (Azure AD)** y arquitectura **BFF (Backend for Frontend)**.
+Plataforma de e-commerce y logística en tiempo real para gestión de pedidos, productos, carrito, analítica, **portal de repartidor** y **chat WebSocket en tiempo real**, con autenticación mediante **Microsoft Entra ID (Azure AD)** y arquitectura **BFF (Backend for Frontend)** sobre microservicios Spring Boot, RabbitMQ y PostgreSQL.
 
 ---
 
-## Arquitectura
+## Arquitectura del Sistema
 
 ```
 Angular (localhost:4200)
-  │  Authorization: Bearer <Access Token de Microsoft Entra ID>
-  ▼
-BFF — Backend for Frontend (localhost:8090)
-  │  Valida JWT: firma, issuer, audience, expiration, scopes, roles
+  │  Authorization: Bearer <JWT Token>
+  ├──▶ HTTP / REST ──▶ BFF (localhost:8090) ─── Proxy validación JWT
+  │                      │
+  │                      ├─▶ usuario-service      (localhost:8081) — DB: usuario_db
+  │                      ├─▶ pedidos-service      (localhost:8082) — DB: pedidos_db
+  │                      ├─▶ carrito-service      (localhost:8083) — DB: carrito_db
+  │                      ├─▶ analitica-service    (localhost:8084) — DB: analitica_db
+  │                      ├─▶ productos-service    (localhost:8085) — DB: productos_db
+  │                      ├─▶ notificacion-service (localhost:8086) — DB: notificacion_db
+  │                      └─▶ chat-service         (localhost:8091) — DB: chat_db
   │
-  ├─▶ usuario-service   (localhost:8081) — PostgreSQL: usuario_db
-  ├─▶ pedidos-service   (localhost:8082) — PostgreSQL: pedidos_db
-  ├─▶ carrito-service   (localhost:8083) — PostgreSQL: carrito_db
-  ├─▶ analitica-service (localhost:8084) — PostgreSQL: analitica_db
-  ├─▶ productos-service (localhost:8085) — PostgreSQL: productos_db
-  └─▶ notificacion-service (localhost:8086) — PostgreSQL: notificacion_db
+  └──▶ WebSocket (STOMP) ─────────────────────────▶ chat-service (ws://localhost:8091/ws-chat)
 ```
 
-**Compatibilidad:** El login local (email/contraseña) con JWT interno sigue funcionando en paralelo al login con Microsoft.
+**Arquitectura Orientada a Eventos:**
+- **RabbitMQ (Topic Exchange `pedidos360.events`):**
+  - `pedido.creado`: Vacía carrito automáticamente y genera notificaciones.
+  - `pedido.estado.actualizado`: Actualiza analítica y cierra automáticamente las conversaciones de chat asociadas cuando el estado cambia a `ENTREGADO`.
+  - `pedido.repartidor.asignado`: Notifica al cliente y habilita la interacción directa de reparto.
+  - `chat.creado`, `chat.mensaje.enviado`, `chat.cerrado`: Eventos de auditoría y notificaciones offline.
+- **Dead Letter Exchange (DLX / DLQ):**
+  - Exchange: `chat.dlx` | Queue: `chat.dlq` (Manejo de reintentos fallidos sin ciclos infinitos).
 
 ---
 
-## Autenticación
+## Roles del Sistema
 
-### Microsoft Entra ID (MSAL)
-- Flujo: **Authorization Code + PKCE** (SPA)
-- Librería Angular: `@azure/msal-angular` v4
-- Los roles del usuario provienen del claim `roles` del Access Token
-- El Access Token se adjunta automáticamente via `MsalInterceptor` al BFF
-
-### Login Local (Base de datos)
-- Email/contraseña contra `usuario-service`
-- JWT interno generado por el servicio con JJWT
-- Roles provienen de la base de datos
+| Rol | Alcance / Permisos | Acceso a Vistas |
+| :--- | :--- | :--- |
+| **ADMIN** | Control total del sistema, gestión de personal, analítica financiera y administración global. | `/analitica`, `/personal`, `/vendedor`, `/repartidor`, `/cliente` |
+| **VENDEDOR** | Gestión de inventario, publicación de productos y actualización de pedidos entrantes. | `/vendedor` |
+| **REPARTIDOR** | Visualización de pedidos disponibles, aceptación de asignaciones, actualización a entregado y chat directo con el cliente. | `/repartidor` |
+| **CLIENTE** | Navegación de catálogo, carrito de compras, seguimiento en vivo de pedidos activos y chat con su repartidor. | `/`, `/carrito`, `/cliente` |
 
 ### Credenciales de prueba (login local)
 | Usuario | Contraseña | Rol |
-|---------|-----------|-----|
-| admin@pedidos360.cl | chupalovixo | ADMIN |
-| vendedor@pedidos360.cl | chupalovixo | VENDEDOR |
-| cliente@pedidos360.cl | chupalovixo | CLIENTE |
+|---|---|---|
+| `admin@pedidos360.cl` | `Password123!` | ADMIN |
+| `vendedor@pedidos360.cl` | `Password123!` | VENDEDOR |
+| `rodrigo.morales@pedidos360.cl` | `Password123!` | REPARTIDOR |
+| `cliente@pedidos360.cl` | `Password123!` | CLIENTE |
 
 ---
 
-## Configuración de Azure Entra ID
+## Migraciones de Base de Datos (Flyway)
 
-Ver: [Backend/bff/README.md](Backend/bff/README.md)
+Todas las modificaciones de la base de datos están estrictamente versionadas mediante scripts Flyway SQL en cada microservicio:
 
-**Resumen:**
-1. Crear App Registration SPA (frontend) → copiar `clientId` y `tenantId`
-2. Crear App Registration API (BFF) → exponer scope `access_as_user`
-3. Configurar roles: `ADMIN`, `VENDEDOR`, `CLIENTE`
-4. Editar `pedidos360-frontend/src/environments/environment.ts` con los IDs
-
----
-
-## Estructura del proyecto
-
-```
-pedidos360/
-├── pedidos360-frontend/          # Angular 21 + MSAL
-│   └── src/
-│       ├── environments/
-│       │   ├── environment.ts    # ← Configurar azure.clientId, tenantId, apiClientId
-│       │   └── environment.prod.ts
-│       └── app/
-│           └── core/
-│               ├── config/
-│               │   ├── auth.config.ts     # Lee de environments
-│               │   └── api.config.ts      # URLs BFF + microservicios
-│               ├── guards/
-│               │   └── role.guard.ts      # Guard de roles
-│               └── services/
-│                   ├── auth.service.ts    # Login Microsoft + local
-│                   └── token-claims.service.ts  # Claims del JWT
-└── Backend/
-    ├── bff/                      # BFF Spring Boot (puerto 8090)
-    │   └── README.md             # ← Ver este archivo para setup Azure
-    ├── usuario/                  # puerto 8081
-    ├── pedidos/                  # puerto 8082
-    ├── carrito/                  # puerto 8083
-    ├── analitica/                # puerto 8084
-    ├── productos/                # puerto 8085
-    ├── notificacion/             # puerto 8086
-    └── docker-compose.yml
-```
+- **`usuario-service` (`usuario_db`):**
+  - `V1__init_schema.sql`: Creación de la tabla `usuarios`.
+  - `V2__agregar_rol_repartidor.sql`: Incorporación y actualización del rol `REPARTIDOR` para Rodrigo Morales.
+- **`pedidos-service` (`pedidos_db`):**
+  - `V1__init_schema.sql`: Creación de la tabla `pedidos`.
+  - `V2__agregar_columna_repartidor.sql`: Inserción de la columna `repartidor_id` e índice `idx_pedidos_repartidor_id`.
+- **`chat-service` (`chat_db`):**
+  - `V1__init_chat_schema.sql`: Creación de `chat_conversacion` y `chat_mensaje` con restricciones e índices.
 
 ---
 
-## Inicio rápido
+## Política de Retención y Borrado de Chats
 
-### Opción A: Desarrollo local (sin Docker)
-
-```bash
-# 1. Bases de datos (PostgreSQL via Docker)
-cd Backend
-docker compose up postgres pgadmin -d
-
-# 2. Microservicios (en terminales separadas)
-cd Backend/usuario    && mvn spring-boot:run
-cd Backend/productos  && mvn spring-boot:run
-cd Backend/pedidos    && mvn spring-boot:run
-cd Backend/carrito    && mvn spring-boot:run
-cd Backend/analitica  && mvn spring-boot:run
-cd Backend/notificacion && mvn spring-boot:run
-
-# 3. BFF (con credenciales Azure)
-cd Backend/bff
-$env:AZURE_TENANT_ID="tu-tenant-id"
-$env:AZURE_API_CLIENT_ID="tu-api-client-id"
-mvn spring-boot:run
-
-# 4. Frontend Angular
-cd pedidos360-frontend
-npm install
-npm start    # http://localhost:4200
-```
-
-### Opción B: Docker Compose completo
-
-```bash
-# Crear archivo .env con credenciales Azure
-cd Backend
-echo "AZURE_TENANT_ID=tu-tenant-id" > .env
-echo "AZURE_API_CLIENT_ID=tu-api-client-id" >> .env
-
-docker compose up --build
-```
+1. **Cierre Automático:** Al entregar un pedido (`pedido.estado.actualizado` con `nuevoEstado=ENTREGADO`), la conversación se marca como `CERRADO`. No se permiten nuevos mensajes.
+2. **Borrado Lógico por Participante:** Cliente o Repartidor pueden ocultar el chat de su vista (`deleted_for_client_at`, `deleted_for_courier_at`).
+3. **Retención Programada (`RetentionService`):** Tarea programada diaria (`@Scheduled`) que purga automáticamente de la BD las conversaciones cerradas con más de `CHAT_RETENTION_DAYS` (configurable, por defecto 30 días).
 
 ---
 
-## Puertos
+## Puertos y Servicios
 
 | Servicio | Puerto | Descripción |
-|---------|--------|-------------|
-| Angular | 4200 | Frontend |
-| BFF | 8090 | Proxy con JWT de Azure |
-| usuario-service | 8081 | Gestión de usuarios + auth local |
-| pedidos-service | 8082 | Pedidos |
-| carrito-service | 8083 | Carrito de compras |
-| analitica-service | 8084 | Analítica y reportes |
-| productos-service | 8085 | Catálogo de productos |
-| notificacion-service | 8086 | Notificaciones |
-| PostgreSQL | 5432 | Base de datos |
-| pgAdmin | 5050 | Gestión visual de BD |
+| :--- | :--- | :--- |
+| Angular Frontend | `4200` | SPA Angular 19 Responsive (Desktop/Notebook/Tablet/Móvil) |
+| BFF (Gateway) | `8090` | OAuth2 Resource Server & Proxy hacia microservicios |
+| usuario-service | `8081` | Autenticación local, gestión de usuarios y JWT |
+| pedidos-service | `8082` | Gestión de pedidos, asignación de repartidor y eventos |
+| carrito-service | `8083` | Carrito de compras |
+| analitica-service | `8084` | Analítica y reportes financieros |
+| productos-service | `8085` | Catálogo y stock de productos |
+| notificacion-service | `8086` | Notificaciones por usuario |
+| **chat-service** | `8091` | **Conversaciones, mensajes REST, STOMP WebSocket y retención** |
+| PostgreSQL | `5432` | Base de datos relacional (7 bases de datos independientes) |
+| RabbitMQ | `5672 / 15672` | Broker de eventos y panel de administración |
+| pgAdmin | `5050` | Administración de PostgreSQL |
 
 ---
 
-## Flujo end-to-end con Microsoft Entra ID
+## Inicio Rápido Local (Docker)
 
-```
-1. Usuario abre Angular → click "Iniciar sesión con Microsoft"
-2. MSAL redirige a login.microsoftonline.com
-3. Microsoft Entra autentica al usuario
-4. Microsoft devuelve ID Token + Access Token
-5. MSAL almacena los tokens en localStorage
-6. AuthService.syncFromMsal() lee roles del claim "roles"
-7. MsalInterceptor adjunta automáticamente:
-   Authorization: Bearer <ACCESS_TOKEN>
-   en todas las llamadas al BFF (http://localhost:8090/api/bff/*)
-8. BFF recibe la request
-9. Spring Security valida la firma RSA (JWKS de Microsoft)
-10. Spring Security valida el issuer
-11. AudienceValidator valida el claim "aud"
-12. Spring Security valida el exp
-13. AzureJwtAuthConverter convierte roles → ROLE_XXX y scp → SCOPE_XXX
-14. SecurityConfig aplica autorización según endpoint
-15. BFF llama al microservicio downstream via WebClient
-16. Microservicio consulta PostgreSQL
-17. Respuesta regresa: microservicio → BFF → Angular
+```bash
+# 1. Clonar el repositorio y posicionarse en Backend
+cd Backend
+
+# 2. Iniciar todos los contenedores locales (Base de Datos, RabbitMQ y 7 Microservicios)
+docker compose up --build -d
+
+# 3. Iniciar el Frontend Angular
+cd ../pedidos360-frontend
+npm install
+npm start
+# Abrir en el navegador: http://localhost:4200
 ```

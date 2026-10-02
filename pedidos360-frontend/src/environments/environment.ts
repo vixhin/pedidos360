@@ -55,6 +55,8 @@ export const environment = {
     carrito: 'http://localhost:8083/api',
     notificacion: 'http://localhost:8086/api',
     analitica: 'http://localhost:8084/api',
+    chat: 'http://localhost:8091/api',
+    chatWs: 'ws://localhost:8091/ws-chat',
   },
 
   /**

@@ -108,6 +108,8 @@ export class Login {
       this.router.navigate(['/analitica']);
     } else if (role === 'VENDEDOR') {
       this.router.navigate(['/vendedor']);
+    } else if (role === 'REPARTIDOR') {
+      this.router.navigate(['/repartidor']);
     } else {
       this.router.navigate(['/']);
     }
