@@ -105,6 +105,10 @@ public class PedidoService {
         Pedido pedido = pedidoRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Pedido no encontrado con ID: " + id));
 
+        if (pedido.getRepartidorId() != null && !pedido.getRepartidorId().equals(repartidorId)) {
+            throw new IllegalStateException("El pedido ya fue asignado a otro repartidor.");
+        }
+
         pedido.setRepartidorId(repartidorId);
         pedido.setEstado("EN_CAMINO");
         Pedido actualizado = pedidoRepository.save(pedido);

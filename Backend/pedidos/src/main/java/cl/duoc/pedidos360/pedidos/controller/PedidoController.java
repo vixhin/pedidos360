@@ -45,10 +45,15 @@ public class PedidoController {
     }
 
     @PutMapping("/{id}/repartidor")
-    public ResponseEntity<Pedido> asignarRepartidor(@PathVariable Long id,
-                                                     @RequestParam Long repartidorId,
-                                                     @RequestParam(defaultValue = "Repartidor") String nombreRepartidor) {
-        return ResponseEntity.ok(pedidoService.asignarRepartidor(id, repartidorId, nombreRepartidor));
+    public ResponseEntity<?> asignarRepartidor(@PathVariable Long id,
+                                                      @RequestParam Long repartidorId,
+                                                      @RequestParam(defaultValue = "Repartidor") String nombreRepartidor) {
+        try {
+            return ResponseEntity.ok(pedidoService.asignarRepartidor(id, repartidorId, nombreRepartidor));
+        } catch (IllegalStateException ise) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.CONFLICT)
+                    .body(java.util.Map.of("success", false, "message", ise.getMessage()));
+        }
     }
 
     @DeleteMapping("/{id}")

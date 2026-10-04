@@ -34,25 +34,34 @@ public class UsuarioService {
     private final JwtUtil jwtUtil;
     private final RabbitTemplate rabbitTemplate;
 
+    private final org.springframework.core.env.Environment environment;
+
     public UsuarioService(UsuarioRepository usuarioRepository,
                           PasswordEncoder passwordEncoder,
                           JwtUtil jwtUtil,
-                          @Autowired(required = false) RabbitTemplate rabbitTemplate) {
+                          @Autowired(required = false) RabbitTemplate rabbitTemplate,
+                          org.springframework.core.env.Environment environment) {
         this.usuarioRepository = usuarioRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
         this.rabbitTemplate = rabbitTemplate;
+        this.environment = environment;
     }
 
     @EventListener(ApplicationReadyEvent.class)
     @Transactional
     public void initDefaultUsers() {
+        if (!environment.matchesProfiles("dev")) {
+            log.info("[USER-SERVICE] Production/Non-Dev environment active — skipping mock user seeding.");
+            return;
+        }
+
         if (usuarioRepository.findByEmail("admin@pedidos360.cl").isEmpty()) {
             Usuario admin = new Usuario(
                     null,
                     "Administrador Vixo",
                     "admin@pedidos360.cl",
-                    passwordEncoder.encode("chupalovixo"),
+                    passwordEncoder.encode("Password123!"),
                     Rol.ADMIN
             );
             usuarioRepository.save(admin);
@@ -64,7 +73,7 @@ public class UsuarioService {
                     null,
                     "Vendedor Gonzalo Silva",
                     "vendedor@pedidos360.cl",
-                    passwordEncoder.encode("chupalovixo"),
+                    passwordEncoder.encode("Password123!"),
                     Rol.VENDEDOR
             );
             usuarioRepository.save(vendedor);
@@ -76,7 +85,7 @@ public class UsuarioService {
                     null,
                     "Cliente Camila Silva",
                     "cliente@pedidos360.cl",
-                    passwordEncoder.encode("chupalovixo"),
+                    passwordEncoder.encode("Password123!"),
                     Rol.CLIENTE
             );
             usuarioRepository.save(cliente);
@@ -88,8 +97,8 @@ public class UsuarioService {
                     null,
                     "Rodrigo Morales (Repartidor)",
                     "rodrigo.morales@pedidos360.cl",
-                    passwordEncoder.encode("chupalovixo"),
-                    Rol.VENDEDOR
+                    passwordEncoder.encode("Password123!"),
+                    Rol.REPARTIDOR
             );
             usuarioRepository.save(repartidor);
             log.info("[USER-SERVICE] Seeded mock courier user: rodrigo.morales@pedidos360.cl");
@@ -100,8 +109,8 @@ public class UsuarioService {
                     null,
                     "Camila Reyes (Soporte Cliente)",
                     "camila.reyes@pedidos360.cl",
-                    passwordEncoder.encode("chupalovixo"),
-                    Rol.VENDEDOR
+                    passwordEncoder.encode("Password123!"),
+                    Rol.REPARTIDOR
             );
             usuarioRepository.save(soporte);
             log.info("[USER-SERVICE] Seeded mock support user: camila.reyes@pedidos360.cl");

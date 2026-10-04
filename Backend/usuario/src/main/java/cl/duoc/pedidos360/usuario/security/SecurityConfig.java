@@ -40,7 +40,7 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register", "/api/auth/forgot-password").permitAll()
                 .requestMatchers("/api/internal/**", "/health", "/ready", "/api/usuario/health", "/actuator/**", "/h2-console/**").permitAll()
                 .requestMatchers("/api/usuario/admin/**").hasRole("ADMIN")
                 .anyRequest().authenticated()

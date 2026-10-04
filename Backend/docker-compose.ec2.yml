@@ -71,6 +71,16 @@ services:
       SPRING_PROFILES_ACTIVE: prod
       FRONTEND_ORIGIN: ${PUBLIC_URL}
 
+  chat:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      FRONTEND_ORIGIN: ${PUBLIC_URL}
+      BFF_INTERNAL_KEY: ${BFF_INTERNAL_KEY}
+      DB_USER: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      RABBITMQ_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
+
 volumes:
   caddy_data:
   caddy_config:

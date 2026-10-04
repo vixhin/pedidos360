@@ -56,9 +56,9 @@ public class ChatController {
         } catch (SecurityException se) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("success", false, "message", se.getMessage()));
-        } catch (IllegalStateException ise) {
+        } catch (IllegalArgumentException | IllegalStateException ie) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(Map.of("success", false, "message", ise.getMessage()));
+                    .body(Map.of("success", false, "message", ie.getMessage()));
         } catch (Exception ex) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("success", false, "message", ex.getMessage()));

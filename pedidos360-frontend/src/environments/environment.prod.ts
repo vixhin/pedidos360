@@ -39,6 +39,8 @@ export const environment = {
     carrito: `${PUBLIC_URL}/api`,
     notificacion: `${PUBLIC_URL}/api`,
     analitica: `${PUBLIC_URL}/api`,
+    chat: `${PUBLIC_URL}/api`,
+    chatWs: `${PUBLIC_URL}/ws-chat`,
   },
 
   useBff: true,

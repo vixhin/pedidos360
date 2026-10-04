@@ -92,6 +92,13 @@ public class ChatService {
 
     @Transactional
     public MensajeResponseDTO enviarMensaje(EnviarMensajeDTO dto) {
+        if (dto.getContenido() == null || dto.getContenido().trim().isEmpty()) {
+            throw new IllegalArgumentException("El mensaje no puede estar vacío.");
+        }
+        if (dto.getContenido().trim().length() > 1000) {
+            throw new IllegalArgumentException("El mensaje no puede superar los 1000 caracteres.");
+        }
+
         Conversacion conv = conversacionRepository.findById(dto.getConversacionId())
                 .orElseThrow(() -> new IllegalArgumentException("Conversación no encontrada con ID: " + dto.getConversacionId()));
 
@@ -101,7 +108,9 @@ public class ChatService {
 
         validarParticipante(conv, dto.getRemitenteId());
 
-        Mensaje msg = new Mensaje(conv.getId(), dto.getRemitenteId(), dto.getTipoRemitente(), dto.getContenido());
+        String tipoRemitenteDerivado = dto.getRemitenteId().equals(conv.getClienteId()) ? "CLIENTE" : "REPARTIDOR";
+
+        Mensaje msg = new Mensaje(conv.getId(), dto.getRemitenteId(), tipoRemitenteDerivado, dto.getContenido().trim());
         msg = mensajeRepository.save(msg);
 
         MensajeResponseDTO responseDTO = mapMensajeDTO(msg);

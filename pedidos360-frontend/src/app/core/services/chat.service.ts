@@ -1,8 +1,10 @@
 import { Injectable, signal, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { catchError, Observable, of, tap } from 'rxjs';
+import { catchError, Observable, of } from 'rxjs';
+import { Client, StompSubscription } from '@stomp/stompjs';
 import { BackendUrlService } from './backend-url.service';
 import { API_CONFIG } from '../config/api.config';
+import { AuthService } from './auth.service';
 
 export interface MensajeChat {
   id: number;
@@ -29,13 +31,16 @@ export interface ConversacionChat {
 export class ChatService {
   private readonly http = inject(HttpClient);
   private readonly urls = inject(BackendUrlService);
+  private readonly auth = inject(AuthService);
 
   readonly conversacionActiva = signal<ConversacionChat | null>(null);
   readonly mensajes = signal<MensajeChat[]>([]);
   readonly isLoading = signal(false);
   readonly errorMessage = signal<string | null>(null);
 
-  private socket: WebSocket | null = null;
+  private stompClient: Client | null = null;
+  private topicSub: StompSubscription | null = null;
+  private statusSub: StompSubscription | null = null;
 
   /**
    * Obtiene o crea la conversación de chat para un pedido específico
@@ -65,10 +70,10 @@ export class ChatService {
   }
 
   /**
-   * Envía un mensaje en la conversación activa vía HTTP REST + WebSocket
+   * Envía un mensaje en la conversación activa vía HTTP REST + WebSocket STOMP
    */
   enviarMensaje(conversacionId: number, remitenteId: number, tipoRemitente: 'CLIENTE' | 'REPARTIDOR', contenido: string): void {
-    if (!contenido.trim()) return;
+    if (!contenido || !contenido.trim()) return;
 
     const payload = {
       conversacionId,
@@ -89,7 +94,6 @@ export class ChatService {
       )
       .subscribe((nuevoMsg) => {
         if (nuevoMsg) {
-          // Si el WS no lo ha insertado aún, agregarlo a la lista
           this.mensajes.update((list) => {
             if (list.some((m) => m.id === nuevoMsg.id)) return list;
             return [...list, nuevoMsg];
@@ -99,61 +103,84 @@ export class ChatService {
   }
 
   /**
-   * Conecta al WebSocket en tiempo real mediante el endpoint STOMP/WS
+   * Conecta al WebSocket en tiempo real utilizando la librería oficial @stomp/stompjs
    */
   private conectarWebSocket(conversacionId: number): void {
-    if (this.socket) {
-      try { this.socket.close(); } catch {}
+    this.desconectar();
+
+    let wsUrl = API_CONFIG.chatWs;
+    if (window.location.protocol === 'https:') {
+      wsUrl = wsUrl.replace(/^ws:\/\//, 'wss://').replace(/^http:\/\//, 'wss://');
+    } else {
+      wsUrl = wsUrl.replace(/^http:\/\//, 'ws://');
     }
 
-    try {
-      const wsUrl = API_CONFIG.chatWs.replace('http', 'ws');
-      this.socket = new WebSocket(wsUrl + '/websocket');
+    const currentUserId = this.auth.user()?.id;
+    const currentUserEmail = this.auth.user()?.email;
 
-      this.socket.onopen = () => {
-        // Enviar frame de conexión STOMP
-        this.socket?.send("CONNECT\naccept-version:1.1,1.0\nheart-beat:10000,10000\n\n\u0000");
-        // Suscribirse al tópico de la conversación
-        const subFrame = `SUBSCRIBE\nid:sub-0\ndestination:/topic/chat/${conversacionId}\n\n\u0000`;
-        this.socket?.send(subFrame);
-      };
+    this.stompClient = new Client({
+      brokerURL: wsUrl,
+      reconnectDelay: 5000,
+      heartbeatIncoming: 10000,
+      heartbeatOutgoing: 10000,
+      connectHeaders: {
+        'X-User-Id': currentUserId ? String(currentUserId) : '',
+        'X-User-Email': currentUserEmail || '',
+      },
+      onConnect: () => {
+        console.log('[ChatService] Conectado exitosamente vía STOMP');
 
-      this.socket.onmessage = (event) => {
-        const bodyStr = event.data as string;
-        if (bodyStr.includes('MESSAGE')) {
+        this.topicSub = this.stompClient?.subscribe(`/topic/chat/${conversacionId}`, (message) => {
           try {
-            const jsonStart = bodyStr.indexOf('{');
-            const jsonEnd = bodyStr.lastIndexOf('}');
-            if (jsonStart !== -1 && jsonEnd !== -1) {
-              const jsonStr = bodyStr.substring(jsonStart, jsonEnd + 1);
-              const data = JSON.parse(jsonStr);
-
-              if (data.id && data.contenido) {
-                this.mensajes.update((list) => {
-                  if (list.some((m) => m.id === data.id)) return list;
-                  return [...list, data];
-                });
-              } else if (data.tipo === 'CHAT_CERRADO') {
-                this.conversacionActiva.update((c) => (c ? { ...c, estado: 'CERRADO' } : null));
-              }
+            const data: MensajeChat = JSON.parse(message.body);
+            if (data.id && data.contenido) {
+              this.mensajes.update((list) => {
+                if (list.some((m) => m.id === data.id)) return list;
+                return [...list, data];
+              });
             }
           } catch (e) {
-            console.debug('[ChatService] WS Frame Parse:', e);
+            console.error('[ChatService] Error procesando mensaje STOMP:', e);
           }
-        }
-      };
-    } catch (err) {
-      console.warn('[ChatService] Fallback WS Connection:', err);
-    }
+        }) || null;
+
+        this.statusSub = this.stompClient?.subscribe(`/topic/chat/${conversacionId}/status`, (message) => {
+          try {
+            const data = JSON.parse(message.body);
+            if (data.tipo === 'CHAT_CERRADO') {
+              this.conversacionActiva.update((c) => (c ? { ...c, estado: 'CERRADO' } : null));
+            }
+          } catch (e) {
+            console.error('[ChatService] Error procesando evento de cierre STOMP:', e);
+          }
+        }) || null;
+      },
+      onStompError: (frame) => {
+        console.error('[ChatService] STOMP Error:', frame.headers['message']);
+      },
+      onWebSocketClose: () => {
+        console.log('[ChatService] Conexión WebSocket STOMP cerrada');
+      },
+    });
+
+    this.stompClient.activate();
   }
 
   /**
-   * Cierra el socket al destruir la vista o cambiar de pedido
+   * Cancela las suscripciones y desactiva el cliente STOMP
    */
   desconectar(): void {
-    if (this.socket) {
-      try { this.socket.close(); } catch {}
-      this.socket = null;
+    if (this.topicSub) {
+      try { this.topicSub.unsubscribe(); } catch {}
+      this.topicSub = null;
+    }
+    if (this.statusSub) {
+      try { this.statusSub.unsubscribe(); } catch {}
+      this.statusSub = null;
+    }
+    if (this.stompClient) {
+      try { this.stompClient.deactivate(); } catch {}
+      this.stompClient = null;
     }
   }
 }

@@ -55,6 +55,9 @@ public class ProxyController {
     private final WebClient usuarioClient;
     private final WebClient chatClient;
 
+    @org.springframework.beans.factory.annotation.Value("${bff.internal-key:${BFF_INTERNAL_KEY:}}")
+    private String bffInternalKey;
+
     public ProxyController(
             @Qualifier("productosClient")    WebClient productosClient,
             @Qualifier("pedidosClient")      WebClient pedidosClient,
@@ -197,6 +200,7 @@ public class ProxyController {
         // Log (sin token). getClaimAsStringList evita el ClassCastException que
         // provoca String.valueOf(jwt.getClaim(...)) por inferencia de tipos.
         String userSub = jwt != null ? jwt.getSubject() : "anonymous";
+        String userEmail = (jwt != null && jwt.getClaimAsString("email") != null) ? jwt.getClaimAsString("email") : userSub;
         java.util.List<String> roles = (jwt != null) ? jwt.getClaimAsStringList("roles") : null;
         String userRoles = (roles != null) ? roles.toString() : "[]";
         log.info("[BFF][PROXY] {} {} | user={} | target={}{}", method, requestUri, userSub, serviceName, fullPath);
@@ -207,8 +211,13 @@ public class ProxyController {
                     .uri(fullPath)
                     // Headers de identidad propagados al microservicio (sin el token)
                     .header("X-User-Sub",   userSub)
+                    .header("X-User-Email", userEmail)
                     .header("X-User-Roles", userRoles)
                     .header("Content-Type", "application/json");
+
+            if (bffInternalKey != null && !bffInternalKey.isBlank()) {
+                requestSpec.header("X-Internal-Service-Key", bffInternalKey);
+            }
 
             String responseBody;
             if (body != null && !body.isBlank()) {
