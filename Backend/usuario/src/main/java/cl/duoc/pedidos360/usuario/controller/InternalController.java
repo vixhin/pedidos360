@@ -10,9 +10,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -52,5 +54,24 @@ public class InternalController {
                 dto.getEmail(), dto.getNombre(), dto.getRol());
 
         return ResponseEntity.ok(ApiResponse.ok("Usuario sincronizado internamente", response));
+    }
+
+    @GetMapping("/usuario/by-email")
+    public ResponseEntity<?> obtenerPorEmailInternal(HttpServletRequest request, @RequestParam String email) {
+        String clientKey = request.getHeader("X-Internal-Service-Key");
+
+        if (clientKey == null || !clientKey.equals(internalKey)) {
+            log.warn("[USER-SERVICE][INTERNAL] Unauthorized by-email lookup attempt. Invalid/missing X-Internal-Service-Key");
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error("Acceso denegado: Clave de servicio interno inválida o faltante"));
+        }
+
+        try {
+            UsuarioResponseDTO response = usuarioService.obtenerPorEmail(email);
+            return ResponseEntity.ok(ApiResponse.ok("Usuario encontrado", response));
+        } catch (RuntimeException re) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(re.getMessage()));
+        }
     }
 }

@@ -36,6 +36,12 @@ public class JwtUtil {
     private long lastJwksFetch = 0;
     private static final long JWKS_CACHE_TTL_MS = 3600_000L;
 
+    @Value("${azure.tenant-id:${AZURE_TENANT_ID:a50f6528-499a-4d94-bcad-ed9b200f7c7b}}")
+    private String expectedTenantId;
+
+    @Value("${azure.api-client-id:${AZURE_API_CLIENT_ID:5febc8e2-ee14-4452-8914-7d237eb5a6f5}}")
+    private String expectedApiClientId;
+
     public JwtUtil(@Value("${jwt.secret:pedidos360_secret_key_for_jwt_token_generation_2026_super_secure}") String secret) {
         this.hmacKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
@@ -127,6 +133,21 @@ public class JwtUtil {
             if (iss == null || (!iss.contains("login.microsoftonline.com") && !iss.contains("sts.windows.net"))) {
                 log.warn("[JWT-UTIL] Rejected MS token with invalid issuer: {}", iss);
                 return null;
+            }
+
+            if (expectedTenantId != null && !expectedTenantId.isBlank() && !iss.contains(expectedTenantId)) {
+                log.warn("[JWT-UTIL] Rejected MS token with tenant mismatch: iss={} expectedTenant={}", iss, expectedTenantId);
+                return null;
+            }
+
+            Set<String> audSet = claims.getAudience();
+            if (expectedApiClientId != null && !expectedApiClientId.isBlank()) {
+                boolean validAud = audSet != null && audSet.stream().anyMatch(aud ->
+                        aud.equals(expectedApiClientId) || aud.equals("api://" + expectedApiClientId));
+                if (!validAud) {
+                    log.warn("[JWT-UTIL] Rejected MS token with audience mismatch: aud={} expectedAud={}", audSet, expectedApiClientId);
+                    return null;
+                }
             }
 
             return claims;

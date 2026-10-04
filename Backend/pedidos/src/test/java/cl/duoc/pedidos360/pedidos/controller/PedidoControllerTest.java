@@ -101,4 +101,54 @@ class PedidoControllerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
     }
+
+    @Test
+    @DisplayName("14. repartidor modifica su pedido -> exito 200")
+    void testRepartidorModificaSuPedidoExito() {
+        org.springframework.mock.web.MockHttpServletRequest request = new org.springframework.mock.web.MockHttpServletRequest();
+        org.springframework.test.util.ReflectionTestUtils.setField(pedidoController, "bffInternalKey", "valid-key");
+        request.addHeader("X-Internal-Service-Key", "valid-key");
+        request.addHeader("X-User-Roles", "REPARTIDOR");
+        request.addHeader("X-User-Email", "15"); // parsed as userId 15
+
+        when(pedidoService.actualizarEstado(1L, "EN_CAMINO", 15L, "REPARTIDOR")).thenReturn(mockPedido);
+
+        ResponseEntity<?> response = pedidoController.actualizarEstado(1L, "EN_CAMINO", request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    @DisplayName("15. repartidor modifica pedido ajeno -> 403 Forbidden")
+    void testRepartidorModificaPedidoAjenoReturns403() {
+        org.springframework.mock.web.MockHttpServletRequest request = new org.springframework.mock.web.MockHttpServletRequest();
+        org.springframework.test.util.ReflectionTestUtils.setField(pedidoController, "bffInternalKey", "valid-key");
+        request.addHeader("X-Internal-Service-Key", "valid-key");
+        request.addHeader("X-User-Roles", "REPARTIDOR");
+        request.addHeader("X-User-Email", "15");
+
+        when(pedidoService.actualizarEstado(1L, "ENTREGADO", 15L, "REPARTIDOR"))
+                .thenThrow(new SecurityException("El repartidor no puede modificar un pedido asignado a otro repartidor"));
+
+        ResponseEntity<?> response = pedidoController.actualizarEstado(1L, "ENTREGADO", request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    @DisplayName("16. repartidor falsifica X-User-Id sin S2S Key -> ignorado y no autorizado como userId real")
+    void testRepartidorFalsificaXUserIdIgnorado() {
+        org.springframework.mock.web.MockHttpServletRequest request = new org.springframework.mock.web.MockHttpServletRequest();
+        org.springframework.test.util.ReflectionTestUtils.setField(pedidoController, "bffInternalKey", "valid-key");
+        // No valid X-Internal-Service-Key sent, but spoofed X-User-Id: 99
+        request.addHeader("X-User-Id", "99");
+
+        // Service fails or treats identity as callerUserId=null
+        when(pedidoService.actualizarEstado(1L, "ENTREGADO", null, "ANONYMOUS"))
+                .thenThrow(new SecurityException("Usuario no autenticado"));
+
+        ResponseEntity<?> response = pedidoController.actualizarEstado(1L, "ENTREGADO", request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
 }

@@ -46,7 +46,7 @@ public class ChatController {
             @RequestParam(required = false) Long repartidorId,
             HttpServletRequest request) {
         try {
-            UserIdentity identity = resolveIdentity(request, clienteId != null ? clienteId : repartidorId);
+            UserIdentity identity = resolveIdentity(request);
             ConversacionResponseDTO response = chatService.crearOObtenerConversacion(pedidoId, clienteId, repartidorId, identity.userId, identity.role);
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (SecurityException se) {
@@ -64,12 +64,10 @@ public class ChatController {
     @GetMapping("/pedido/{pedidoId}")
     public ResponseEntity<?> obtenerPorPedidoId(
             @PathVariable Long pedidoId,
-            @RequestParam(required = false) Long usuarioId,
             HttpServletRequest request) {
         try {
-            UserIdentity identity = resolveIdentity(request, usuarioId);
-            Long effectiveUserId = identity.userId != null ? identity.userId : usuarioId;
-            ConversacionResponseDTO response = chatService.obtenerPorPedidoId(pedidoId, effectiveUserId);
+            UserIdentity identity = resolveIdentity(request);
+            ConversacionResponseDTO response = chatService.obtenerPorPedidoId(pedidoId, identity.userId);
             return ResponseEntity.ok(response);
         } catch (SecurityException se) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
@@ -81,12 +79,16 @@ public class ChatController {
     }
 
     @GetMapping("/usuario/{usuarioId}")
-    public ResponseEntity<List<ConversacionResponseDTO>> obtenerConversacionesPorUsuario(
+    public ResponseEntity<?> obtenerConversacionesPorUsuario(
             @PathVariable Long usuarioId,
             HttpServletRequest request) {
-        UserIdentity identity = resolveIdentity(request, usuarioId);
-        Long effectiveUserId = identity.userId != null ? identity.userId : usuarioId;
-        return ResponseEntity.ok(chatService.obtenerConversacionesPorUsuario(effectiveUserId));
+        try {
+            UserIdentity identity = resolveIdentity(request);
+            return ResponseEntity.ok(chatService.obtenerConversacionesPorUsuario(identity.userId));
+        } catch (SecurityException se) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("success", false, "message", se.getMessage()));
+        }
     }
 
     @PostMapping("/mensaje")
@@ -94,7 +96,7 @@ public class ChatController {
             @RequestBody EnviarMensajeDTO dto,
             HttpServletRequest request) {
         try {
-            UserIdentity identity = resolveIdentity(request, dto.getRemitenteId());
+            UserIdentity identity = resolveIdentity(request);
             MensajeResponseDTO msg = chatService.enviarMensaje(dto, identity.userId, identity.role);
             return ResponseEntity.status(HttpStatus.CREATED).body(msg);
         } catch (SecurityException se) {
@@ -112,12 +114,10 @@ public class ChatController {
     @DeleteMapping("/conversacion/{id}")
     public ResponseEntity<?> eliminarLogico(
             @PathVariable Long id,
-            @RequestParam(required = false) Long usuarioId,
             HttpServletRequest request) {
         try {
-            UserIdentity identity = resolveIdentity(request, usuarioId);
-            Long effectiveUserId = identity.userId != null ? identity.userId : usuarioId;
-            chatService.eliminarLogico(id, effectiveUserId);
+            UserIdentity identity = resolveIdentity(request);
+            chatService.eliminarLogico(id, identity.userId);
             return ResponseEntity.ok(Map.of("success", true, "message", "Conversación ocultada exitosamente"));
         } catch (SecurityException se) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
@@ -125,7 +125,7 @@ public class ChatController {
         }
     }
 
-    private UserIdentity resolveIdentity(HttpServletRequest request, Long fallbackUserId) {
+    private UserIdentity resolveIdentity(HttpServletRequest request) {
         String serviceKey = request.getHeader("X-Internal-Service-Key");
         String xUserId = request.getHeader("X-User-Id");
         String xUserEmail = request.getHeader("X-User-Email");
@@ -140,7 +140,12 @@ public class ChatController {
             if (userId == null && xUserEmail != null && !xUserEmail.isBlank()) {
                 userId = resolveUserIdByEmail(xUserEmail);
             }
-            if (userId == null) userId = fallbackUserId;
+            if (userId == null && request.getHeader("X-User-Sub") != null) {
+                userId = resolveUserIdByEmail(request.getHeader("X-User-Sub"));
+            }
+            if (userId == null) {
+                throw new SecurityException("Acceso denegado: No se pudo resolver la identidad del usuario desde BFF.");
+            }
             return new UserIdentity(userId, xUserEmail, xUserRoles != null ? xUserRoles : "CLIENTE");
         }
 
@@ -150,22 +155,24 @@ public class ChatController {
                 String email = jwtUtil.extractEmail(token);
                 String role = jwtUtil.extractRole(token);
                 Long userId = resolveUserIdByEmail(email);
-                if (userId == null) userId = fallbackUserId;
+                if (userId == null) {
+                    throw new SecurityException("Acceso denegado: No se pudo resolver la cuenta de usuario.");
+                }
                 return new UserIdentity(userId, email, role != null ? role : "CLIENTE");
             }
         }
 
-        if (fallbackUserId != null) {
-            return new UserIdentity(fallbackUserId, null, "CLIENTE");
-        }
-
-        return new UserIdentity(null, null, "ANONYMOUS");
+        throw new SecurityException("Acceso denegado: Requiere autenticación JWT válida o clave interna de servicio.");
     }
 
-    private Long resolveUserIdByEmail(String email) {
-        if (email == null || email.isBlank()) return null;
+    private Long resolveUserIdByEmail(String emailOrId) {
+        if (emailOrId == null || emailOrId.isBlank()) return null;
         try {
-            String url = usuarioServiceUrl + "/api/usuario/by-email?email=" + email;
+            return Long.parseLong(emailOrId);
+        } catch (NumberFormatException ignored) {}
+
+        try {
+            String url = usuarioServiceUrl + "/api/internal/usuario/by-email?email=" + emailOrId;
             HttpHeaders headers = new HttpHeaders();
             headers.set("X-Internal-Service-Key", bffInternalKey);
             HttpEntity<Void> entity = new HttpEntity<>(headers);
@@ -177,7 +184,7 @@ public class ChatController {
                 }
             }
         } catch (Exception e) {
-            log.debug("[CHAT-CONTROLLER] Could not resolve userId by email={}: {}", email, e.getMessage());
+            log.warn("[CHAT-CONTROLLER] Could not resolve userId by email={}: {}", emailOrId, e.getMessage());
         }
         return null;
     }

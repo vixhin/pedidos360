@@ -71,4 +71,40 @@ class InternalControllerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
     }
+
+    @Test
+    @DisplayName("GET /api/internal/usuario/by-email sin cabecera X-Internal-Service-Key -> 403 Forbidden")
+    void testByEmailSinHeaderReturns403() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+
+        ResponseEntity<?> response = internalController.obtenerPorEmailInternal(request, "test@pedidos360.cl");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    @DisplayName("GET /api/internal/usuario/by-email con cabecera incorrecta -> 403 Forbidden")
+    void testByEmailConHeaderInvalidoReturns403() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("X-Internal-Service-Key", "clave-incorrecta");
+
+        ResponseEntity<?> response = internalController.obtenerPorEmailInternal(request, "test@pedidos360.cl");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    @DisplayName("GET /api/internal/usuario/by-email con cabecera correcta -> 200 OK")
+    void testByEmailConHeaderValidoReturns200() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("X-Internal-Service-Key", validInternalKey);
+
+        UsuarioResponseDTO mockUser = new UsuarioResponseDTO(15L, "Test User", "test@pedidos360.cl", Rol.REPARTIDOR, null, null);
+        when(usuarioService.obtenerPorEmail("test@pedidos360.cl")).thenReturn(mockUser);
+
+        ResponseEntity<?> response = internalController.obtenerPorEmailInternal(request, "test@pedidos360.cl");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+    }
 }

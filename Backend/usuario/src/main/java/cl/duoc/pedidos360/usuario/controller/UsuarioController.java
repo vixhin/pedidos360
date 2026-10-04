@@ -40,17 +40,6 @@ public class UsuarioController {
         return ResponseEntity.ok(ApiResponse.ok("Usuario encontrado", usuario));
     }
 
-    @GetMapping("/by-email")
-    public ResponseEntity<ApiResponse<UsuarioResponseDTO>> obtenerPorEmail(@RequestParam String email) {
-        try {
-            UsuarioResponseDTO usuario = usuarioService.obtenerPorEmail(email);
-            return ResponseEntity.ok(ApiResponse.ok("Usuario encontrado", usuario));
-        } catch (RuntimeException re) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(ApiResponse.error(re.getMessage()));
-        }
-    }
-
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<UsuarioResponseDTO>> actualizarUsuario(@PathVariable Long id,
                                                                               @Valid @RequestBody UsuarioCreateDTO dto) {
