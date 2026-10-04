@@ -40,29 +40,58 @@ public class PedidoController {
     }
 
     @GetMapping
-    public ResponseEntity<List<Pedido>> listar() {
-        return ResponseEntity.ok(pedidoService.obtenerTodos());
+    public ResponseEntity<?> listar(HttpServletRequest request) {
+        try {
+            UserIdentity identity = resolveIdentity(request);
+            String role = identity.getRoleUpper();
+            if (role.contains("ADMIN") || role.contains("VENDEDOR")) {
+                return ResponseEntity.ok(pedidoService.obtenerTodos());
+            } else if (role.contains("REPARTIDOR")) {
+                return ResponseEntity.ok(pedidoService.obtenerDisponiblesOAsignados(identity.userId));
+            } else {
+                return ResponseEntity.ok(pedidoService.obtenerPorUsuario(identity.userId));
+            }
+        } catch (SecurityException se) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("success", false, "message", se.getMessage()));
+        }
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Pedido> obtenerPorId(@PathVariable Long id) {
-        return pedidoService.obtenerPorId(id)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+    public ResponseEntity<?> obtenerPorId(@PathVariable Long id, HttpServletRequest request) {
+        try {
+            UserIdentity identity = resolveIdentity(request);
+            return pedidoService.obtenerPorId(id)
+                    .map(pedido -> {
+                        if (!puedeVerPedido(identity, pedido)) {
+                            throw new SecurityException("Acceso denegado: No tiene permisos para ver este pedido.");
+                        }
+                        return ResponseEntity.ok(pedido);
+                    })
+                    .orElse(ResponseEntity.notFound().build());
+        } catch (SecurityException se) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("success", false, "message", se.getMessage()));
+        }
     }
 
     @GetMapping("/usuario/{usuarioId}")
-    public ResponseEntity<List<Pedido>> obtenerPorUsuario(@PathVariable Long usuarioId) {
-        return ResponseEntity.ok(pedidoService.obtenerPorUsuario(usuarioId));
+    public ResponseEntity<?> obtenerPorUsuario(@PathVariable Long usuarioId, HttpServletRequest request) {
+        try {
+            UserIdentity identity = resolveIdentity(request);
+            validarPuedeConsultarUsuario(identity, usuarioId);
+            return ResponseEntity.ok(pedidoService.obtenerPorUsuario(usuarioId));
+        } catch (SecurityException se) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("success", false, "message", se.getMessage()));
+        }
     }
 
     @PostMapping
     public ResponseEntity<?> crear(@RequestBody Pedido pedido, HttpServletRequest request) {
         try {
             UserIdentity identity = resolveIdentity(request);
-            if (pedido.getUsuarioId() == null) {
-                pedido.setUsuarioId(identity.userId);
-            }
+            validarPuedeCrearPedido(identity, pedido);
             return ResponseEntity.ok(pedidoService.guardar(pedido));
         } catch (SecurityException se) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
@@ -77,9 +106,11 @@ public class PedidoController {
             HttpServletRequest request) {
         try {
             UserIdentity identity = resolveIdentity(request);
-            Long callerUserId = identity.userId;
-            String callerRoles = identity.role;
-            return ResponseEntity.ok(pedidoService.actualizarEstado(id, nuevoEstado, callerUserId, callerRoles));
+            Pedido pedido = pedidoService.obtenerPorId(id)
+                    .orElseThrow(() -> new IllegalArgumentException("Pedido no encontrado con ID: " + id));
+
+            validarPuedeActualizarEstado(identity, pedido);
+            return ResponseEntity.ok(pedidoService.actualizarEstado(id, nuevoEstado, identity.userId, identity.role));
         } catch (SecurityException se) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("success", false, "message", se.getMessage()));
@@ -97,13 +128,10 @@ public class PedidoController {
             HttpServletRequest request) {
         try {
             UserIdentity identity = resolveIdentity(request);
-            Long callerUserId = identity.userId;
-            String callerRoles = identity.role;
+            Pedido pedido = pedidoService.obtenerPorId(id)
+                    .orElseThrow(() -> new IllegalArgumentException("Pedido no encontrado con ID: " + id));
 
-            Long effectiveRepartidorId = repartidorId;
-            if (callerRoles != null && callerRoles.toUpperCase().contains("REPARTIDOR") && callerUserId != null) {
-                effectiveRepartidorId = callerUserId;
-            }
+            Long effectiveRepartidorId = validarPuedeAsignarRepartidor(identity, pedido, repartidorId);
 
             return ResponseEntity.ok(pedidoService.asignarRepartidor(id, effectiveRepartidorId, nombreRepartidor));
         } catch (SecurityException se) {
@@ -112,19 +140,88 @@ public class PedidoController {
         } catch (IllegalStateException ise) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("success", false, "message", ise.getMessage()));
+        } catch (IllegalArgumentException ie) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("success", false, "message", ie.getMessage()));
         }
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<?> eliminar(@PathVariable Long id, HttpServletRequest request) {
         try {
-            resolveIdentity(request);
+            UserIdentity identity = resolveIdentity(request);
+            validarPuedeEliminar(identity);
             pedidoService.eliminar(id);
             return ResponseEntity.noContent().build();
         } catch (SecurityException se) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("success", false, "message", se.getMessage()));
         }
+    }
+
+    private void validarPuedeCrearPedido(UserIdentity identity, Pedido pedido) {
+        String role = identity.getRoleUpper();
+        if (role.contains("CLIENTE") || (!role.contains("ADMIN") && !role.contains("VENDEDOR"))) {
+            pedido.setUsuarioId(identity.userId);
+        } else {
+            if (pedido.getUsuarioId() == null) {
+                pedido.setUsuarioId(identity.userId);
+            }
+        }
+    }
+
+    private void validarPuedeActualizarEstado(UserIdentity identity, Pedido pedido) {
+        String role = identity.getRoleUpper();
+        if (role.contains("CLIENTE")) {
+            throw new SecurityException("Acceso denegado: El cliente no puede modificar el estado del pedido.");
+        }
+        if (role.contains("REPARTIDOR") && !role.contains("ADMIN") && !role.contains("VENDEDOR")) {
+            if (pedido.getRepartidorId() == null || !pedido.getRepartidorId().equals(identity.userId)) {
+                throw new SecurityException("Acceso denegado: El repartidor no puede modificar pedidos asignados a otros repartidores.");
+            }
+        }
+    }
+
+    private Long validarPuedeAsignarRepartidor(UserIdentity identity, Pedido pedido, Long requestedRepartidorId) {
+        String role = identity.getRoleUpper();
+        if (role.contains("CLIENTE")) {
+            throw new SecurityException("Acceso denegado: El cliente no puede asignar repartidores.");
+        }
+        Long effectiveRepartidorId = requestedRepartidorId;
+        if (role.contains("REPARTIDOR") && !role.contains("ADMIN") && !role.contains("VENDEDOR")) {
+            effectiveRepartidorId = identity.userId;
+        }
+        if (pedido.getRepartidorId() != null && !pedido.getRepartidorId().equals(effectiveRepartidorId)) {
+            throw new IllegalStateException("El pedido ya fue asignado a otro repartidor.");
+        }
+        return effectiveRepartidorId;
+    }
+
+    private void validarPuedeEliminar(UserIdentity identity) {
+        String role = identity.getRoleUpper();
+        if (!role.contains("ADMIN")) {
+            throw new SecurityException("Acceso denegado: No tiene permisos para eliminar pedidos.");
+        }
+    }
+
+    private void validarPuedeConsultarUsuario(UserIdentity identity, Long usuarioIdTarget) {
+        String role = identity.getRoleUpper();
+        if (!role.contains("ADMIN") && !role.contains("VENDEDOR")) {
+            if (!identity.userId.equals(usuarioIdTarget)) {
+                throw new SecurityException("Acceso denegado: No puede consultar los pedidos de otro usuario.");
+            }
+        }
+    }
+
+    private boolean puedeVerPedido(UserIdentity identity, Pedido pedido) {
+        String role = identity.getRoleUpper();
+        if (role.contains("ADMIN") || role.contains("VENDEDOR")) {
+            return true;
+        }
+        if (role.contains("REPARTIDOR")) {
+            return pedido.getRepartidorId() == null || identity.userId.equals(pedido.getRepartidorId());
+        }
+        return identity.userId.equals(pedido.getUsuarioId());
     }
 
     private UserIdentity resolveIdentity(HttpServletRequest request) {
@@ -199,6 +296,10 @@ public class PedidoController {
             this.userId = userId;
             this.email = email;
             this.role = role;
+        }
+
+        String getRoleUpper() {
+            return role != null ? role.toUpperCase() : "";
         }
     }
 }

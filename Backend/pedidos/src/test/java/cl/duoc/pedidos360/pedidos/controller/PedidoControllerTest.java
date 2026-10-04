@@ -11,12 +11,15 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
 
@@ -30,96 +33,128 @@ class PedidoControllerTest {
     private PedidoController pedidoController;
 
     private Pedido mockPedido;
+    private final String validKey = "valid-key-2026";
 
     @BeforeEach
     void setUp() {
+        ReflectionTestUtils.setField(pedidoController, "bffInternalKey", validKey);
         mockPedido = new Pedido();
         mockPedido.setId(1L);
         mockPedido.setUsuarioId(10L);
         mockPedido.setTotal(25000.0);
     }
 
-    @Test
-    @DisplayName("listar - retorna HTTP 200 con la lista de pedidos")
-    void testListar() {
-        when(pedidoService.obtenerTodos()).thenReturn(List.of(mockPedido));
-
-        ResponseEntity<List<Pedido>> response = pedidoController.listar();
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).hasSize(1);
+    private MockHttpServletRequest createAuthRequest(String emailOrId, String role) {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("X-Internal-Service-Key", validKey);
+        request.addHeader("X-User-Email", emailOrId);
+        if (role != null) {
+            request.addHeader("X-User-Roles", role);
+        }
+        return request;
     }
 
     @Test
-    @DisplayName("obtenerPorId - retorna HTTP 200 si existe")
-    void testObtenerPorIdExito() {
+    @DisplayName("1. cliente crea pedido con usuarioId falso -> backend fuerza callerUserId")
+    void testClienteCreaPedidoConUsuarioIdFalso() {
+        MockHttpServletRequest request = createAuthRequest("10", "CLIENTE");
+        Pedido pedidoEntrante = new Pedido();
+        pedidoEntrante.setUsuarioId(999L); // Falso
+
+        when(pedidoService.guardar(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ResponseEntity<?> response = pedidoController.crear(pedidoEntrante, request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        Pedido creado = (Pedido) response.getBody();
+        assertThat(creado.getUsuarioId()).isEqualTo(10L); // Forzado a 10L
+    }
+
+    @Test
+    @DisplayName("2. cliente cambia estado -> 403 Forbidden")
+    void testClienteCambiaEstadoReturns403() {
+        MockHttpServletRequest request = createAuthRequest("10", "CLIENTE");
         when(pedidoService.obtenerPorId(1L)).thenReturn(Optional.of(mockPedido));
 
-        ResponseEntity<Pedido> response = pedidoController.obtenerPorId(1L);
+        ResponseEntity<?> response = pedidoController.actualizarEstado(1L, "ENTREGADO", request);
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody().getId()).isEqualTo(1L);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
     }
 
     @Test
-    @DisplayName("obtenerPorId - retorna HTTP 404 si no existe")
-    void testObtenerPorIdNoEncontrado() {
-        when(pedidoService.obtenerPorId(99L)).thenReturn(Optional.empty());
+    @DisplayName("3. cliente asigna repartidor -> 403 Forbidden")
+    void testClienteAsignaRepartidorReturns403() {
+        MockHttpServletRequest request = createAuthRequest("10", "CLIENTE");
+        when(pedidoService.obtenerPorId(1L)).thenReturn(Optional.of(mockPedido));
 
-        ResponseEntity<Pedido> response = pedidoController.obtenerPorId(99L);
+        ResponseEntity<?> response = pedidoController.asignarRepartidor(1L, 99L, "Carlos", request);
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
     }
 
     @Test
-    @DisplayName("obtenerPorUsuario - retorna HTTP 200")
-    void testObtenerPorUsuario() {
-        when(pedidoService.obtenerPorUsuario(10L)).thenReturn(List.of(mockPedido));
-
-        ResponseEntity<List<Pedido>> response = pedidoController.obtenerPorUsuario(10L);
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-    }
-
-    @Test
-    @DisplayName("crear - retorna HTTP 200 con pedido guardado")
-    void testCrear() {
-        org.springframework.mock.web.MockHttpServletRequest request = new org.springframework.mock.web.MockHttpServletRequest();
-        org.springframework.test.util.ReflectionTestUtils.setField(pedidoController, "bffInternalKey", "valid-key");
-        request.addHeader("X-Internal-Service-Key", "valid-key");
-        request.addHeader("X-User-Email", "10");
-
-        when(pedidoService.guardar(any(Pedido.class))).thenReturn(mockPedido);
-
-        ResponseEntity<?> response = pedidoController.crear(mockPedido, request);
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-    }
-
-    @Test
-    @DisplayName("eliminar - retorna HTTP 204 NO CONTENT")
-    void testEliminar() {
-        org.springframework.mock.web.MockHttpServletRequest request = new org.springframework.mock.web.MockHttpServletRequest();
-        org.springframework.test.util.ReflectionTestUtils.setField(pedidoController, "bffInternalKey", "valid-key");
-        request.addHeader("X-Internal-Service-Key", "valid-key");
-        request.addHeader("X-User-Email", "10");
-
-        doNothing().when(pedidoService).eliminar(1L);
+    @DisplayName("4. cliente elimina pedido -> 403 Forbidden")
+    void testClienteEliminaPedidoReturns403() {
+        MockHttpServletRequest request = createAuthRequest("10", "CLIENTE");
 
         ResponseEntity<?> response = pedidoController.eliminar(1L, request);
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
     }
 
     @Test
-    @DisplayName("14. repartidor modifica su pedido -> exito 200")
-    void testRepartidorModificaSuPedidoExito() {
-        org.springframework.mock.web.MockHttpServletRequest request = new org.springframework.mock.web.MockHttpServletRequest();
-        org.springframework.test.util.ReflectionTestUtils.setField(pedidoController, "bffInternalKey", "valid-key");
-        request.addHeader("X-Internal-Service-Key", "valid-key");
-        request.addHeader("X-User-Roles", "REPARTIDOR");
-        request.addHeader("X-User-Email", "15"); // parsed as userId 15
+    @DisplayName("5. cliente consulta pedidos de otro usuario -> 403 Forbidden")
+    void testClienteConsultaPedidosDeOtroReturns403() {
+        MockHttpServletRequest request = createAuthRequest("10", "CLIENTE");
 
+        ResponseEntity<?> response = pedidoController.obtenerPorUsuario(999L, request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    @DisplayName("6. cliente consulta sus propios pedidos -> 200 OK")
+    void testClienteConsultaSusPropiosPedidosExito() {
+        MockHttpServletRequest request = createAuthRequest("10", "CLIENTE");
+        when(pedidoService.obtenerPorUsuario(10L)).thenReturn(List.of(mockPedido));
+
+        ResponseEntity<?> response = pedidoController.obtenerPorUsuario(10L, request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    @DisplayName("7. repartidor acepta pedido libre -> éxito 200")
+    void testRepartidorAceptaPedidoLibreExito() {
+        MockHttpServletRequest request = createAuthRequest("15", "REPARTIDOR");
+        mockPedido.setRepartidorId(null);
+        when(pedidoService.obtenerPorId(1L)).thenReturn(Optional.of(mockPedido));
+        when(pedidoService.asignarRepartidor(1L, 15L, "Repartidor")).thenReturn(mockPedido);
+
+        ResponseEntity<?> response = pedidoController.asignarRepartidor(1L, 999L, "Repartidor", request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    @DisplayName("8. repartidor intenta asignarlo a otro ID -> se ignora ID externo y usa callerUserId")
+    void testRepartidorIgnoraIdExternoEnAsignacion() {
+        MockHttpServletRequest request = createAuthRequest("15", "REPARTIDOR");
+        mockPedido.setRepartidorId(null);
+        when(pedidoService.obtenerPorId(1L)).thenReturn(Optional.of(mockPedido));
+        when(pedidoService.asignarRepartidor(1L, 15L, "Repartidor")).thenReturn(mockPedido);
+
+        ResponseEntity<?> response = pedidoController.asignarRepartidor(1L, 888L, "Repartidor", request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    @DisplayName("9. repartidor cambia estado de pedido propio -> 200 OK")
+    void testRepartidorCambiaEstadoPedidoPropioExito() {
+        MockHttpServletRequest request = createAuthRequest("15", "REPARTIDOR");
+        mockPedido.setRepartidorId(15L);
+        when(pedidoService.obtenerPorId(1L)).thenReturn(Optional.of(mockPedido));
         when(pedidoService.actualizarEstado(1L, "EN_CAMINO", 15L, "REPARTIDOR")).thenReturn(mockPedido);
 
         ResponseEntity<?> response = pedidoController.actualizarEstado(1L, "EN_CAMINO", request);
@@ -128,16 +163,11 @@ class PedidoControllerTest {
     }
 
     @Test
-    @DisplayName("15. repartidor modifica pedido ajeno -> 403 Forbidden")
-    void testRepartidorModificaPedidoAjenoReturns403() {
-        org.springframework.mock.web.MockHttpServletRequest request = new org.springframework.mock.web.MockHttpServletRequest();
-        org.springframework.test.util.ReflectionTestUtils.setField(pedidoController, "bffInternalKey", "valid-key");
-        request.addHeader("X-Internal-Service-Key", "valid-key");
-        request.addHeader("X-User-Roles", "REPARTIDOR");
-        request.addHeader("X-User-Email", "15");
-
-        when(pedidoService.actualizarEstado(1L, "ENTREGADO", 15L, "REPARTIDOR"))
-                .thenThrow(new SecurityException("El repartidor no puede modificar un pedido asignado a otro repartidor"));
+    @DisplayName("10. repartidor cambia pedido ajeno -> 403 Forbidden")
+    void testRepartidorCambiaPedidoAjenoReturns403() {
+        MockHttpServletRequest request = createAuthRequest("15", "REPARTIDOR");
+        mockPedido.setRepartidorId(99L); // Asignado a otro
+        when(pedidoService.obtenerPorId(1L)).thenReturn(Optional.of(mockPedido));
 
         ResponseEntity<?> response = pedidoController.actualizarEstado(1L, "ENTREGADO", request);
 
@@ -145,12 +175,91 @@ class PedidoControllerTest {
     }
 
     @Test
-    @DisplayName("16. repartidor falsifica X-User-Id sin S2S Key -> ignorado y no autorizado como userId real (403)")
-    void testRepartidorFalsificaXUserIdIgnorado() {
-        org.springframework.mock.web.MockHttpServletRequest request = new org.springframework.mock.web.MockHttpServletRequest();
-        org.springframework.test.util.ReflectionTestUtils.setField(pedidoController, "bffInternalKey", "valid-key");
-        // No valid X-Internal-Service-Key sent, but spoofed X-User-Id: 99
-        request.addHeader("X-User-Id", "99");
+    @DisplayName("11. repartidor intenta aceptar pedido de otro -> 409 Conflict")
+    void testRepartidorAceptaPedidoDeOtroReturns409() {
+        MockHttpServletRequest request = createAuthRequest("15", "REPARTIDOR");
+        mockPedido.setRepartidorId(99L); // Ya asignado a 99L
+        when(pedidoService.obtenerPorId(1L)).thenReturn(Optional.of(mockPedido));
+
+        ResponseEntity<?> response = pedidoController.asignarRepartidor(1L, 15L, "Repartidor", request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    }
+
+    @Test
+    @DisplayName("12. vendedor cambia estado -> permitido 200 OK")
+    void testVendedorCambiaEstadoPermitido() {
+        MockHttpServletRequest request = createAuthRequest("20", "VENDEDOR");
+        when(pedidoService.obtenerPorId(1L)).thenReturn(Optional.of(mockPedido));
+        when(pedidoService.actualizarEstado(1L, "PREPARANDO", 20L, "VENDEDOR")).thenReturn(mockPedido);
+
+        ResponseEntity<?> response = pedidoController.actualizarEstado(1L, "PREPARANDO", request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    @DisplayName("13. vendedor asigna repartidor -> permitido 200 OK")
+    void testVendedorAsignaRepartidorPermitido() {
+        MockHttpServletRequest request = createAuthRequest("20", "VENDEDOR");
+        when(pedidoService.obtenerPorId(1L)).thenReturn(Optional.of(mockPedido));
+        when(pedidoService.asignarRepartidor(1L, 99L, "Carlos")).thenReturn(mockPedido);
+
+        ResponseEntity<?> response = pedidoController.asignarRepartidor(1L, 99L, "Carlos", request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    @DisplayName("14. admin puede eliminar -> 204 No Content")
+    void testAdminPuedeEliminar() {
+        MockHttpServletRequest request = createAuthRequest("1", "ADMIN");
+        doNothing().when(pedidoService).eliminar(1L);
+
+        ResponseEntity<?> response = pedidoController.eliminar(1L, request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    }
+
+    @Test
+    @DisplayName("15. admin puede cambiar estado -> 200 OK")
+    void testAdminPuedeCambiarEstado() {
+        MockHttpServletRequest request = createAuthRequest("1", "ADMIN");
+        when(pedidoService.obtenerPorId(1L)).thenReturn(Optional.of(mockPedido));
+        when(pedidoService.actualizarEstado(1L, "CANCELADO", 1L, "ADMIN")).thenReturn(mockPedido);
+
+        ResponseEntity<?> response = pedidoController.actualizarEstado(1L, "CANCELADO", request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    @DisplayName("16. request sin JWT y sin service key -> 403 Forbidden")
+    void testRequestSinAuthReturns403() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+
+        ResponseEntity<?> response = pedidoController.actualizarEstado(1L, "ENTREGADO", request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    @DisplayName("17. X-User-Id falsificado sin service key -> 403 Forbidden")
+    void testXUserIdFalsificadoSinServiceKeyReturns403() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("X-User-Id", "999"); // Spoofed header without S2S Key
+
+        ResponseEntity<?> response = pedidoController.actualizarEstado(1L, "ENTREGADO", request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    @DisplayName("18. service key válida pero usuario no resoluble -> 403 Forbidden")
+    void testServiceKeyValidaSinUsuarioResolubleReturns403() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("X-Internal-Service-Key", validKey);
+        // No email or X-User-Id sent
 
         ResponseEntity<?> response = pedidoController.actualizarEstado(1L, "ENTREGADO", request);
 

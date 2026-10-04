@@ -38,6 +38,10 @@ public class PedidoService {
         return pedidoRepository.findByUsuarioId(usuarioId);
     }
 
+    public List<Pedido> obtenerDisponiblesOAsignados(Long repartidorId) {
+        return pedidoRepository.findByRepartidorIdIsNullOrRepartidorId(repartidorId);
+    }
+
     @Transactional
     public Pedido guardar(Pedido pedido) {
         Pedido guardado = pedidoRepository.save(pedido);
