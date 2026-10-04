@@ -251,7 +251,7 @@ public class ChatService {
 
     private PedidoDTO obtenerPedidoPorId(Long pedidoId) {
         try {
-            String url = pedidosServiceUrl + "/api/pedidos/" + pedidoId;
+            String url = pedidosServiceUrl + "/api/internal/pedidos/" + pedidoId;
             HttpHeaders headers = new HttpHeaders();
             headers.set("X-Internal-Service-Key", bffInternalKey);
             HttpEntity<Void> entity = new HttpEntity<>(headers);

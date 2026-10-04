@@ -67,7 +67,7 @@ public class HealthController {
         }
 
         try {
-            pedidosClient.get().uri("/api/pedidos").retrieve()
+            pedidosClient.get().uri("/health").retrieve()
                     .toBodilessEntity().block();
             pedidosOk = true;
         } catch (Exception e) {
