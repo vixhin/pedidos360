@@ -130,7 +130,7 @@ public class ChatService {
             event.put("conversacionId", conv.getId());
             event.put("pedidoId", conv.getPedidoId());
             event.put("remitenteId", dto.getRemitenteId());
-            event.put("tipoRemitente", dto.getTipoRemitente());
+            event.put("tipoRemitente", tipoRemitenteDerivado);
             event.put("contenido", dto.getContenido());
             event.put("timestamp", LocalDateTime.now().toString());
 

@@ -45,10 +45,10 @@ Angular (localhost:4200)
 ### Credenciales de prueba (login local)
 | Usuario | Contraseña | Rol |
 |---|---|---|
-| `admin@pedidos360.cl` | `chuplovixo` | ADMIN |
-| `vendedor@pedidos360.cl` | `chuplovixo` | VENDEDOR |
-| `rodrigo.morales@pedidos360.cl` | `chuplovixo` | REPARTIDOR |
-| `cliente@pedidos360.cl` | `chuplovixo` | CLIENTE |
+| `admin@pedidos360.cl` | `Password123!` | ADMIN |
+| `vendedor@pedidos360.cl` | `Password123!` | VENDEDOR |
+| `rodrigo.morales@pedidos360.cl` | `Password123!` | REPARTIDOR |
+| `cliente@pedidos360.cl` | `Password123!` | CLIENTE |
 
 ---
 

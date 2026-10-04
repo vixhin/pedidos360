@@ -133,4 +133,28 @@ class PedidoServiceTest {
                 any(cl.duoc.pedidos360.pedidos.event.RepartidorAsignadoEvent.class)
         );
     }
+
+    @Test
+    @DisplayName("actualizarEstado - repartidor intentando modificar pedido ajeno lanza SecurityException")
+    void testActualizarEstado_RepartidorAjeno_LanzaSecurityException() {
+        mockPedido.setRepartidorId(15L);
+        when(pedidoRepository.findById(1L)).thenReturn(Optional.of(mockPedido));
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                SecurityException.class,
+                () -> pedidoService.actualizarEstado(1L, "ENTREGADO", 88L, "REPARTIDOR")
+        );
+    }
+
+    @Test
+    @DisplayName("asignarRepartidor - intentar asignar pedido ya asignado a otro lanza IllegalStateException")
+    void testAsignarRepartidor_YaAsignado_LanzaIllegalStateException() {
+        mockPedido.setRepartidorId(15L);
+        when(pedidoRepository.findById(1L)).thenReturn(Optional.of(mockPedido));
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> pedidoService.asignarRepartidor(1L, 99L, "Otro Repartidor")
+        );
+    }
 }

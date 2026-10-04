@@ -34,8 +34,12 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final ObjectProvider<ConversacionRepository> conversacionRepositoryProvider;
 
-    public WebSocketConfig(ObjectProvider<ConversacionRepository> conversacionRepositoryProvider) {
+    private final cl.duoc.pedidos360.chat.security.JwtUtil jwtUtil;
+
+    public WebSocketConfig(ObjectProvider<ConversacionRepository> conversacionRepositoryProvider,
+                           cl.duoc.pedidos360.chat.security.JwtUtil jwtUtil) {
         this.conversacionRepositoryProvider = conversacionRepositoryProvider;
+        this.jwtUtil = jwtUtil;
     }
 
     @Override
@@ -64,13 +68,34 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                 StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
                 if (accessor != null) {
                     if (StompCommand.CONNECT.equals(accessor.getCommand())) {
-                        String userId = accessor.getFirstNativeHeader("X-User-Id");
-                        String userEmail = accessor.getFirstNativeHeader("X-User-Email");
-                        String name = (userId != null && !userId.isBlank()) ? userId : ((userEmail != null) ? userEmail : "anonymous");
+                        String authHeader = accessor.getFirstNativeHeader("Authorization");
+                        String userIdHeader = accessor.getFirstNativeHeader("X-User-Id");
+                        String userEmailHeader = accessor.getFirstNativeHeader("X-User-Email");
 
-                        Principal principal = () -> name;
+                        String authenticatedIdentity = null;
+
+                        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                            String token = authHeader.substring(7);
+                            if (jwtUtil.validateToken(token)) {
+                                authenticatedIdentity = jwtUtil.extractEmail(token);
+                            }
+                        }
+
+                        if (authenticatedIdentity == null && userIdHeader != null && !userIdHeader.isBlank()) {
+                            authenticatedIdentity = userIdHeader;
+                        } else if (authenticatedIdentity == null && userEmailHeader != null && !userEmailHeader.isBlank()) {
+                            authenticatedIdentity = userEmailHeader;
+                        }
+
+                        if (authenticatedIdentity == null || "anonymous".equalsIgnoreCase(authenticatedIdentity)) {
+                            log.warn("[WS-CHAT] Connection rejected: No valid JWT token or identity provided.");
+                            throw new IllegalArgumentException("Conexión WebSocket rechazada: Token JWT inválido o ausente.");
+                        }
+
+                        final String finalIdentity = authenticatedIdentity;
+                        Principal principal = () -> finalIdentity;
                         accessor.setUser(principal);
-                        log.info("[WS-CHAT] STOMP Client Connected: principal={}", name);
+                        log.info("[WS-CHAT] STOMP Client Connected: principal={}", finalIdentity);
                     } else if (StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
                         String destination = accessor.getDestination();
                         if (destination != null && destination.startsWith("/topic/chat/")) {

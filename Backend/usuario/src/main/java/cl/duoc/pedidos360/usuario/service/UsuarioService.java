@@ -51,7 +51,7 @@ public class UsuarioService {
     @EventListener(ApplicationReadyEvent.class)
     @Transactional
     public void initDefaultUsers() {
-        if (!environment.matchesProfiles("dev")) {
+        if (environment != null && !environment.matchesProfiles("dev")) {
             log.info("[USER-SERVICE] Production/Non-Dev environment active — skipping mock user seeding.");
             return;
         }
@@ -110,7 +110,7 @@ public class UsuarioService {
                     "Camila Reyes (Soporte Cliente)",
                     "camila.reyes@pedidos360.cl",
                     passwordEncoder.encode("Password123!"),
-                    Rol.REPARTIDOR
+                    Rol.VENDEDOR
             );
             usuarioRepository.save(soporte);
             log.info("[USER-SERVICE] Seeded mock support user: camila.reyes@pedidos360.cl");

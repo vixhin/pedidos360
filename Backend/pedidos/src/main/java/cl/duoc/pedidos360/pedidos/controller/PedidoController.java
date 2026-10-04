@@ -40,16 +40,36 @@ public class PedidoController {
     }
 
     @PutMapping("/{id}/estado")
-    public ResponseEntity<Pedido> actualizarEstado(@PathVariable Long id, @RequestParam String nuevoEstado) {
-        return ResponseEntity.ok(pedidoService.actualizarEstado(id, nuevoEstado));
+    public ResponseEntity<?> actualizarEstado(
+            @PathVariable Long id,
+            @RequestParam String nuevoEstado,
+            @RequestHeader(value = "X-User-Id", required = false) String xUserId,
+            @RequestHeader(value = "X-User-Roles", required = false) String xUserRoles) {
+        try {
+            Long callerUserId = (xUserId != null && !xUserId.isBlank()) ? Long.parseLong(xUserId) : null;
+            return ResponseEntity.ok(pedidoService.actualizarEstado(id, nuevoEstado, callerUserId, xUserRoles));
+        } catch (SecurityException se) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
+                    .body(java.util.Map.of("success", false, "message", se.getMessage()));
+        } catch (IllegalArgumentException ie) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.NOT_FOUND)
+                    .body(java.util.Map.of("success", false, "message", ie.getMessage()));
+        }
     }
 
     @PutMapping("/{id}/repartidor")
-    public ResponseEntity<?> asignarRepartidor(@PathVariable Long id,
-                                                      @RequestParam Long repartidorId,
-                                                      @RequestParam(defaultValue = "Repartidor") String nombreRepartidor) {
+    public ResponseEntity<?> asignarRepartidor(
+            @PathVariable Long id,
+            @RequestParam Long repartidorId,
+            @RequestParam(defaultValue = "Repartidor") String nombreRepartidor,
+            @RequestHeader(value = "X-User-Id", required = false) String xUserId,
+            @RequestHeader(value = "X-User-Roles", required = false) String xUserRoles) {
         try {
-            return ResponseEntity.ok(pedidoService.asignarRepartidor(id, repartidorId, nombreRepartidor));
+            Long effectiveRepartidorId = repartidorId;
+            if (xUserRoles != null && xUserRoles.toUpperCase().contains("REPARTIDOR") && xUserId != null && !xUserId.isBlank()) {
+                effectiveRepartidorId = Long.parseLong(xUserId);
+            }
+            return ResponseEntity.ok(pedidoService.asignarRepartidor(id, effectiveRepartidorId, nombreRepartidor));
         } catch (IllegalStateException ise) {
             return ResponseEntity.status(org.springframework.http.HttpStatus.CONFLICT)
                     .body(java.util.Map.of("success", false, "message", ise.getMessage()));

@@ -69,8 +69,19 @@ public class PedidoService {
 
     @Transactional
     public Pedido actualizarEstado(Long id, String nuevoEstado) {
+        return actualizarEstado(id, nuevoEstado, null, null);
+    }
+
+    @Transactional
+    public Pedido actualizarEstado(Long id, String nuevoEstado, Long callerUserId, String callerRoles) {
         Pedido pedido = pedidoRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Pedido no encontrado con ID: " + id));
+
+        if (callerRoles != null && callerRoles.toUpperCase().contains("REPARTIDOR") && callerUserId != null) {
+            if (pedido.getRepartidorId() == null || !pedido.getRepartidorId().equals(callerUserId)) {
+                throw new SecurityException("Acceso denegado: El repartidor no puede modificar pedidos asignados a otros repartidores.");
+            }
+        }
 
         pedido.setEstado(nuevoEstado);
         Pedido actualizado = pedidoRepository.save(pedido);

@@ -115,18 +115,24 @@ export class ChatService {
       wsUrl = wsUrl.replace(/^http:\/\//, 'ws://');
     }
 
+    const token = this.auth.token();
     const currentUserId = this.auth.user()?.id;
     const currentUserEmail = this.auth.user()?.email;
+
+    const connectHeaders: Record<string, string> = {
+      'X-User-Id': currentUserId ? String(currentUserId) : '',
+      'X-User-Email': currentUserEmail || '',
+    };
+    if (token) {
+      connectHeaders['Authorization'] = `Bearer ${token}`;
+    }
 
     this.stompClient = new Client({
       brokerURL: wsUrl,
       reconnectDelay: 5000,
       heartbeatIncoming: 10000,
       heartbeatOutgoing: 10000,
-      connectHeaders: {
-        'X-User-Id': currentUserId ? String(currentUserId) : '',
-        'X-User-Email': currentUserEmail || '',
-      },
+      connectHeaders,
       onConnect: () => {
         console.log('[ChatService] Conectado exitosamente vía STOMP');
 
