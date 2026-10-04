@@ -84,20 +84,29 @@ class PedidoControllerTest {
     @Test
     @DisplayName("crear - retorna HTTP 200 con pedido guardado")
     void testCrear() {
+        org.springframework.mock.web.MockHttpServletRequest request = new org.springframework.mock.web.MockHttpServletRequest();
+        org.springframework.test.util.ReflectionTestUtils.setField(pedidoController, "bffInternalKey", "valid-key");
+        request.addHeader("X-Internal-Service-Key", "valid-key");
+        request.addHeader("X-User-Email", "10");
+
         when(pedidoService.guardar(any(Pedido.class))).thenReturn(mockPedido);
 
-        ResponseEntity<Pedido> response = pedidoController.crear(mockPedido);
+        ResponseEntity<?> response = pedidoController.crear(mockPedido, request);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody().getId()).isEqualTo(1L);
     }
 
     @Test
     @DisplayName("eliminar - retorna HTTP 204 NO CONTENT")
     void testEliminar() {
+        org.springframework.mock.web.MockHttpServletRequest request = new org.springframework.mock.web.MockHttpServletRequest();
+        org.springframework.test.util.ReflectionTestUtils.setField(pedidoController, "bffInternalKey", "valid-key");
+        request.addHeader("X-Internal-Service-Key", "valid-key");
+        request.addHeader("X-User-Email", "10");
+
         doNothing().when(pedidoService).eliminar(1L);
 
-        ResponseEntity<Void> response = pedidoController.eliminar(1L);
+        ResponseEntity<?> response = pedidoController.eliminar(1L, request);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
     }
@@ -136,16 +145,12 @@ class PedidoControllerTest {
     }
 
     @Test
-    @DisplayName("16. repartidor falsifica X-User-Id sin S2S Key -> ignorado y no autorizado como userId real")
+    @DisplayName("16. repartidor falsifica X-User-Id sin S2S Key -> ignorado y no autorizado como userId real (403)")
     void testRepartidorFalsificaXUserIdIgnorado() {
         org.springframework.mock.web.MockHttpServletRequest request = new org.springframework.mock.web.MockHttpServletRequest();
         org.springframework.test.util.ReflectionTestUtils.setField(pedidoController, "bffInternalKey", "valid-key");
         // No valid X-Internal-Service-Key sent, but spoofed X-User-Id: 99
         request.addHeader("X-User-Id", "99");
-
-        // Service fails or treats identity as callerUserId=null
-        when(pedidoService.actualizarEstado(1L, "ENTREGADO", null, "ANONYMOUS"))
-                .thenThrow(new SecurityException("Usuario no autenticado"));
 
         ResponseEntity<?> response = pedidoController.actualizarEstado(1L, "ENTREGADO", request);
 

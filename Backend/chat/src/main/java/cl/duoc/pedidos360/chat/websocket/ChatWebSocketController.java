@@ -1,27 +1,19 @@
 package cl.duoc.pedidos360.chat.websocket;
 
-import cl.duoc.pedidos360.chat.dto.EnviarMensajeDTO;
-import cl.duoc.pedidos360.chat.dto.MensajeResponseDTO;
-import cl.duoc.pedidos360.chat.service.ChatService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.messaging.handler.annotation.MessageMapping;
-import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Controller;
 
+/**
+ * ChatWebSocketController — Los mensajes de chat son enviados mediante HTTP REST (POST /api/chat/mensaje)
+ * con identidad autenticada. El canal WebSocket/STOMP se utiliza únicamente para suscripciones
+ * y difusión en tiempo real de nuevos mensajes y eventos de cierre.
+ */
 @Controller
 public class ChatWebSocketController {
 
     private static final Logger log = LoggerFactory.getLogger(ChatWebSocketController.class);
-    private final ChatService chatService;
 
-    public ChatWebSocketController(ChatService chatService) {
-        this.chatService = chatService;
-    }
-
-    @MessageMapping("/chat.sendMessage")
-    public MensajeResponseDTO processMessage(@Payload EnviarMensajeDTO dto) {
-        log.info("[CHAT-SERVICE][WEBSOCKET] Received STOMP message for conversacionId={}: {}", dto.getConversacionId(), dto.getContenido());
-        return chatService.enviarMensaje(dto);
+    public ChatWebSocketController() {
     }
 }

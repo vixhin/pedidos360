@@ -57,8 +57,17 @@ public class PedidoController {
     }
 
     @PostMapping
-    public ResponseEntity<Pedido> crear(@RequestBody Pedido pedido) {
-        return ResponseEntity.ok(pedidoService.guardar(pedido));
+    public ResponseEntity<?> crear(@RequestBody Pedido pedido, HttpServletRequest request) {
+        try {
+            UserIdentity identity = resolveIdentity(request);
+            if (pedido.getUsuarioId() == null) {
+                pedido.setUsuarioId(identity.userId);
+            }
+            return ResponseEntity.ok(pedidoService.guardar(pedido));
+        } catch (SecurityException se) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("success", false, "message", se.getMessage()));
+        }
     }
 
     @PutMapping("/{id}/estado")
@@ -97,6 +106,9 @@ public class PedidoController {
             }
 
             return ResponseEntity.ok(pedidoService.asignarRepartidor(id, effectiveRepartidorId, nombreRepartidor));
+        } catch (SecurityException se) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("success", false, "message", se.getMessage()));
         } catch (IllegalStateException ise) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("success", false, "message", ise.getMessage()));
@@ -104,9 +116,15 @@ public class PedidoController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> eliminar(@PathVariable Long id) {
-        pedidoService.eliminar(id);
-        return ResponseEntity.noContent().build();
+    public ResponseEntity<?> eliminar(@PathVariable Long id, HttpServletRequest request) {
+        try {
+            resolveIdentity(request);
+            pedidoService.eliminar(id);
+            return ResponseEntity.noContent().build();
+        } catch (SecurityException se) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("success", false, "message", se.getMessage()));
+        }
     }
 
     private UserIdentity resolveIdentity(HttpServletRequest request) {
@@ -124,6 +142,9 @@ public class PedidoController {
             if (userId == null && xUserId != null && !xUserId.isBlank()) {
                 try { userId = Long.parseLong(xUserId); } catch (NumberFormatException ignored) {}
             }
+            if (userId == null) {
+                throw new SecurityException("Acceso denegado: No se pudo resolver la identidad del usuario desde la clave de servicio interno.");
+            }
             return new UserIdentity(userId, xUserEmail, xUserRoles != null ? xUserRoles : "CLIENTE");
         }
 
@@ -133,11 +154,16 @@ public class PedidoController {
                 String email = jwtUtil.extractEmail(token);
                 String role = jwtUtil.extractRole(token);
                 Long userId = resolveUserIdByEmail(email);
+                if (userId == null) {
+                    throw new SecurityException("Acceso denegado: No se encontró usuario registrado para la cuenta del token.");
+                }
                 return new UserIdentity(userId, email, role != null ? role : "CLIENTE");
+            } else {
+                throw new SecurityException("Token JWT inválido o expirado.");
             }
         }
 
-        return new UserIdentity(null, null, "ANONYMOUS");
+        throw new SecurityException("Acceso denegado: Requiere autenticación JWT válida o clave interna de servicio.");
     }
 
     private Long resolveUserIdByEmail(String emailOrId) {

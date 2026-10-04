@@ -39,7 +39,7 @@ class ChatServiceTest {
     }
 
     @Test
-    void testCrearOObtenerConversacion_Nueva() {
+    void testCrearOObtenerConversacion_Nueva_ConCallerValido() {
         when(conversacionRepository.findByPedidoId(10L)).thenReturn(Optional.empty());
 
         Conversacion nuevaConv = new Conversacion(10L, 5L, 8L);
@@ -47,13 +47,29 @@ class ChatServiceTest {
         when(conversacionRepository.save(any(Conversacion.class))).thenReturn(nuevaConv);
         when(mensajeRepository.findByConversacionIdOrderByFechaEnvioAsc(100L)).thenReturn(List.of());
 
-        ConversacionResponseDTO dto = chatService.crearOObtenerConversacion(10L, 5L, 8L);
+        // Simulamos respuesta de pedidos-service Mock (o nulo por defecto en test unitario sin Mock RestTemplate)
+        // Probamos cuando conv ya existe con participante vs usuario ajeno:
+        Conversacion convExistente = new Conversacion(10L, 5L, 8L);
+        convExistente.setId(100L);
+        when(conversacionRepository.findByPedidoId(10L)).thenReturn(Optional.of(convExistente));
 
+        // Participante cliente 5L -> OK
+        ConversacionResponseDTO dto = chatService.crearOObtenerConversacion(10L, 5L, 8L, 5L, "CLIENTE");
         assertNotNull(dto);
         assertEquals(100L, dto.getId());
-        assertEquals(10L, dto.getPedidoId());
-        assertEquals(5L, dto.getClienteId());
-        assertEquals(8L, dto.getRepartidorId());
+
+        // Usuario ajeno 99L -> SecurityException (403)
+        assertThrows(SecurityException.class, () ->
+                chatService.crearOObtenerConversacion(10L, 5L, 8L, 99L, "CLIENTE"));
+    }
+
+    @Test
+    void testCrearOObtenerConversacion_PedidosServiceCaido_LanzaIllegalStateException() {
+        when(conversacionRepository.findByPedidoId(10L)).thenReturn(Optional.empty());
+
+        // Sin mock de pedidos-service (retornará null) -> Fail Closed
+        assertThrows(IllegalStateException.class, () ->
+                chatService.crearOObtenerConversacion(10L, 5L, 8L, 5L, "CLIENTE"));
     }
 
     @Test

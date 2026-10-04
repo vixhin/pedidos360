@@ -57,21 +57,34 @@ public class ChatService {
 
     @Transactional
     public ConversacionResponseDTO crearOObtenerConversacion(Long pedidoId, Long clienteId, Long repartidorId, Long callerUserId, String callerRole) {
+        if (callerUserId == null) {
+            throw new SecurityException("Acceso denegado: Usuario no autenticado.");
+        }
+
         Optional<Conversacion> existente = conversacionRepository.findByPedidoId(pedidoId);
         Conversacion conv;
         if (existente.isPresent()) {
             conv = existente.get();
+            if (callerRole == null || !callerRole.toUpperCase().contains("ADMIN")) {
+                if (!callerUserId.equals(conv.getClienteId()) && !callerUserId.equals(conv.getRepartidorId())) {
+                    throw new SecurityException("Acceso denegado: El usuario no participa en esta conversación.");
+                }
+            }
         } else {
-            // Validar contra pedidos-service
+            // Validar contra pedidos-service (Fail Closed)
             PedidoDTO pedidoReal = obtenerPedidoPorId(pedidoId);
-            Long realClienteId = (pedidoReal != null && pedidoReal.getUsuarioId() != null) ? pedidoReal.getUsuarioId() : clienteId;
-            Long realRepartidorId = (pedidoReal != null && pedidoReal.getRepartidorId() != null) ? pedidoReal.getRepartidorId() : repartidorId;
-
-            if (realRepartidorId == null) {
-                throw new IllegalStateException("No se puede iniciar el chat: El pedido no tiene repartidor asignado aún.");
+            if (pedidoReal == null) {
+                throw new IllegalStateException("No se pudo validar el pedido con pedidos-service.");
             }
 
-            if (callerUserId != null && (callerRole == null || !callerRole.toUpperCase().contains("ADMIN"))) {
+            Long realClienteId = pedidoReal.getUsuarioId();
+            Long realRepartidorId = pedidoReal.getRepartidorId();
+
+            if (realRepartidorId == null) {
+                throw new IllegalStateException("El pedido aún no tiene repartidor asignado.");
+            }
+
+            if (callerRole == null || !callerRole.toUpperCase().contains("ADMIN")) {
                 if (!callerUserId.equals(realClienteId) && !callerUserId.equals(realRepartidorId)) {
                     throw new SecurityException("Acceso denegado: El usuario autenticado no es participante del pedido.");
                 }
