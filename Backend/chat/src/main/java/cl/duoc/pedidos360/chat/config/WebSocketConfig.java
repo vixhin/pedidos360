@@ -69,27 +69,22 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                 if (accessor != null) {
                     if (StompCommand.CONNECT.equals(accessor.getCommand())) {
                         String authHeader = accessor.getFirstNativeHeader("Authorization");
-                        String userIdHeader = accessor.getFirstNativeHeader("X-User-Id");
-                        String userEmailHeader = accessor.getFirstNativeHeader("X-User-Email");
 
-                        String authenticatedIdentity = null;
-
-                        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-                            String token = authHeader.substring(7);
-                            if (jwtUtil.validateToken(token)) {
-                                authenticatedIdentity = jwtUtil.extractEmail(token);
-                            }
+                        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                            log.warn("[WS-CHAT] Connection rejected: Missing Authorization header.");
+                            throw new IllegalArgumentException("Conexión WebSocket rechazada: Token JWT requerido.");
                         }
 
-                        if (authenticatedIdentity == null && userIdHeader != null && !userIdHeader.isBlank()) {
-                            authenticatedIdentity = userIdHeader;
-                        } else if (authenticatedIdentity == null && userEmailHeader != null && !userEmailHeader.isBlank()) {
-                            authenticatedIdentity = userEmailHeader;
+                        String token = authHeader.substring(7);
+                        if (!jwtUtil.validateToken(token)) {
+                            log.warn("[WS-CHAT] Connection rejected: Invalid or expired JWT token.");
+                            throw new IllegalArgumentException("Conexión WebSocket rechazada: Token JWT inválido o expirado.");
                         }
 
-                        if (authenticatedIdentity == null || "anonymous".equalsIgnoreCase(authenticatedIdentity)) {
-                            log.warn("[WS-CHAT] Connection rejected: No valid JWT token or identity provided.");
-                            throw new IllegalArgumentException("Conexión WebSocket rechazada: Token JWT inválido o ausente.");
+                        String authenticatedIdentity = jwtUtil.extractEmail(token);
+                        if (authenticatedIdentity == null || authenticatedIdentity.isBlank() || "anonymous".equalsIgnoreCase(authenticatedIdentity)) {
+                            log.warn("[WS-CHAT] Connection rejected: Token missing subject identity.");
+                            throw new IllegalArgumentException("Conexión WebSocket rechazada: Token sin identidad de usuario.");
                         }
 
                         final String finalIdentity = authenticatedIdentity;

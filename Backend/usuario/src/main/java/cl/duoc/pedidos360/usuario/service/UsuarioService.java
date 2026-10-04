@@ -245,6 +245,14 @@ public class UsuarioService {
         return UsuarioResponseDTO.fromEntity(usuario);
     }
 
+    @Transactional(readOnly = true)
+    public UsuarioResponseDTO obtenerPorEmail(String email) {
+        log.info("[USER-SERVICE] Fetching user by email={}", email);
+        Usuario usuario = usuarioRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado con email: " + email));
+        return UsuarioResponseDTO.fromEntity(usuario);
+    }
+
     @Transactional
     public UsuarioResponseDTO actualizarUsuario(Long id, UsuarioCreateDTO dto) {
         log.info("[USER-SERVICE] Updating user ID={}", id);

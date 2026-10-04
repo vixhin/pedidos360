@@ -1,9 +1,11 @@
 import { Injectable, signal, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { catchError, Observable, of } from 'rxjs';
+import { catchError, Observable, of, firstValueFrom, from } from 'rxjs';
 import { Client, StompSubscription } from '@stomp/stompjs';
+import { MsalService } from '@azure/msal-angular';
 import { BackendUrlService } from './backend-url.service';
 import { API_CONFIG } from '../config/api.config';
+import { AZURE_AD_CONFIG, isAzureAdConfigured } from '../config/auth.config';
 import { AuthService } from './auth.service';
 
 export interface MensajeChat {
@@ -32,6 +34,7 @@ export class ChatService {
   private readonly http = inject(HttpClient);
   private readonly urls = inject(BackendUrlService);
   private readonly auth = inject(AuthService);
+  private readonly msal = inject(MsalService, { optional: true });
 
   readonly conversacionActiva = signal<ConversacionChat | null>(null);
   readonly mensajes = signal<MensajeChat[]>([]);
@@ -103,9 +106,37 @@ export class ChatService {
   }
 
   /**
+   * Obtiene el token JWT apropiado (local o MSAL silencioso para Microsoft)
+   */
+  private async obtenerWsToken(): Promise<string | null> {
+    const localToken = this.auth.token();
+    if (localToken) return localToken;
+
+    if (this.auth.user()?.provider === 'microsoft' && this.msal && isAzureAdConfigured()) {
+      try {
+        const account = this.msal.instance.getAllAccounts()[0];
+        if (account && AZURE_AD_CONFIG.apiScope) {
+          const result = await firstValueFrom(
+            from(
+              this.msal.instance.acquireTokenSilent({
+                account,
+                scopes: [AZURE_AD_CONFIG.apiScope],
+              })
+            )
+          );
+          return result?.accessToken || null;
+        }
+      } catch (err) {
+        console.warn('[ChatService] No se pudo obtener token MSAL silencioso para WS:', err);
+      }
+    }
+    return null;
+  }
+
+  /**
    * Conecta al WebSocket en tiempo real utilizando la librería oficial @stomp/stompjs
    */
-  private conectarWebSocket(conversacionId: number): void {
+  private async conectarWebSocket(conversacionId: number): Promise<void> {
     this.desconectar();
 
     let wsUrl = API_CONFIG.chatWs;
@@ -115,14 +146,9 @@ export class ChatService {
       wsUrl = wsUrl.replace(/^http:\/\//, 'ws://');
     }
 
-    const token = this.auth.token();
-    const currentUserId = this.auth.user()?.id;
-    const currentUserEmail = this.auth.user()?.email;
+    const token = await this.obtenerWsToken();
 
-    const connectHeaders: Record<string, string> = {
-      'X-User-Id': currentUserId ? String(currentUserId) : '',
-      'X-User-Email': currentUserEmail || '',
-    };
+    const connectHeaders: Record<string, string> = {};
     if (token) {
       connectHeaders['Authorization'] = `Bearer ${token}`;
     }

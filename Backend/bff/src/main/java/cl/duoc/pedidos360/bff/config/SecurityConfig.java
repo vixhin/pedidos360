@@ -126,9 +126,9 @@ public class SecurityConfig {
                 .requestMatchers("/api/bff/analitica/**")
                     .hasRole("ADMIN")
 
-                // ── AUTH / ENTRA SYNC ─────────────────────────────
-                .requestMatchers("/api/bff/auth/entra-sync")
-                    .hasAuthority("SCOPE_access_as_user")
+                // ── CHAT ───────────────────────────────────────────
+                .requestMatchers("/api/bff/chat/**")
+                    .hasAnyAuthority("ROLE_CLIENTE", "ROLE_REPARTIDOR", "ROLE_ADMIN", "SCOPE_access_as_user")
 
                 // Todo lo demás bajo /api/bff/** requiere autenticación
                 .requestMatchers("/api/bff/**")

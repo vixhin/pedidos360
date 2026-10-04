@@ -1,4 +1,4 @@
-package cl.duoc.pedidos360.chat.security;
+package cl.duoc.pedidos360.pedidos.security;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -17,7 +17,7 @@ public class ServiceKeyFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(ServiceKeyFilter.class);
 
-    @Value("${bff.internal-key:${BFF_INTERNAL_KEY:}}")
+    @Value("${bff.internal-key:${BFF_INTERNAL_KEY:pedidos360-internal-secret-key-local-2026}}")
     private String bffInternalKey;
 
     private final JwtUtil jwtUtil;
@@ -32,8 +32,8 @@ public class ServiceKeyFilter extends OncePerRequestFilter {
 
         String path = request.getRequestURI();
 
-        // Skip filter for OPTIONS preflight, health checks, or websocket handshake
-        if ("OPTIONS".equalsIgnoreCase(request.getMethod()) || path.startsWith("/health") || path.startsWith("/ws-chat")) {
+        // Allow preflight, health checks, actuator
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod()) || path.startsWith("/health") || path.startsWith("/actuator")) {
             filterChain.doFilter(request, response);
             return;
         }
@@ -44,7 +44,7 @@ public class ServiceKeyFilter extends OncePerRequestFilter {
         if (bffInternalKey != null && !bffInternalKey.isBlank()) {
             if (serviceKey != null && !serviceKey.isBlank()) {
                 if (!bffInternalKey.equals(serviceKey)) {
-                    log.warn("[CHAT-SECURITY] Invalid S2S key provided for path={}", path);
+                    log.warn("[PEDIDOS-SECURITY] Invalid S2S key provided for path={}", path);
                     response.setStatus(HttpServletResponse.SC_FORBIDDEN);
                     response.setContentType("application/json");
                     response.getWriter().write("{\"success\":false,\"message\":\"Acceso denegado: Clave interna de servicio inválida.\"}");
@@ -52,7 +52,7 @@ public class ServiceKeyFilter extends OncePerRequestFilter {
                 }
             } else {
                 if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-                    log.warn("[CHAT-SECURITY] Missing internal S2S key and missing JWT auth for path={}", path);
+                    log.warn("[PEDIDOS-SECURITY] Missing internal S2S key and missing JWT auth for path={}", path);
                     response.setStatus(HttpServletResponse.SC_FORBIDDEN);
                     response.setContentType("application/json");
                     response.getWriter().write("{\"success\":false,\"message\":\"Acceso denegado: Requiere autenticación JWT o clave interna de servicio.\"}");
@@ -61,7 +61,7 @@ public class ServiceKeyFilter extends OncePerRequestFilter {
 
                 String token = authHeader.substring(7);
                 if (!jwtUtil.validateToken(token)) {
-                    log.warn("[CHAT-SECURITY] Invalid or expired JWT token for path={}", path);
+                    log.warn("[PEDIDOS-SECURITY] Invalid or expired JWT token for path={}", path);
                     response.setStatus(HttpServletResponse.SC_FORBIDDEN);
                     response.setContentType("application/json");
                     response.getWriter().write("{\"success\":false,\"message\":\"Acceso denegado: Token JWT inválido o expirado.\"}");

@@ -9,9 +9,15 @@ import cl.duoc.pedidos360.chat.repository.MensajeRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -26,6 +32,13 @@ public class ChatService {
     private final MensajeRepository mensajeRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final RabbitTemplate rabbitTemplate;
+    private final RestTemplate restTemplate = new RestTemplate();
+
+    @Value("${services.pedidos-url:${PEDIDOS_SERVICE_URL:http://localhost:8082}}")
+    private String pedidosServiceUrl;
+
+    @Value("${bff.internal-key:${BFF_INTERNAL_KEY:pedidos360-internal-secret-key-local-2026}}")
+    private String bffInternalKey;
 
     public ChatService(ConversacionRepository conversacionRepository,
                        MensajeRepository mensajeRepository,
@@ -39,24 +52,43 @@ public class ChatService {
 
     @Transactional
     public ConversacionResponseDTO crearOObtenerConversacion(Long pedidoId, Long clienteId, Long repartidorId) {
+        return crearOObtenerConversacion(pedidoId, clienteId, repartidorId, null, null);
+    }
+
+    @Transactional
+    public ConversacionResponseDTO crearOObtenerConversacion(Long pedidoId, Long clienteId, Long repartidorId, Long callerUserId, String callerRole) {
         Optional<Conversacion> existente = conversacionRepository.findByPedidoId(pedidoId);
         Conversacion conv;
         if (existente.isPresent()) {
             conv = existente.get();
         } else {
-            conv = new Conversacion(pedidoId, clienteId, repartidorId);
+            // Validar contra pedidos-service
+            PedidoDTO pedidoReal = obtenerPedidoPorId(pedidoId);
+            Long realClienteId = (pedidoReal != null && pedidoReal.getUsuarioId() != null) ? pedidoReal.getUsuarioId() : clienteId;
+            Long realRepartidorId = (pedidoReal != null && pedidoReal.getRepartidorId() != null) ? pedidoReal.getRepartidorId() : repartidorId;
+
+            if (realRepartidorId == null) {
+                throw new IllegalStateException("No se puede iniciar el chat: El pedido no tiene repartidor asignado aún.");
+            }
+
+            if (callerUserId != null && (callerRole == null || !callerRole.toUpperCase().contains("ADMIN"))) {
+                if (!callerUserId.equals(realClienteId) && !callerUserId.equals(realRepartidorId)) {
+                    throw new SecurityException("Acceso denegado: El usuario autenticado no es participante del pedido.");
+                }
+            }
+
+            conv = new Conversacion(pedidoId, realClienteId, realRepartidorId);
             conv = conversacionRepository.save(conv);
             log.info("[CHAT-SERVICE] Chat conversation created for order ID={}, clienteId={}, repartidorId={}",
-                    pedidoId, clienteId, repartidorId);
+                    pedidoId, realClienteId, realRepartidorId);
 
-            // Publicar evento chat.creado en RabbitMQ
             try {
                 Map<String, Object> event = new HashMap<>();
                 event.put("eventId", UUID.randomUUID().toString());
                 event.put("conversacionId", conv.getId());
                 event.put("pedidoId", pedidoId);
-                event.put("clienteId", clienteId);
-                event.put("repartidorId", repartidorId);
+                event.put("clienteId", realClienteId);
+                event.put("repartidorId", realRepartidorId);
                 event.put("timestamp", LocalDateTime.now().toString());
 
                 rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE_EVENTS, RabbitMQConfig.ROUTING_KEY_CHAT_CREADO, event);
@@ -92,6 +124,11 @@ public class ChatService {
 
     @Transactional
     public MensajeResponseDTO enviarMensaje(EnviarMensajeDTO dto) {
+        return enviarMensaje(dto, null, null);
+    }
+
+    @Transactional
+    public MensajeResponseDTO enviarMensaje(EnviarMensajeDTO dto, Long callerUserId, String callerRole) {
         if (dto.getContenido() == null || dto.getContenido().trim().isEmpty()) {
             throw new IllegalArgumentException("El mensaje no puede estar vacío.");
         }
@@ -106,30 +143,38 @@ public class ChatService {
             throw new IllegalStateException("Esta conversación fue cerrada porque el pedido fue entregado.");
         }
 
-        validarParticipante(conv, dto.getRemitenteId());
+        // Determinar remitente autenticado de forma confiable
+        Long effectiveRemitenteId = dto.getRemitenteId();
+        if (callerUserId != null && (callerRole == null || !callerRole.toUpperCase().contains("ADMIN"))) {
+            effectiveRemitenteId = callerUserId;
+        }
 
-        String tipoRemitenteDerivado = dto.getRemitenteId().equals(conv.getClienteId()) ? "CLIENTE" : "REPARTIDOR";
+        if (effectiveRemitenteId == null) {
+            effectiveRemitenteId = dto.getRemitenteId();
+        }
 
-        Mensaje msg = new Mensaje(conv.getId(), dto.getRemitenteId(), tipoRemitenteDerivado, dto.getContenido().trim());
+        validarParticipante(conv, effectiveRemitenteId);
+
+        String tipoRemitenteDerivado = effectiveRemitenteId.equals(conv.getClienteId()) ? "CLIENTE" : "REPARTIDOR";
+
+        Mensaje msg = new Mensaje(conv.getId(), effectiveRemitenteId, tipoRemitenteDerivado, dto.getContenido().trim());
         msg = mensajeRepository.save(msg);
 
         MensajeResponseDTO responseDTO = mapMensajeDTO(msg);
 
-        // Transmitir vía WebSocket en tiempo real al tópico del chat
         try {
             messagingTemplate.convertAndSend("/topic/chat/" + conv.getId(), responseDTO);
         } catch (Exception e) {
             log.warn("[CHAT-SERVICE] Failed to broadcast WS message: {}", e.getMessage());
         }
 
-        // Publicar evento chat.mensaje.enviado a RabbitMQ
         try {
             Map<String, Object> event = new HashMap<>();
             event.put("eventId", UUID.randomUUID().toString());
             event.put("mensajeId", msg.getId());
             event.put("conversacionId", conv.getId());
             event.put("pedidoId", conv.getPedidoId());
-            event.put("remitenteId", dto.getRemitenteId());
+            event.put("remitenteId", effectiveRemitenteId);
             event.put("tipoRemitente", tipoRemitenteDerivado);
             event.put("contenido", dto.getContenido());
             event.put("timestamp", LocalDateTime.now().toString());
@@ -153,7 +198,6 @@ public class ChatService {
             conversacionRepository.save(conv);
             log.info("[CHAT-SERVICE] Conversation ID={} closed automatically due to order delivery.", conv.getId());
 
-            // Avisar por WebSocket
             try {
                 Map<String, Object> statusMsg = Map.of(
                         "tipo", "CHAT_CERRADO",
@@ -187,8 +231,22 @@ public class ChatService {
     }
 
     private void validarParticipante(Conversacion conv, Long usuarioId) {
-        if (!usuarioId.equals(conv.getClienteId()) && !usuarioId.equals(conv.getRepartidorId())) {
+        if (usuarioId == null || (!usuarioId.equals(conv.getClienteId()) && !usuarioId.equals(conv.getRepartidorId()))) {
             throw new SecurityException("Acceso denegado: El usuario no es participante del pedido.");
+        }
+    }
+
+    private PedidoDTO obtenerPedidoPorId(Long pedidoId) {
+        try {
+            String url = pedidosServiceUrl + "/api/pedidos/" + pedidoId;
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("X-Internal-Service-Key", bffInternalKey);
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            ResponseEntity<PedidoDTO> response = restTemplate.exchange(url, HttpMethod.GET, entity, PedidoDTO.class);
+            return response.getBody();
+        } catch (Exception e) {
+            log.warn("[CHAT-SERVICE] Could not fetch order ID={} from pedidos-service: {}", pedidoId, e.getMessage());
+            return null;
         }
     }
 
