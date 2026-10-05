@@ -1,0 +1,106 @@
+name: Pedidos360 CI Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  backend-tests:
+    name: Backend Microservices Unit & Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Test usuario-service
+        run: cd Backend/usuario && ./mvnw test
+
+      - name: Test pedidos-service
+        run: cd Backend/pedidos && ./mvnw test
+
+      - name: Test carrito-service
+        run: cd Backend/carrito && ./mvnw test
+
+      - name: Test analitica-service
+        run: cd Backend/analitica && ./mvnw test
+
+      - name: Test productos-service
+        run: cd Backend/productos && ./mvnw test
+
+      - name: Test notificacion-service
+        run: cd Backend/notificacion && ./mvnw test
+
+      - name: Test chat-service
+        run: cd Backend/chat && ./mvnw test
+
+      - name: Test bff-service
+        run: cd Backend/bff && ./mvnw test
+
+  frontend-build:
+    name: Frontend Angular Build & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: pedidos360-frontend/package-lock.json
+
+      - name: Install Frontend Dependencies
+        run: cd pedidos360-frontend && npm ci
+
+      - name: Build Frontend Production Bundle
+        run: cd pedidos360-frontend && npm run build
+
+  terraform-check:
+    name: Terraform Quality & Validation Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.7.0'
+
+      - name: Check Terraform Formatting
+        run: terraform fmt -check -recursive terraform/
+
+      - name: Validate Dev Environment
+        run: |
+          cd terraform/environments/dev
+          terraform init -backend=false
+          terraform validate
+
+      - name: Validate Prod Environment
+        run: |
+          cd terraform/environments/prod
+          terraform init -backend=false
+          terraform validate
+
+  docker-config-check:
+    name: Docker Compose Syntax Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Validate Local Docker Compose
+        run: docker compose -f Backend/docker-compose.yml config
+
+      - name: Validate EC2 Overlay Docker Compose
+        run: docker compose -f Backend/docker-compose.yml -f Backend/docker-compose.ec2.yml config

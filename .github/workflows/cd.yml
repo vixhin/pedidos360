@@ -1,0 +1,58 @@
+name: Pedidos360 Deployment (AWS / Docker)
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target Environment (dev / prod)'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - prod
+      action:
+        description: 'Action to perform'
+        required: true
+        default: 'plan'
+        type: choice
+        options:
+          - plan
+          - apply
+
+jobs:
+  terraform-deploy:
+    name: Terraform Provisioning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials (AWS Academy Compatible)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.7.0'
+
+      - name: Terraform Init
+        run: |
+          cd terraform/environments/${{ github.event.inputs.environment }}
+          terraform init
+
+      - name: Terraform Plan
+        run: |
+          cd terraform/environments/${{ github.event.inputs.environment }}
+          terraform plan -out=tfplan
+
+      - name: Terraform Apply (Manual Approval Only)
+        if: ${{ github.event.inputs.action == 'apply' }}
+        run: |
+          cd terraform/environments/${{ github.event.inputs.environment }}
+          terraform apply -auto-approve tfplan

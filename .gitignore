@@ -22,3 +22,13 @@ node_modules/
 playwright-report/
 playwright-report-ec2/
 test-results/
+
+# Terraform
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfvars
+!.tfvars.example
+.terraform/
+.terraform.lock.hcl
