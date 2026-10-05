@@ -1,9 +1,14 @@
 output "vpc_id" {
-  value       = data.aws_vpc.default.id
-  description = "ID of the target VPC"
+  value       = aws_vpc.main.id
+  description = "ID of the created VPC"
+}
+
+output "subnet_id" {
+  value       = aws_subnet.public.id
+  description = "ID of the created public subnet"
 }
 
 output "subnet_ids" {
-  value       = data.aws_subnets.default.ids
+  value       = [aws_subnet.public.id]
   description = "List of public subnet IDs in the VPC"
 }

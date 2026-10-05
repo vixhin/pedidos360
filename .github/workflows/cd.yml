@@ -1,4 +1,4 @@
-name: Pedidos360 Deployment (AWS / Docker)
+name: Pedidos360 Terraform Plan
 
 on:
   workflow_dispatch:
@@ -11,18 +11,10 @@ on:
         options:
           - dev
           - prod
-      action:
-        description: 'Action to perform'
-        required: true
-        default: 'plan'
-        type: choice
-        options:
-          - plan
-          - apply
 
 jobs:
-  terraform-deploy:
-    name: Terraform Provisioning
+  terraform-plan:
+    name: Terraform Plan Execution (Local State Mode)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -46,13 +38,22 @@ jobs:
           cd terraform/environments/${{ github.event.inputs.environment }}
           terraform init
 
-      - name: Terraform Plan
+      - name: Terraform Validate
         run: |
           cd terraform/environments/${{ github.event.inputs.environment }}
-          terraform plan -out=tfplan
+          terraform validate
 
-      - name: Terraform Apply (Manual Approval Only)
-        if: ${{ github.event.inputs.action == 'apply' }}
+      - name: Terraform Plan
+        env:
+          TF_VAR_allowed_ssh_cidr: ${{ secrets.ALLOWED_SSH_CIDR || '190.0.0.1/32' }}
         run: |
           cd terraform/environments/${{ github.event.inputs.environment }}
-          terraform apply -auto-approve tfplan
+          terraform plan
+
+      - name: State Notice
+        run: |
+          echo "=========================================================================="
+          echo "NOTE: Terraform state is currently local (terraform.tfstate)."
+          echo "terraform apply and terraform destroy are disabled in GitHub Actions."
+          echo "Run apply locally from the developer workstation where state is maintained."
+          echo "=========================================================================="

@@ -29,6 +29,5 @@ test-results/
 crash.log
 crash.*.log
 *.tfvars
-!.tfvars.example
+!*.tfvars.example
 .terraform/
-.terraform.lock.hcl

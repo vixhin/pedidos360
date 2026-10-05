@@ -6,8 +6,8 @@ variable "aws_region" {
 
 variable "ami_id" {
   type        = string
-  description = "AMI ID for Ubuntu 22.04 LTS"
-  default     = "ami-0c7217cdde317cfec"
+  description = "AMI ID for Ubuntu 22.04 LTS. If empty, automatically resolves the latest official Ubuntu 22.04 LTS AMI."
+  default     = ""
 }
 
 variable "instance_type" {
@@ -24,8 +24,7 @@ variable "key_name" {
 
 variable "allowed_ssh_cidr" {
   type        = string
-  description = "Restricted CIDR block allowed for SSH access"
-  default     = "190.0.0.1/32"
+  description = "Required CIDR block allowed for SSH access (e.g. 190.x.x.x/32). Must be specified explicitly."
 }
 
 variable "environment" {

@@ -1,6 +1,7 @@
 variable "ami_id" {
   type        = string
-  description = "AMI ID for the EC2 instance (Ubuntu 22.04 LTS or compatible)"
+  description = "AMI ID for Ubuntu 22.04 LTS or compatible Linux. If empty, the latest official Ubuntu 22.04 LTS AMI is resolved automatically."
+  default     = ""
 }
 
 variable "instance_type" {

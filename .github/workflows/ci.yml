@@ -21,6 +21,9 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
 
+      - name: Enable Maven wrappers
+        run: find Backend -name mvnw -type f -exec chmod +x {} \;
+
       - name: Test usuario-service
         run: cd Backend/usuario && ./mvnw test
 

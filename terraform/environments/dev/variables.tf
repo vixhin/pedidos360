@@ -6,13 +6,13 @@ variable "aws_region" {
 
 variable "ami_id" {
   type        = string
-  description = "AMI ID for Ubuntu 22.04 LTS"
-  default     = "ami-0c7217cdde317cfec" # Example Ubuntu 22.04 LTS us-east-1
+  description = "AMI ID for Ubuntu 22.04 LTS. If empty, automatically resolves the latest official Ubuntu 22.04 LTS AMI."
+  default     = ""
 }
 
 variable "instance_type" {
   type        = string
-  description = "EC2 instance type"
+  description = "EC2 instance type (e.g. t3.medium or t2.micro depending on AWS Academy permissions)"
   default     = "t3.medium"
 }
 
@@ -24,8 +24,7 @@ variable "key_name" {
 
 variable "allowed_ssh_cidr" {
   type        = string
-  description = "CIDR block allowed for SSH access"
-  default     = "0.0.0.0/0"
+  description = "Required CIDR block allowed for SSH access (e.g. 190.x.x.x/32). Must be specified explicitly."
 }
 
 variable "environment" {
