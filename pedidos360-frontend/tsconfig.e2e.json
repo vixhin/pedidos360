@@ -9,6 +9,7 @@
   },
   "include": [
     "playwright.config.ts",
+    "playwright.config.ec2.ts",
     "e2e/**/*.ts"
   ]
 }

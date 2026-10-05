@@ -8,3 +8,15 @@ variable "environment" {
   description = "Environment name (dev, prod)"
   default     = "dev"
 }
+
+variable "throttling_burst_limit" {
+  type        = number
+  description = "Maximum burst limit for API Gateway requests"
+  default     = 200
+}
+
+variable "throttling_rate_limit" {
+  type        = number
+  description = "Maximum steady-state rate limit for API Gateway requests per second"
+  default     = 100
+}

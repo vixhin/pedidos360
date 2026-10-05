@@ -1,19 +1,22 @@
-# Overlay para desplegar en EC2 con HTTPS (nip.io/sslip.io + Caddy).
+# Overlay para desplegar en EC2 con HTTPS (sslip.io + Caddy).
 #
-# Uso (desde la carpeta Backend/, con PUBLIC_URL y PUBLIC_DOMAIN exportados
-# o en un archivo .env):
-#   docker compose -f docker-compose.yml -f docker-compose.ec2.yml up -d --build
+# Uso (desde la carpeta Backend/, con PUBLIC_URL y PUBLIC_DOMAIN en .env.production):
+#   docker compose -f docker-compose.yml -f docker-compose.ec2.yml --env-file .env.production up -d --build
 #
-# Variables requeridas:
-#   PUBLIC_DOMAIN = 34-207-191-208.nip.io          (sin esquema)
-#   PUBLIC_URL    = https://34-207-191-208.nip.io  (con esquema)
+# Variables requeridas en .env.production:
+#   PUBLIC_DOMAIN = 3-92-44-37.sslip.io        (sin esquema)
+#   PUBLIC_URL    = https://3-92-44-37.sslip.io  (con esquema)
+
+version: '3.8'
 
 services:
+  # ─── FRONTEND & REVERSE PROXY (ÚNICOS PUERTOS PÚBLICOS EXPUESTOS AL HOST) ──
   frontend:
     build:
       context: ../pedidos360-frontend
       args:
         PUBLIC_URL: ${PUBLIC_URL}
+        BFF_PUBLIC_URL: ${BFF_PUBLIC_URL:-}
     container_name: pedidos360-frontend
     restart: unless-stopped
     depends_on:
@@ -36,46 +39,68 @@ services:
       - frontend
       - bff
 
+  # ─── MICROSERVICIOS E INFRAESTRUCTURA (PUERTOS PRIVADOS RESETEADOS) ───────
+  postgres:
+    ports: !reset []
+
+  pgadmin:
+    ports: !reset []
+
+  rabbitmq:
+    ports: !reset []
+
   bff:
+    ports: !reset []
     environment:
       SPRING_PROFILES_ACTIVE: prod
       FRONTEND_ORIGIN: ${PUBLIC_URL}
+      BFF_INTERNAL_KEY: ${BFF_INTERNAL_KEY}
 
   usuario:
+    ports: !reset []
     environment:
       SPRING_PROFILES_ACTIVE: prod
       FRONTEND_ORIGIN: ${PUBLIC_URL}
+      BFF_INTERNAL_KEY: ${BFF_INTERNAL_KEY}
+      JWT_SECRET: ${JWT_SECRET}
 
   productos:
+    ports: !reset []
     environment:
       SPRING_PROFILES_ACTIVE: prod
       FRONTEND_ORIGIN: ${PUBLIC_URL}
 
   pedidos:
+    ports: !reset []
     environment:
       SPRING_PROFILES_ACTIVE: prod
       FRONTEND_ORIGIN: ${PUBLIC_URL}
 
   carrito:
+    ports: !reset []
     environment:
       SPRING_PROFILES_ACTIVE: prod
       FRONTEND_ORIGIN: ${PUBLIC_URL}
 
   notificacion:
+    ports: !reset []
     environment:
       SPRING_PROFILES_ACTIVE: prod
       FRONTEND_ORIGIN: ${PUBLIC_URL}
 
   analitica:
+    ports: !reset []
     environment:
       SPRING_PROFILES_ACTIVE: prod
       FRONTEND_ORIGIN: ${PUBLIC_URL}
 
   chat:
+    ports: !reset []
     environment:
       SPRING_PROFILES_ACTIVE: prod
       FRONTEND_ORIGIN: ${PUBLIC_URL}
       BFF_INTERNAL_KEY: ${BFF_INTERNAL_KEY}
+      JWT_SECRET: ${JWT_SECRET}
       DB_USER: ${POSTGRES_USER:-postgres}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       RABBITMQ_USER: ${RABBITMQ_USER:-guest}
@@ -84,4 +109,3 @@ services:
 volumes:
   caddy_data:
   caddy_config:
-

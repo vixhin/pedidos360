@@ -1,16 +1,15 @@
 /**
  * Environment de PRODUCCIÓN (build con `ng build --configuration production`).
  *
- * __PUBLIC_URL__ es un marcador que el Dockerfile del frontend reemplaza en
- * tiempo de build por la URL pública real (build-arg PUBLIC_URL), p.ej.
- * https://34-207-191-208.nip.io
- *
- * Caddy enruta en esa URL:
- *   /api/bff/*  → BFF (8090)
- *   /api/*      → microservicios (auth/usuario→8081, carrito→8083, etc.)
- *   resto       → este frontend (nginx)
+ * __PUBLIC_URL__ y __BFF_PUBLIC_URL__ son marcadores reemplazados en tiempo de build
+ * por el Dockerfile del frontend (build-args PUBLIC_URL y BFF_PUBLIC_URL).
  */
 const PUBLIC_URL = '__PUBLIC_URL__';
+const RAW_BFF_URL = '__BFF_PUBLIC_URL__';
+
+const BFF_PUBLIC_URL = (RAW_BFF_URL && RAW_BFF_URL !== '__BFF_PUBLIC_URL__')
+  ? RAW_BFF_URL
+  : `${PUBLIC_URL}/api/bff`;
 
 export const environment = {
   production: true,
@@ -32,7 +31,7 @@ export const environment = {
   },
 
   api: {
-    bff: `${PUBLIC_URL}/api/bff`,
+    bff: BFF_PUBLIC_URL,
     usuario: `${PUBLIC_URL}/api`,
     productos: `${PUBLIC_URL}/api`,
     pedidos: `${PUBLIC_URL}/api`,

@@ -54,12 +54,12 @@ terraform/
     ├── security_group/       # Reglas de SG (HTTP 80, HTTPS 443, SSH 22 restringido)
     ├── ec2/                  # Instancia EC2 Linux (Ubuntu + Docker Engine)
     ├── elastic_ip/           # Elastic IP estática
-    └── api_gateway/          # HTTP API Gateway v2 (Proxy ANY /api/bff/*)
+    └── api_gateway/          # HTTP API Gateway v2 (Proxy ANY /api/bff/*, CORS & Throttling)
 ```
 
 ---
 
-## 🛠️ Comandos de Ejecución (Desarrollo & Producción)
+## 🛠️ Comandos de Aprovisionamiento (Terraform)
 
 ### Entorno de Desarrollo (`dev`)
 
@@ -100,32 +100,81 @@ terraform apply
 
 ---
 
+## 🚀 ETAPA 2 — Proceso de Despliegue en EC2 (Deployment)
+
+Una vez completado `terraform apply`, ejecute el script automatizado e idempotente de despliegue:
+
+### En Linux / macOS / Bash:
+```bash
+./scripts/deploy-ec2.sh dev ~/.ssh/pedidos360-dev-key.pem
+```
+
+### En Windows PowerShell:
+```powershell
+.\scripts\deploy-ec2.ps1 -Environment dev -SshKeyPath "C:\Users\tu-usuario\.ssh\pedidos360-dev-key.pem"
+```
+
+### Pasos Internos del Script de Despliegue:
+1. Lee `public_ip` y `public_dns` desde `terraform output`.
+2. Genera dinámicamente `PUBLIC_DOMAIN` (ej. `3-92-44-37.sslip.io`) y `PUBLIC_URL` (`https://3-92-44-37.sslip.io`).
+3. Resuelve el endpoint de API Gateway (`BFF_PUBLIC_URL`).
+4. Se conecta vía SSH a la EC2 e instala/actualiza el código en `/opt/pedidos360/app`.
+5. Genera el archivo `/opt/pedidos360/app/Backend/.env.production`.
+6. Levanta los contenedores aislados usando Docker Compose:
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.ec2.yml --env-file .env.production up -d --build
+   ```
+7. Verifica que Caddy obtenga el certificado HTTPS y que la aplicación responda.
+
+---
+
+## 🔐 Configuración de Microsoft Entra ID (Azure AD)
+
+Tras desplegar en AWS, registre la URL pública generada en el portal de Azure AD:
+
+- **Redirect URI (SPA):** `https://3-92-44-37.sslip.io`
+- **Post-Logout Redirect URI:** `https://3-92-44-37.sslip.io`
+
+---
+
+## 🔄 Redeploy & Rollback
+
+### Re-desplegar última versión:
+```bash
+./scripts/deploy-ec2.sh dev
+```
+
+### Rollback a un commit anterior:
+```bash
+ssh -i ~/.ssh/pedidos360-dev-key.pem ubuntu@<PUBLIC_IP>
+cd /opt/pedidos360/app
+git checkout <COMMIT_SHA_ANTERIOR>
+cd Backend
+docker compose -f docker-compose.yml -f docker-compose.ec2.yml --env-file .env.production up -d --build
+```
+
+---
+
 ## 💾 Gestión de Estado (Terraform State)
 
 - Cada entorno (`dev` y `prod`) posee su propio archivo de estado local **`terraform.tfstate`**.
 - Los archivos `*.tfstate` y `terraform.tfvars` están incluidos en `.gitignore` y **NUNCA** deben subirse al repositorio Git.
 - **Importante:** Mientras el estado sea local, los comandos `terraform apply` y `terraform destroy` deben ejecutarse únicamente desde la máquina del desarrollador donde reside el archivo `terraform.tfstate`.
 
-> **Mejora Futura:** Migración de estado a un Backend Remoto (Bucket S3 + Tabla DynamoDB para State Locking).
-
 ---
 
 ## 🛑 Detener EC2 vs Destruir Infraestructura (`stop` vs `destroy`)
-
-Para administrar eficientemente los créditos en **AWS Academy**:
 
 ### 1. Apagar Temporalmente la Instancia (`stop`)
 Apaga la máquina virtual sin destruir la VPC, Security Group ni la Elastic IP. **La IP pública se mantiene estable al volver a iniciar.**
 
 ```bash
-# Obtener ID de instancia o usar tag
 AWS_INSTANCE_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=pedidos360-ec2-dev" --query "Reservations[*].Instances[*].InstanceId" --output text)
 
-# Apagar instancia
 aws ec2 stop-instances --instance-ids $AWS_INSTANCE_ID
 aws ec2 wait instance-stopped --instance-ids $AWS_INSTANCE_ID
 
-# Volver a iniciar instancia
+# Re-iniciar
 aws ec2 start-instances --instance-ids $AWS_INSTANCE_ID
 aws ec2 wait instance-running --instance-ids $AWS_INSTANCE_ID
 ```
@@ -138,9 +187,4 @@ cd terraform/environments/dev
 terraform destroy
 ```
 
----
-
-## 🏗️ Desacoplamiento: Infraestructura vs Despliegue de Aplicación
-
-- **Terraform:** Responsable **únicamente** de aprovisionar la infraestructura AWS (VPC, Subnet, IGW, Security Group, EC2, Elastic IP, API Gateway).
-- **Docker Compose:** Responsable de compilar y desplegar los contenedores de la aplicación (Angular, Caddy, BFF, 7 Microservicios Spring Boot, PostgreSQL y RabbitMQ) dentro de la EC2.
+> **Advertencia:** Al ejecutar `terraform destroy` se elimina la instancia EC2 y los datos almacenados en su disco EBS local.

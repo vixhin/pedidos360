@@ -1,7 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
 
-// Config temporal para EV-CN (ISY1102): corre los mismos specs de e2e/ contra
-// el sitio real ya desplegado en EC2, sin depender de levantar el stack local.
 export default defineConfig({
   testDir: './e2e',
   timeout: 30000,
@@ -13,7 +11,7 @@ export default defineConfig({
   workers: 1,
   reporter: [['list'], ['html', { outputFolder: 'playwright-report-ec2', open: 'never' }]],
   use: {
-    baseURL: 'https://3-92-44-37.sslip.io',
+    baseURL: process.env['PLAYWRIGHT_BASE_URL'] || 'https://localhost',
     trace: 'on-first-retry',
     screenshot: 'on',
     video: 'on-first-retry',
