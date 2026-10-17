@@ -1,6 +1,8 @@
 # 🚀 Guía Completa de Microservicios Backend - Pedidos360
 
-Esta documentación contiene el **paso a paso detallado** para levantar la infraestructura con **Docker/PostgreSQL/pgAdmin**, ejecutar los microservicios y consumir la API REST de cada uno de los 6 microservicios con **JWT** y ejemplos de **JSON copy-pasteable**.
+Esta documentación contiene el **paso a paso detallado** para levantar la infraestructura con **Docker/PostgreSQL/pgAdmin/RabbitMQ**, ejecutar los microservicios y consumir la API REST de cada uno con **JWT** y ejemplos de **JSON copy-pasteable**.
+
+> ℹ️ **Alcance de esta guía:** los ejemplos de las secciones de `pedidos`, `carrito`, `analitica`, `productos` y `notificacion` corresponden a la primera versión de la API y **omiten el encabezado `Authorization: Bearer <token>`** (obtén el token con el login de la sección 1). Hoy esos endpoints exigen autenticación y aplican reglas por rol, y los cuerpos pueden haber cambiado; ante una diferencia manda el código del controlador. Los servicios `chat` (`:8091`) y `bff` (`:8090`) están descritos en el [README raíz](../README.md#-funcionamiento-interno-por-componente) y en [`bff/README.md`](bff/README.md).
 
 ---
 
@@ -29,18 +31,20 @@ Esta documentación contiene el **paso a paso detallado** para levantar la infra
 | **`analitica`** | `8084` | `analitica_db` | `analitica_eventos` | Requerida / Endpoint REST |
 | **`productos`** | `8085` | `productos_db` | `productos` | Requerida / Endpoint REST |
 | **`notificacion`** | `8086` | `notificacion_db` | `notificaciones` | Requerida / Endpoint REST |
+| **`chat`** | `8091` | `chat_db` | `chat_conversacion`, `chat_mensaje` | JWT (REST y STOMP `/ws-chat`) |
+| **`bff`** | `8090` | — | — | JWT de Microsoft Entra ID |
 
 ---
 
 ## Paso 1: Levantar la Base de Datos y pgAdmin
 
-Abre una terminal en la carpeta `Backend/` y ejecuta:
+Abre una terminal en la carpeta `Backend/` y ejecuta solo la infraestructura:
 
 ```bash
-docker compose up -d
+docker compose up -d postgres pgadmin rabbitmq
 ```
 
-Esto levantará los contenedores de **PostgreSQL (Puerto 5432)** y **pgAdmin 4 (Puerto 5050)**.
+Esto levantará **PostgreSQL (Puerto 5432)**, **pgAdmin 4 (Puerto 5050)** y **RabbitMQ (5672 / panel en 15672)**. Si prefieres levantar *todo* el stack (infraestructura + los microservicios y el BFF en contenedores), usa `docker compose up --build -d`.
 
 ---
 
@@ -61,7 +65,7 @@ Esto levantará los contenedores de **PostgreSQL (Puerto 5432)** y **pgAdmin 4 (
      - **Password**: `postgres`
    - Marca **Save password?** y haz clic en **Save**.
 
-¡Verás creadas automáticamente las 6 bases de datos (`usuario_db`, `pedidos_db`, `carrito_db`, `analitica_db`, `productos_db`, `notificacion_db`)!
+¡Verás creadas automáticamente las 7 bases de datos (`usuario_db`, `pedidos_db`, `carrito_db`, `analitica_db`, `productos_db`, `notificacion_db`, `chat_db`)!
 
 ---
 
@@ -96,7 +100,7 @@ cd Backend/usuario
 ```json
 {
   "email": "admin@pedidos360.cl",
-  "password": "chupalovixo"
+  "password": "Password123!"
 }
 ```
 - **Respuesta (`200 OK`)**: Te entregará el `token`. Copia ese token.
