@@ -42,7 +42,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register", "/api/auth/forgot-password").permitAll()
                 .requestMatchers("/api/internal/**", "/health", "/ready", "/api/usuario/health", "/actuator/**", "/h2-console/**").permitAll()
-                .requestMatchers("/api/usuario/admin/**").hasRole("ADMIN")
+                .requestMatchers("/api/usuario/admin/**", "/api/admin/rabbit/**").hasRole("ADMIN")
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

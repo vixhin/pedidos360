@@ -3,11 +3,15 @@ package cl.duoc.pedidos360.carrito.listener;
 import cl.duoc.pedidos360.carrito.config.RabbitMQConfig;
 import cl.duoc.pedidos360.carrito.event.PedidoCreadoEvent;
 import cl.duoc.pedidos360.carrito.service.CarritoService;
+import com.rabbitmq.client.Channel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.amqp.support.AmqpHeaders;
+import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -23,16 +27,20 @@ public class CarritoEventListener {
         this.carritoService = carritoService;
     }
 
-    @RabbitListener(queues = RabbitMQConfig.QUEUE_CART)
-    public void handlePedidoCreado(PedidoCreadoEvent event) {
+    @RabbitListener(queues = RabbitMQConfig.QUEUE_CART, ackMode = "MANUAL")
+    public void handlePedidoCreado(PedidoCreadoEvent event,
+                                    Channel channel,
+                                    @Header(AmqpHeaders.DELIVERY_TAG) long deliveryTag) throws IOException {
         if (event == null || event.getEventId() == null) {
-            log.warn("[CARRITO-SERVICE] Received null or invalid event");
+            log.warn("[CARRITO-SERVICE] Received null or invalid event. Sending ACK to discard.");
+            channel.basicAck(deliveryTag, false);
             return;
         }
 
         // Verificación de idempotencia
         if (processedEventIds.contains(event.getEventId())) {
-            log.info("[CARRITO-SERVICE] Duplicate event ignored: eventId={}", event.getEventId());
+            log.info("[CARRITO-SERVICE] Duplicate event ignored: eventId={}. Sending ACK.", event.getEventId());
+            channel.basicAck(deliveryTag, false);
             return;
         }
 
@@ -46,9 +54,12 @@ public class CarritoEventListener {
                         event.getUsuarioId(), event.getEventId());
             }
             processedEventIds.add(event.getEventId());
+            channel.basicAck(deliveryTag, false);
+            log.debug("[CARRITO-SERVICE] ACK sent for eventId={} deliveryTag={}", event.getEventId(), deliveryTag);
         } catch (Exception ex) {
-            log.error("[CARRITO-SERVICE] Error emptying cart for eventId={}: {}", event.getEventId(), ex.getMessage(), ex);
-            throw ex; // Re-throw to allow retry or DLQ policy in RabbitMQ listener
+            log.error("[CARRITO-SERVICE] Error emptying cart for eventId={}: {}. Sending NACK (requeue=false, goes to DLQ).",
+                    event.getEventId(), ex.getMessage(), ex);
+            channel.basicNack(deliveryTag, false, false);
         }
     }
 

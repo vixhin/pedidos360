@@ -28,11 +28,18 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error("Datos de usuario inválidos: " + errorMsg));
     }
 
+    @ExceptionHandler(ProtectedResourceException.class)
+    public ResponseEntity<ApiResponse<Void>> handleProtectedResource(ProtectedResourceException ex) {
+        log.warn("[USER-SERVICE][CONFLICT] Intento de operar sobre recurso protegido: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiResponse<Void>> handleDataIntegrity(DataIntegrityViolationException ex) {
         log.warn("[USER-SERVICE][CONFLICT] Error de integridad o duplicado: {}", ex.getMostSpecificCause().getMessage());
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(ApiResponse.error("El email ya se encuentra registrado"));
+                .body(ApiResponse.error("Error de integridad o duplicado en la base de datos"));
     }
 
     @ExceptionHandler(RuntimeException.class)

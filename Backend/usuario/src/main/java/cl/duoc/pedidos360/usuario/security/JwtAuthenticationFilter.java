@@ -23,6 +23,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         this.jwtUtil = jwtUtil;
     }
 
+    @org.springframework.beans.factory.annotation.Value("${bff.internal-key:${BFF_INTERNAL_KEY:}}")
+    private String internalKey;
+
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
@@ -38,6 +41,36 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     new UsernamePasswordAuthenticationToken(email, null, Collections.singletonList(authority));
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
+        } else {
+            // Soporte para llamadas autenticadas reenviadas desde BFF vía internal-key y headers de rol
+            String clientKey = request.getHeader("X-Internal-Service-Key");
+            if (StringUtils.hasText(internalKey) && internalKey.equals(clientKey)) {
+                String email = request.getHeader("X-User-Email");
+                if (!StringUtils.hasText(email)) {
+                    email = request.getHeader("X-User-Sub");
+                }
+                String rolesHeader = request.getHeader("X-User-Roles");
+                java.util.List<SimpleGrantedAuthority> authorities = new java.util.ArrayList<>();
+                if (StringUtils.hasText(rolesHeader)) {
+                    if (rolesHeader.contains("ADMIN") || rolesHeader.contains("ROLE_ADMIN")) {
+                        authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
+                    }
+                    if (rolesHeader.contains("CLIENTE") || rolesHeader.contains("ROLE_CLIENTE")) {
+                        authorities.add(new SimpleGrantedAuthority("ROLE_CLIENTE"));
+                    }
+                    if (rolesHeader.contains("REPARTIDOR") || rolesHeader.contains("ROLE_REPARTIDOR")) {
+                        authorities.add(new SimpleGrantedAuthority("ROLE_REPARTIDOR"));
+                    }
+                    if (rolesHeader.contains("VENDEDOR") || rolesHeader.contains("ROLE_VENDEDOR")) {
+                        authorities.add(new SimpleGrantedAuthority("ROLE_VENDEDOR"));
+                    }
+                }
+                if (!authorities.isEmpty()) {
+                    UsernamePasswordAuthenticationToken auth =
+                            new UsernamePasswordAuthenticationToken(email != null ? email : "internal-admin", null, authorities);
+                    SecurityContextHolder.getContext().setAuthentication(auth);
+                }
+            }
         }
 
         filterChain.doFilter(request, response);

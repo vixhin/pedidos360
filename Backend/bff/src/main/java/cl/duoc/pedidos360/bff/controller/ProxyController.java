@@ -166,6 +166,19 @@ public class ProxyController {
         return proxy(usuarioClient, request, jwt, body, "usuario-service", "/api/bff/usuarios");
     }
 
+    // ─── RABBITMQ ADMIN ──────────────────────────────────────────────────────
+
+    @RequestMapping(value = "/admin/rabbit/**", method = {
+            RequestMethod.GET, RequestMethod.POST,
+            RequestMethod.PUT, RequestMethod.DELETE, RequestMethod.PATCH
+    })
+    public ResponseEntity<String> proxiarRabbitAdmin(
+            HttpServletRequest request,
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestBody(required = false) String body) {
+        return proxy(usuarioClient, request, jwt, body, "usuario-service", "/api/bff/admin/rabbit", "/api/admin/rabbit");
+    }
+
     // ─── HELPER GENÉRICO ────────────────────────────────────────────────────
 
     /**
@@ -183,12 +196,22 @@ public class ProxyController {
             String body,
             String serviceName,
             String bffPathPrefix) {
+        String serviceBasePath = "/api/" + serviceName.replace("-service", "");
+        return proxy(client, request, jwt, body, serviceName, bffPathPrefix, serviceBasePath);
+    }
 
-        // Construir el path downstream mapeando de /api/bff/xxx a /api/xxx
+    private ResponseEntity<String> proxy(
+            WebClient client,
+            HttpServletRequest request,
+            Jwt jwt,
+            String body,
+            String serviceName,
+            String bffPathPrefix,
+            String serviceBasePath) {
+
+        // Construir el path downstream mapeando de /api/bff/xxx a downstream path
         String requestUri  = request.getRequestURI();
         String relativePath = requestUri.replace(bffPathPrefix, "");
-        // Los microservicios usan /api/productos, /api/pedidos, /api/usuario (singular), etc.
-        String serviceBasePath = "/api/" + serviceName.replace("-service", "");
         String downstreamPath = serviceBasePath + relativePath;
 
         String queryString = request.getQueryString();

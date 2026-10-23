@@ -33,4 +33,11 @@ public class RabbitMQConfig {
         template.setMessageConverter(messageConverter());
         return template;
     }
+
+    @Bean
+    public org.springframework.amqp.rabbit.core.RabbitAdmin rabbitAdmin(ConnectionFactory connectionFactory) {
+        org.springframework.amqp.rabbit.core.RabbitAdmin admin = new org.springframework.amqp.rabbit.core.RabbitAdmin(connectionFactory);
+        admin.setAutoStartup(true);
+        return admin;
+    }
 }
