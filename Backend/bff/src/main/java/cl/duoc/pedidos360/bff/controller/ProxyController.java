@@ -6,16 +6,16 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.reactive.function.client.WebClient;
-import org.springframework.web.reactive.function.client.WebClientResponseException;
 import org.springframework.web.server.ResponseStatusException;
 
 import jakarta.servlet.http.HttpServletRequest;
-import java.util.Map;
 
 /**
  * ProxyController — Enruta llamadas HTTP del frontend hacia los microservicios.
@@ -24,22 +24,23 @@ import java.util.Map;
  *   Angular → BFF (JWT validado) → Microservicio → PostgreSQL
  *
  * Endpoints expuestos:
- *   /api/bff/productos/**    → productos-service :8085
- *   /api/bff/pedidos/**      → pedidos-service   :8082
- *   /api/bff/carrito/**      → carrito-service   :8083
- *   /api/bff/notificaciones/**→notificacion-service :8086
- *   /api/bff/analitica/**    → analitica-service :8084
- *   /api/bff/usuarios/**     → usuario-service   :8081
+ *   /api/bff/productos/**     → productos-service :8085
+ *   /api/bff/pedidos/**       → pedidos-service   :8082
+ *   /api/bff/carrito/**       → carrito-service   :8083
+ *   /api/bff/notificaciones/**→ notificacion-service :8086
+ *   /api/bff/analitica/**     → analitica-service :8084
+ *   /api/bff/usuarios/**      → usuario-service   :8081
+ *   /api/bff/chat/**          → chat-service      :8091
  *
  * Propagación de identidad:
  * - El BFF NO reenvía el Access Token de Azure a los microservicios
  *   (los microservicios no tienen OAuth2 Resource Server configurado).
- * - El BFF puede enviar headers internos de identidad si se requiere:
- *   X-User-Sub, X-User-Roles (sin token).
+ * - El BFF envía headers internos de identidad si se requiere:
+ *   X-User-Sub, X-User-Roles, X-User-Email (sin token).
  *
  * Logs:
  * [BFF][PROXY]      — inicio de llamada
- * [BFF][DOWNSTREAM] — resultado de la llamada
+ * [BFF][DOWNSTREAM] — resultado de la llamada con status real
  */
 @RestController
 @RequestMapping("/api/bff")
@@ -79,7 +80,7 @@ public class ProxyController {
 
     @RequestMapping(value = "/chat/**", method = {
             RequestMethod.GET, RequestMethod.POST,
-            RequestMethod.PUT, RequestMethod.DELETE, RequestMethod.PATCH
+            RequestMethod.PUT, RequestMethod.DELETE
     })
     public ResponseEntity<String> proxiarChat(
             HttpServletRequest request,
@@ -92,7 +93,7 @@ public class ProxyController {
 
     @RequestMapping(value = "/productos/**", method = {
             RequestMethod.GET, RequestMethod.POST,
-            RequestMethod.PUT, RequestMethod.DELETE, RequestMethod.PATCH
+            RequestMethod.PUT, RequestMethod.DELETE
     })
     public ResponseEntity<String> proxiarProductos(
             HttpServletRequest request,
@@ -105,7 +106,7 @@ public class ProxyController {
 
     @RequestMapping(value = "/pedidos/**", method = {
             RequestMethod.GET, RequestMethod.POST,
-            RequestMethod.PUT, RequestMethod.DELETE, RequestMethod.PATCH
+            RequestMethod.PUT, RequestMethod.DELETE
     })
     public ResponseEntity<String> proxiarPedidos(
             HttpServletRequest request,
@@ -118,7 +119,7 @@ public class ProxyController {
 
     @RequestMapping(value = "/carrito/**", method = {
             RequestMethod.GET, RequestMethod.POST,
-            RequestMethod.PUT, RequestMethod.DELETE, RequestMethod.PATCH
+            RequestMethod.PUT, RequestMethod.DELETE
     })
     public ResponseEntity<String> proxiarCarrito(
             HttpServletRequest request,
@@ -131,7 +132,7 @@ public class ProxyController {
 
     @RequestMapping(value = "/notificaciones/**", method = {
             RequestMethod.GET, RequestMethod.POST,
-            RequestMethod.PUT, RequestMethod.DELETE, RequestMethod.PATCH
+            RequestMethod.PUT, RequestMethod.DELETE
     })
     public ResponseEntity<String> proxiarNotificaciones(
             HttpServletRequest request,
@@ -157,7 +158,7 @@ public class ProxyController {
 
     @RequestMapping(value = "/usuarios/**", method = {
             RequestMethod.GET, RequestMethod.POST,
-            RequestMethod.PUT, RequestMethod.DELETE, RequestMethod.PATCH
+            RequestMethod.PUT, RequestMethod.DELETE
     })
     public ResponseEntity<String> proxiarUsuarios(
             HttpServletRequest request,
@@ -170,7 +171,7 @@ public class ProxyController {
 
     @RequestMapping(value = "/admin/rabbit/**", method = {
             RequestMethod.GET, RequestMethod.POST,
-            RequestMethod.PUT, RequestMethod.DELETE, RequestMethod.PATCH
+            RequestMethod.PUT, RequestMethod.DELETE
     })
     public ResponseEntity<String> proxiarRabbitAdmin(
             HttpServletRequest request,
@@ -185,9 +186,10 @@ public class ProxyController {
      * Proxy genérico que:
      * 1. Extrae el path relativo al microservicio
      * 2. Propaga la query string
-     * 3. Agrega headers de identidad (X-User-Sub, X-User-Roles) — NO el token
-     * 4. Hace la llamada al microservicio via WebClient
-     * 5. Devuelve la respuesta al cliente
+     * 3. Agrega headers de identidad (X-User-Sub, X-User-Roles, X-User-Email) — NO el token
+     * 4. Hace la llamada al microservicio via WebClient con exchangeToMono
+     * 5. Preserva el código de estado HTTP real (200, 201, 204, 4xx, 5xx) y Content-Type
+     * 6. Retorna 503 solo ante fallo de conexión / infraestructura
      */
     private ResponseEntity<String> proxy(
             WebClient client,
@@ -220,8 +222,6 @@ public class ProxyController {
         // Método HTTP
         HttpMethod method = HttpMethod.valueOf(request.getMethod());
 
-        // Log (sin token). getClaimAsStringList evita el ClassCastException que
-        // provoca String.valueOf(jwt.getClaim(...)) por inferencia de tipos.
         String userSub = jwt != null ? jwt.getSubject() : "anonymous";
         String userEmail = (jwt != null && jwt.getClaimAsString("email") != null) ? jwt.getClaimAsString("email") : userSub;
         java.util.List<String> roles = (jwt != null) ? jwt.getClaimAsStringList("roles") : null;
@@ -232,7 +232,6 @@ public class ProxyController {
             WebClient.RequestBodySpec requestSpec = client
                     .method(method)
                     .uri(fullPath)
-                    // Headers de identidad propagados al microservicio (sin el token)
                     .header("X-User-Sub",   userSub)
                     .header("X-User-Email", userEmail)
                     .header("X-User-Roles", userRoles)
@@ -242,32 +241,36 @@ public class ProxyController {
                 requestSpec.header("X-Internal-Service-Key", bffInternalKey);
             }
 
-            String responseBody;
+            WebClient.RequestHeadersSpec<?> headersSpec;
             if (body != null && !body.isBlank()) {
-                responseBody = requestSpec
-                        .bodyValue(body)
-                        .retrieve()
-                        .bodyToMono(String.class)
-                        .block();
+                headersSpec = requestSpec.bodyValue(body);
             } else {
-                responseBody = requestSpec
-                        .retrieve()
-                        .bodyToMono(String.class)
-                        .block();
+                headersSpec = requestSpec;
             }
 
-            log.info("[BFF][DOWNSTREAM] {} | {} → 200 OK", serviceName, fullPath);
-            return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_TYPE, "application/json")
-                    .body(responseBody);
+            return headersSpec
+                    .exchangeToMono(clientResponse -> {
+                        HttpStatusCode status = clientResponse.statusCode();
+                        MediaType contentType = clientResponse.headers()
+                                .contentType()
+                                .orElse(MediaType.APPLICATION_JSON);
 
-        } catch (WebClientResponseException ex) {
-            log.warn("[BFF][DOWNSTREAM] {} | {} → {} | reason={}",
-                    serviceName, fullPath, ex.getStatusCode(), ex.getMessage());
-            return ResponseEntity
-                    .status(ex.getStatusCode())
-                    .header(HttpHeaders.CONTENT_TYPE, "application/json")
-                    .body(ex.getResponseBodyAsString());
+                        return clientResponse.bodyToMono(String.class)
+                                .defaultIfEmpty("")
+                                .map(responseBody -> {
+                                    ResponseEntity.BodyBuilder builder = ResponseEntity.status(status);
+                                    if (status.value() == 204 || responseBody.isBlank()) {
+                                        log.info("[BFF][DOWNSTREAM] {} | {} → {} (empty body)", serviceName, fullPath, status);
+                                        return builder.<String>build();
+                                    }
+                                    log.info("[BFF][DOWNSTREAM] {} | {} → {}", serviceName, fullPath, status);
+                                    return builder
+                                            .contentType(contentType)
+                                            .body(responseBody);
+                                });
+                    })
+                    .block();
+
         } catch (Exception ex) {
             log.error("[BFF][DOWNSTREAM] {} | {} → 503 | error={}", serviceName, fullPath, ex.getMessage());
             throw new ResponseStatusException(
