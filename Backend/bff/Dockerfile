@@ -39,4 +39,6 @@ ENV ANALITICA_SERVICE_URL="http://analitica:8084"
 ENV PRODUCTOS_SERVICE_URL="http://productos:8085"
 ENV NOTIFICACION_SERVICE_URL="http://notificacion:8086"
 
+HEALTHCHECK --interval=15s --timeout=5s --retries=4 CMD wget -qO- http://localhost:8090/health || exit 1
+
 ENTRYPOINT ["java", "-jar", "app.jar"]

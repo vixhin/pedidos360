@@ -41,72 +41,94 @@ services:
 
   # ─── MICROSERVICIOS E INFRAESTRUCTURA (PUERTOS PRIVADOS RESETEADOS) ───────
   postgres:
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
     ports: !reset []
 
   pgadmin:
     ports: !reset []
 
   rabbitmq:
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?RABBITMQ_USER required}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD required}
     ports: !reset []
 
   bff:
     ports: !reset []
-    environment:
-      SPRING_PROFILES_ACTIVE: prod
-      FRONTEND_ORIGIN: ${PUBLIC_URL}
-      BFF_INTERNAL_KEY: ${BFF_INTERNAL_KEY}
 
   usuario:
     ports: !reset []
     environment:
-      SPRING_PROFILES_ACTIVE: prod
-      FRONTEND_ORIGIN: ${PUBLIC_URL}
-      BFF_INTERNAL_KEY: ${BFF_INTERNAL_KEY}
-      JWT_SECRET: ${JWT_SECRET}
+      DB_USER: ${POSTGRES_USER:?POSTGRES_USER required}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
+      RABBITMQ_USER: ${RABBITMQ_USER:?RABBITMQ_USER required}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD required}
+      environment:
+        DB_USER: ${POSTGRES_USER:?POSTGRES_USER required}
+        DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
+        RABBITMQ_USER: ${RABBITMQ_USER:?RABBITMQ_USER required}
+        RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD required}
+        JWT_SECRET: ${JWT_SECRET}
 
   productos:
     ports: !reset []
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      FRONTEND_ORIGIN: ${PUBLIC_URL}
+
+      DB_USER: ${POSTGRES_USER:?POSTGRES_USER required}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
+
 
   pedidos:
     ports: !reset []
-    environment:
-      SPRING_PROFILES_ACTIVE: prod
-      FRONTEND_ORIGIN: ${PUBLIC_URL}
-      BFF_INTERNAL_KEY: ${BFF_INTERNAL_KEY}
-      JWT_SECRET: ${JWT_SECRET}
+      environment:
+        DB_USER: ${POSTGRES_USER:?POSTGRES_USER required}
+        DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
+        RABBITMQ_USER: ${RABBITMQ_USER:?RABBITMQ_USER required}
+        RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD required}
+        JWT_SECRET: ${JWT_SECRET}
 
   carrito:
     ports: !reset []
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      FRONTEND_ORIGIN: ${PUBLIC_URL}
+
+      DB_USER: ${POSTGRES_USER:?POSTGRES_USER required}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
+
 
   notificacion:
     ports: !reset []
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      FRONTEND_ORIGIN: ${PUBLIC_URL}
+
+      DB_USER: ${POSTGRES_USER:?POSTGRES_USER required}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
+
 
   analitica:
     ports: !reset []
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      FRONTEND_ORIGIN: ${PUBLIC_URL}
+
+      DB_USER: ${POSTGRES_USER:?POSTGRES_USER required}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
+
 
   chat:
     ports: !reset []
-    environment:
-      SPRING_PROFILES_ACTIVE: prod
-      FRONTEND_ORIGIN: ${PUBLIC_URL}
-      BFF_INTERNAL_KEY: ${BFF_INTERNAL_KEY}
-      JWT_SECRET: ${JWT_SECRET}
-      DB_USER: ${POSTGRES_USER:-postgres}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      RABBITMQ_USER: ${RABBITMQ_USER:-guest}
-      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
+      environment:
+        DB_USER: ${POSTGRES_USER:?POSTGRES_USER required}
+        DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
+        RABBITMQ_USER: ${RABBITMQ_USER:?RABBITMQ_USER required}
+        RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD required}
+        JWT_SECRET: ${JWT_SECRET}
+      DB_USER: ${POSTGRES_USER:?POSTGRES_USER required}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
+      RABBITMQ_USER: ${RABBITMQ_USER:?RABBITMQ_USER required}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD required}
 
 volumes:
   caddy_data:

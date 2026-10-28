@@ -18,12 +18,19 @@ resource "aws_instance" "this" {
   instance_type          = var.instance_type
   key_name               = var.key_name != "" ? var.key_name : null
   subnet_id              = var.subnet_id
-  vpc_security_group_ids = [var.security_group_id]
+    vpc_security_group_ids = [var.security_group_id]
+
+  metadata_options {
+    http_tokens = "required"
+    http_put_response_hop_limit = 2
+    instance_metadata_tags = "enabled"
+  }
 
   root_block_device {
     volume_size           = var.root_volume_size
     volume_type           = var.root_volume_type
     delete_on_termination = true
+    encrypted = true
   }
 
   user_data = <<-EOF

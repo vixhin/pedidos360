@@ -106,4 +106,11 @@ jobs:
         run: docker compose -f Backend/docker-compose.yml config
 
       - name: Validate EC2 Overlay Docker Compose
-        run: docker compose -f Backend/docker-compose.yml -f Backend/docker-compose.ec2.yml config
+        run: |
+          export POSTGRES_USER=dummy
+          export POSTGRES_PASSWORD=dummy
+          export RABBITMQ_USER=dummy
+          export RABBITMQ_PASSWORD=dummy
+          export JWT_SECRET=dummy
+          export BFF_INTERNAL_KEY=dummy
+          docker compose -f Backend/docker-compose.yml -f Backend/docker-compose.ec2.yml config
