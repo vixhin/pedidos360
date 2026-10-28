@@ -1,0 +1,16 @@
+# Pedidos360 - Line endings configuration
+# Set default behavior to automatically handle line endings
+* text=auto eol=lf
+
+# Explicitly ensure shell scripts, config and SQL files use LF
+*.sh text eol=lf
+mvnw text eol=lf
+*.sql text eol=lf
+*.properties text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+
+# PowerShell scripts maintain CRLF for Windows compatibility if needed
+*.ps1 text eol=crlf

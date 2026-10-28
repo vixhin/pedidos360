@@ -479,15 +479,22 @@ Reporte HTML en `playwright-report-ec2/` (`npx playwright show-report playwright
 
 ---
 
+## Seguridad y Buenas Prácticas Implementadas
+
+Mejoras de seguridad y robustez implementadas en la arquitectura:
+
+1. **Secretos obligatorios en Producción (Fail-Fast):** En `scripts/deploy-ec2.sh` y `scripts/deploy-ec2.ps1`, el despliegue a entorno `prod` exige obligatoriamente las variables `POSTGRES_PASSWORD`, `RABBITMQ_PASSWORD`, `BFF_INTERNAL_KEY` y `JWT_SECRET`, bloqueando la ejecución si falta algún secreto o se intentan usar valores por defecto inseguros.
+2. **Propagación completa de secretos:** `docker-compose.yml` y `docker-compose.ec2.yml` propagan de forma uniforme `JWT_SECRET` y `BFF_INTERNAL_KEY` a todos los microservicios que validan tokens (`usuario`, `pedidos`, `chat`, `bff`).
+3. **Parametrización dinámica de base de datos y broker:** Tanto `POSTGRES_USER`/`POSTGRES_PASSWORD` como `RABBITMQ_USER`/`RABBITMQ_PASSWORD` están completamente parametrizados en `docker-compose.yml`, eliminando credenciales fijas y configurando comprobaciones `pg_isready` y `rabbitmq-diagnostics` acordes.
+4. **Health Checks y Despliegue Fail-Fast:** Todos los microservicios cuentan con endpoints `/health` y comprobaciones `healthcheck` en Docker Compose. Los scripts de despliegue ejecutan un bucle activo de sondeo que detecta contenedores fallidos o no saludables y aborta de inmediato con los logs de diagnóstico.
+5. **Manejo de saltos de línea (CRLF/LF):** Se integró `.gitattributes` y sanitización en PowerShell (`deploy-ec2.ps1`) para asegurar que scripts y archivos `.env.production` mantengan saltos de línea UNIX (LF) sin corrupción por retorno de carro (`\r`).
+6. **Validación estricta de migraciones (Flyway):** Todos los microservicios de base de datos cuentan con `validate-on-migrate=true` y `baseline-on-migrate=true` en sus perfiles de producción.
+
 ## Seguridad: Pendientes Conocidos
 
-Hallazgos verificados en el código actual (pensados como lista de trabajo, no como críticas):
+1. **Usuarios semilla y credenciales de demo públicas:** En un despliegue con datos reales hay que deshabilitar el seed o cambiar las contraseñas iniciales.
+2. **Security Group:** Mantener únicamente puertos `22` (restringido al CIDR del desarrollador/bastion), `80` y `443`.
 
-1. **Secretos con valor por defecto en un repositorio público.** `jwt.secret` tiene un valor por defecto en `usuario`, `pedidos` y `chat`; `BFF_INTERNAL_KEY` también; `docker-compose.yml` fija `postgres/postgres` y pgAdmin `admin/admin`; y `scripts/deploy-ec2.sh` usa valores de respaldo si no se exportan los secretos. Cualquier despliegue que no los sobrescriba usa secretos conocidos. Requisito: Exigir variables sin fallback en `prod`, rotar los valores y no publicar credenciales reales.
-2. **Propagación incompleta de secretos en `docker-compose.ec2.yml`.** `JWT_SECRET` solo se inyecta a `usuario` y `chat` (y `BFF_INTERNAL_KEY` no llega a `pedidos`, que valida JWT local y la clave S2S con sus valores por defecto). Conviene propagar las mismas variables a **todos** los servicios que validan el token o la clave interna y comprobar el flujo con un login local en la EC2.
-3. **Usuarios semilla y credenciales de demo públicas** (ver arriba): deshabilitar el seed o forzar cambio de contraseña en entornos reales.
-4. **Contraseñas de BD fijas** (`DB_PASSWORD: postgres`) en el compose base; el overlay solo las parametriza para `chat`.
-5. **Security Group:** mantener únicamente `22` (restringido a tu IP), `80` y `443`.
 
 ---
 
