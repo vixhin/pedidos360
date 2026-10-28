@@ -405,6 +405,24 @@ Ocurre si la instancia no tiene Elastic IP (por ejemplo, al reiniciar un AWS Aca
 4. **API Gateway:** edita la integración y actualiza la URL a `https://<dominio nuevo>/{proxy}`.
 5. Pruebas e2e: `PLAYWRIGHT_BASE_URL=https://<dominio nuevo>`.
 
+### Comportamiento de Volúmenes Persistentes (PostgreSQL y RabbitMQ)
+
+Es fundamental entender cómo operan las imágenes oficiales respecto a los volúmenes ya inicializados:
+
+1. **PostgreSQL (`postgres_data`):** Las variables `POSTGRES_USER` y `POSTGRES_PASSWORD` solo tienen efecto durante la creación inicial del clúster (cuando el directorio de datos está vacío). Si el volumen ya existía, PostgreSQL **no actualizará** las credenciales automáticamente al cambiar el archivo `.env.production`.
+   - **Diagnóstico:** Para verificar si las credenciales actuales coinciden:
+     ```bash
+     docker exec -i pedidos360-postgres psql -U <usuario> -d postgres -c "SELECT current_user;"
+     ```
+   - Si hubo un cambio de credenciales, deben actualizarse mediante `ALTER USER ... WITH PASSWORD ...;` dentro de la sesión de `psql`. **No ejecute `docker compose down -v`** como primera solución, ya que destruirá permanentemente los datos existentes.
+
+2. **RabbitMQ (`rabbitmq_data`):** Las variables `RABBITMQ_DEFAULT_USER` y `RABBITMQ_DEFAULT_PASS` solo se procesan en el primer arranque. Si el volumen persiste, las cuentas previas se mantienen.
+   - **Diagnóstico:** Para consultar los usuarios existentes:
+     ```bash
+     docker exec -i pedidos360-rabbitmq rabbitmqctl list_users
+     ```
+   - Si se requiere un nuevo usuario o permisos, use `rabbitmqctl add_user` y `rabbitmqctl set_permissions`.
+
 ### Administrar la base de datos en la EC2
 
 PostgreSQL, pgAdmin y RabbitMQ **no se publican** en la EC2. Para inspeccionar datos usa la consola del contenedor, sin abrir puertos al exterior:

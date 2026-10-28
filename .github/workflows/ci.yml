@@ -113,4 +113,6 @@ jobs:
           export RABBITMQ_PASSWORD=dummy
           export JWT_SECRET=dummy
           export BFF_INTERNAL_KEY=dummy
+          export PUBLIC_URL=http://localhost
+          export PUBLIC_DOMAIN=localhost
           docker compose -f Backend/docker-compose.yml -f Backend/docker-compose.ec2.yml config
