@@ -9,7 +9,7 @@
           <p>{{ notifications.activeToast()?.message }}</p>
         </div>
       </div>
-      <button type="button" class="live-toast-close" (click)="notifications.closeToast(); $event.stopPropagation()">✕</button>
+      <button type="button" class="live-toast-close" aria-label="Cerrar notificación" (click)="notifications.closeToast(); $event.stopPropagation()">✕</button>
     </div>
   }
 
@@ -261,7 +261,7 @@
           }
         </div>
 
-        <a routerLink="/carrito" class="cart-btn" (click)="closeMenus()">
+        <a routerLink="/carrito" class="cart-btn" aria-label="Ver carrito de compras" (click)="closeMenus()">
           <app-icon name="cart" size="20" />
           @if (cart.itemCount() > 0) {
             <span class="badge badge--float">{{ cart.itemCount() }}</span>
@@ -270,7 +270,7 @@
 
         @if (auth.isLoggedIn()) {
           <div class="dropdown-wrap">
-            <button type="button" class="avatar-btn" (click)="toggleProfile()">
+            <button type="button" class="avatar-btn" aria-label="Menú de perfil de usuario" (click)="toggleProfile()">
               {{ auth.user()?.avatarInitial }}
             </button>
 

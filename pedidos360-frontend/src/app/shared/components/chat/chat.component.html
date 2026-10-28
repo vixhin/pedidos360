@@ -77,6 +77,7 @@
       (click)="enviar()"
       [disabled]="!nuevoMensaje().trim() || chatSvc.conversacionActiva()?.estado === 'CERRADO' || chatSvc.isLoading()"
       title="Enviar Mensaje"
+      aria-label="Enviar Mensaje"
     >
       <app-icon name="arrow-right" size="18"></app-icon>
     </button>

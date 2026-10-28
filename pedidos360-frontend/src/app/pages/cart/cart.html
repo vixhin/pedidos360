@@ -41,15 +41,15 @@
                 <p class="cart-line__price">${{ line.product.price | number }}</p>
               </div>
               <div class="qty-control">
-                <button type="button" (click)="cart.setQuantity(line.product.id, line.quantity - 1)">
+                <button type="button" aria-label="Disminuir cantidad" (click)="cart.setQuantity(line.product.id, line.quantity - 1)">
                   <app-icon name="minus" size="14" />
                 </button>
                 <span>{{ line.quantity }}</span>
-                <button type="button" (click)="cart.setQuantity(line.product.id, line.quantity + 1)">
+                <button type="button" aria-label="Aumentar cantidad" (click)="cart.setQuantity(line.product.id, line.quantity + 1)">
                   <app-icon name="plus" size="14" />
                 </button>
               </div>
-              <button type="button" class="cart-line__remove" (click)="cart.remove(line.product.id)">
+              <button type="button" class="cart-line__remove" aria-label="Eliminar producto del carrito" (click)="cart.remove(line.product.id)">
                 <app-icon name="trash" size="16" />
               </button>
             </div>

@@ -73,12 +73,15 @@
   margin-bottom: 4px;
 }
 
-.footer__col a {
+.footer__col a,
+.footer__col .link-button {
   font-size: 0.82rem;
   color: rgba(255, 255, 255, 0.65);
+  text-align: left;
 }
 
-.footer__col a:hover {
+.footer__col a:hover,
+.footer__col .link-button:hover {
   color: var(--color-accent);
 }
 

@@ -2,7 +2,7 @@
 # PUBLIC_DOMAIN se pasa como variable de entorno, ej: 34-207-191-208.nip.io
 
 {$PUBLIC_DOMAIN} {
-    encode gzip
+    encode zstd gzip
 
     # BFF (API Manager) — valida JWT de Microsoft Entra ID
     handle /api/bff/* {

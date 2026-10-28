@@ -123,6 +123,7 @@
                   class="password-toggle-btn"
                   (click)="showCurrentPassword.set(!showCurrentPassword())"
                   [title]="showCurrentPassword() ? 'Ocultar contraseña' : 'Mostrar contraseña'"
+                  [attr.aria-label]="showCurrentPassword() ? 'Ocultar contraseña' : 'Mostrar contraseña'"
                 >
                   <app-icon [name]="showCurrentPassword() ? 'eye-off' : 'eye'" size="18" />
                 </button>
@@ -146,6 +147,7 @@
                     class="password-toggle-btn"
                     (click)="showNewPassword.set(!showNewPassword())"
                     [title]="showNewPassword() ? 'Ocultar contraseña' : 'Mostrar contraseña'"
+                    [attr.aria-label]="showNewPassword() ? 'Ocultar contraseña' : 'Mostrar contraseña'"
                   >
                     <app-icon [name]="showNewPassword() ? 'eye-off' : 'eye'" size="18" />
                   </button>
@@ -168,6 +170,7 @@
                     class="password-toggle-btn"
                     (click)="showConfirmPassword.set(!showConfirmPassword())"
                     [title]="showConfirmPassword() ? 'Ocultar contraseña' : 'Mostrar contraseña'"
+                    [attr.aria-label]="showConfirmPassword() ? 'Ocultar contraseña' : 'Mostrar contraseña'"
                   >
                     <app-icon [name]="showConfirmPassword() ? 'eye-off' : 'eye'" size="18" />
                   </button>
@@ -232,7 +235,7 @@
                   <p class="list-row__title">{{ a.label }} @if (a.isPrimary) { <span class="tag">Principal</span> }</p>
                   <p class="list-row__sub">{{ a.detail }}</p>
                 </div>
-                <button type="button" class="icon-btn-outline"><app-icon name="edit" size="14" /></button>
+                <button type="button" class="icon-btn-outline" aria-label="Editar dirección"><app-icon name="edit" size="14" /></button>
               </div>
             }
             <button type="button" class="btn btn-secondary btn-sm btn-block">Agregar nueva dirección</button>
@@ -248,7 +251,7 @@
                   <p class="list-row__title">{{ pm.brand }}</p>
                   <p class="list-row__sub">{{ pm.kind }} •••• {{ pm.last4 }}</p>
                 </div>
-                <button type="button" class="icon-btn-outline"><app-icon name="edit" size="14" /></button>
+                <button type="button" class="icon-btn-outline" aria-label="Editar método de pago"><app-icon name="edit" size="14" /></button>
               </div>
             }
             <button type="button" class="btn btn-secondary btn-sm btn-block">Agregar método de pago</button>
@@ -302,8 +305,8 @@
                 <p class="list-row__sub">{{ a.detail }}</p>
               </div>
               <div class="list-row__actions">
-                <button type="button" class="icon-btn-outline"><app-icon name="edit" size="14" /></button>
-                <button type="button" class="icon-btn-outline"><app-icon name="trash" size="14" /></button>
+                <button type="button" class="icon-btn-outline" aria-label="Editar dirección"><app-icon name="edit" size="14" /></button>
+                <button type="button" class="icon-btn-outline" aria-label="Eliminar dirección"><app-icon name="trash" size="14" /></button>
               </div>
             </div>
           }
@@ -321,8 +324,8 @@
                 <p class="list-row__sub">{{ pm.kind }} •••• {{ pm.last4 }}</p>
               </div>
               <div class="list-row__actions">
-                <button type="button" class="icon-btn-outline"><app-icon name="edit" size="14" /></button>
-                <button type="button" class="icon-btn-outline"><app-icon name="trash" size="14" /></button>
+                <button type="button" class="icon-btn-outline" aria-label="Editar método de pago"><app-icon name="edit" size="14" /></button>
+                <button type="button" class="icon-btn-outline" aria-label="Eliminar método de pago"><app-icon name="trash" size="14" /></button>
               </div>
             </div>
           }
@@ -342,6 +345,7 @@
                 [class.switch--on]="p.on"
                 (click)="togglePreference(p.key)"
                 [attr.aria-pressed]="p.on"
+                [attr.aria-label]="p.label"
               >
                 <span class="switch__knob"></span>
               </button>

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { Icon } from '../../shared/icon/icon';
@@ -16,6 +16,9 @@ import { Product } from '../../core/models/catalog.model';
   styleUrl: './home.css',
 })
 export class Home {
+  readonly visibleCount = signal(16);
+  readonly visibleProducts = computed(() => this.catalog.products().slice(0, this.visibleCount()));
+
   readonly steps = [
     { icon: 'list' as const, title: 'Selecciona productos', text: 'Explora todas las categorías y arma tu pedido.' },
     { icon: 'package' as const, title: 'Agrupa todo', text: 'Unimos tus productos de distintas tiendas cercanas.' },
@@ -30,16 +33,23 @@ export class Home {
   ) {}
 
   filterByCategory(categoryId: string): void {
+    this.visibleCount.set(16);
     this.catalog.selectCategory(categoryId);
   }
 
   showAllProducts(): void {
+    this.visibleCount.set(16);
     this.catalog.selectCategory('TODAS');
     this.catalog.setSearchQuery('');
   }
 
   clearSearch(): void {
+    this.visibleCount.set(16);
     this.catalog.setSearchQuery('');
+  }
+
+  showMore(): void {
+    this.visibleCount.update(count => count + 16);
   }
 
   addToCart(product: Product): void {

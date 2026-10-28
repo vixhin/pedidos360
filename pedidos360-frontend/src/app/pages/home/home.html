@@ -17,7 +17,7 @@
 </section>
 
 <section class="container section">
-  <h2>Shop by need</h2>
+  <h2>Compra según lo que necesitas</h2>
   <div class="need-grid">
     @for (need of catalog.needShortcuts; track need.id) {
       <div class="need-card card">
@@ -35,7 +35,7 @@
 <section class="container section">
   <div class="section__head">
     <h2>Categorías principales</h2>
-    <a href="javascript:void(0)" class="link" (click)="showAllProducts()">Ver todas las categorías</a>
+    <button type="button" class="link link-button" (click)="showAllProducts()">Ver todas las categorías</button>
   </div>
   <div class="category-grid">
     @for (cat of catalog.categories; track cat.id) {
@@ -70,17 +70,17 @@
     <div>
       <h2>Catálogo de Productos 360</h2>
       <p style="margin-top: 4px; color: #666; font-size: 0.95rem;">
-        Mostrando {{ catalog.products().length }} productos disponibles en supermercado (PostgreSQL)
+        Mostrando {{ visibleProducts().length }} de {{ catalog.products().length }} productos disponibles en supermercado (PostgreSQL)
       </p>
     </div>
     <div style="display: flex; gap: 8px; align-items: center;">
       @if (catalog.searchQuery()) {
         <span style="background: #e4e6ff; color: #1e3a8a; padding: 4px 10px; border-radius: 16px; font-size: 0.85rem; font-weight: 500;">
           Búsqueda: "{{ catalog.searchQuery() }}"
-          <button type="button" style="background: none; border: none; cursor: pointer; margin-left: 4px;" (click)="clearSearch()">✕</button>
+          <button type="button" class="link-button" aria-label="Limpiar búsqueda" style="cursor: pointer; margin-left: 4px;" (click)="clearSearch()">✕</button>
         </span>
       }
-      <a href="javascript:void(0)" class="link" (click)="showAllProducts()">Restablecer filtros</a>
+      <button type="button" class="link link-button" (click)="showAllProducts()">Restablecer filtros</button>
     </div>
   </div>
 
@@ -99,7 +99,7 @@
     </div>
   } @else {
     <div class="product-grid">
-      @for (product of catalog.products(); track product.id) {
+      @for (product of visibleProducts(); track product.id) {
         <div class="product-card card">
           <button
             type="button"
@@ -107,7 +107,7 @@
             [class.product-card__fav--active]="favorites.isFavorite(product.id)"
             (click)="favorites.toggleFavorite(product)"
             [title]="favorites.isFavorite(product.id) ? 'Quitar de favoritos' : 'Guardar en favoritos'"
-            aria-label="Agregar a favoritos"
+            [attr.aria-label]="favorites.isFavorite(product.id) ? 'Quitar de favoritos' : 'Agregar a favoritos'"
           >
             <app-icon name="heart" size="16" />
           </button>
@@ -131,21 +131,33 @@
         </div>
       }
     </div>
+
+    @if (catalog.products().length > visibleCount()) {
+      <div style="text-align: center; margin-top: 2rem;">
+        <button type="button" class="btn btn-secondary" (click)="showMore()">
+          Ver más productos ({{ catalog.products().length - visibleCount() }} restantes)
+        </button>
+      </div>
+    }
   }
 </section>
 
-<section class="steps-section">
-  <div class="container">
-    <h2>De la tienda a tu puerta, sin perder tiempo</h2>
-    <div class="steps-grid">
-      @for (step of steps; track step.title; let i = $index) {
-        <div class="step-card">
-          <span class="step-card__num">{{ i + 1 }}</span>
-          <div class="step-card__icon"><app-icon [name]="step.icon" size="20" /></div>
-          <h3>{{ step.title }}</h3>
-          <p>{{ step.text }}</p>
-        </div>
-      }
+@defer (on viewport) {
+  <section class="steps-section">
+    <div class="container">
+      <h2>De la tienda a tu puerta, sin perder tiempo</h2>
+      <div class="steps-grid">
+        @for (step of steps; track step.title; let i = $index) {
+          <div class="step-card">
+            <span class="step-card__num">{{ i + 1 }}</span>
+            <div class="step-card__icon"><app-icon [name]="step.icon" size="20" /></div>
+            <h3>{{ step.title }}</h3>
+            <p>{{ step.text }}</p>
+          </div>
+        }
+      </div>
     </div>
-  </div>
-</section>
+  </section>
+} @placeholder {
+  <div style="min-height: 200px;"></div>
+}
