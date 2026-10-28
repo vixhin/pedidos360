@@ -1,0 +1,14 @@
+# Solo para pruebas locales EV2: perfil dev en los servicios cuyas migraciones Flyway no se ejecutan
+services:
+  usuario:
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+  pedidos:
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+  carrito:
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+  chat:
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
