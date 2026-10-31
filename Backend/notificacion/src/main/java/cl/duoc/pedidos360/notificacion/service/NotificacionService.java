@@ -21,7 +21,11 @@ public class NotificacionService {
     }
 
     public List<Notificacion> obtenerPorUsuario(Long usuarioId) {
-        return notificacionRepository.findByUsuarioIdOrderByFechaEnvioDesc(usuarioId);
+        List<Notificacion> notificaciones = notificacionRepository.findByUsuarioIdOrderByFechaEnvioDesc(usuarioId);
+        if (notificaciones == null || notificaciones.isEmpty()) {
+            return notificacionRepository.findByUsuarioId(usuarioId);
+        }
+        return notificaciones;
     }
 
     @Transactional

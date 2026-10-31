@@ -49,7 +49,7 @@ class NotificacionServiceTest {
     @Test
     @DisplayName("obtenerPorUsuario - retorna notificaciones del usuario")
     void testObtenerPorUsuario() {
-        when(notificacionRepository.findByUsuarioId(5L)).thenReturn(List.of(mockNotif));
+        when(notificacionRepository.findByUsuarioIdOrderByFechaEnvioDesc(5L)).thenReturn(List.of(mockNotif));
 
         List<Notificacion> resultado = notificacionService.obtenerPorUsuario(5L);
 
