@@ -75,10 +75,7 @@ export class AuthService {
    *
    * Los roles de aplicación (ADMIN/VENDEDOR/CLIENTE) están definidos en el
    * App Registration de la API, no en el del SPA, por lo que NO aparecen en el
-   * ID Token sino en el Access Token de la API. Por eso:
-   *   1. Se intenta leer "roles" del ID Token.
-   *   2. Si no hay, se pide el Access Token de la API vía acquireTokenSilent
-   *      y se decodifica su claim "roles" (solo para UX; el BFF valida de verdad).
+   * ID Token sino en el Access Token de la API.
    */
   async syncFromMsal(): Promise<void> {
     const account = this.msal.instance.getAllAccounts()[0];
@@ -100,15 +97,14 @@ export class AuthService {
         });
         tokenRoles = this.rolesFromJwt(result.accessToken);
       } catch {
-        // Sin consentimiento aún o token no disponible: se usa el fallback.
+        // Sin consentimiento aún o token no disponible: se usa el fallback seguro.
       }
     }
 
     let dbId: number | undefined;
-    let assignedRole: UserRole = this.resolveRoleFromClaims(tokenRoles, account.username);
+    let assignedRole: UserRole = this.resolveRoleFromClaims(tokenRoles);
     let displayName = account.name || account.username;
     let email = account.username;
-
 
     // Provisioning JIT vía BFF: El BFF extrae la identidad del JWT validado
     // y la sincroniza de forma segura con usuario-service.
@@ -121,12 +117,12 @@ export class AuthService {
       );
       if (res?.data) {
         dbId = res.data.id;
-        if (res.data.rol) assignedRole = res.data.rol as UserRole;
+        if (res.data.rol) assignedRole = this.sanitizeRole(res.data.rol);
         if (res.data.nombre) displayName = res.data.nombre;
         if (res.data.email) email = res.data.email;
       }
     } catch {
-      // Si falla la sincronización, se usa el rol del token de Microsoft y entra sin carrito/pedidos persistentes.
+      // Si falla la sincronización, se usa el rol del claim del token de Microsoft.
     }
 
     this.setSession(
@@ -138,10 +134,9 @@ export class AuthService {
         rol:           assignedRole,
         provider:      'microsoft',
       },
-      null // El Access Token lo maneja MSAL
+      null
     );
   }
-
 
   /** Decodifica el payload de un JWT (sin verificar) y devuelve el claim "roles". */
   private rolesFromJwt(jwt: string): string[] {
@@ -208,11 +203,9 @@ export class AuthService {
   // ─────────────────────────────────────────────────
 
   private applyAuthResponse(res: AuthResponse, provider: AppUser['provider']): void {
-    // El rol viene de la BD a través del JWT interno del usuario-service
-    let assignedRole: UserRole = (res.rol as UserRole);
-    if (!assignedRole) {
-      assignedRole = this.determineRoleFromEmail(res.email);
-    }
+    // El rol proviene estrictamente de la respuesta autenticada por el backend en PostgreSQL
+    const assignedRole: UserRole = this.sanitizeRole(res.rol);
+
     this._activeRole.set(assignedRole);
     this.setSession(
       {
@@ -228,10 +221,10 @@ export class AuthService {
   }
 
   /**
-   * Resuelve el rol UX desde los claims del token de Microsoft.
-   * PROHIBIDO usar heurística de email para Microsoft Entra ID.
+   * Resuelve el rol UX exclusivamente desde los claims del token de Microsoft.
+   * Queda estrictamente prohibido usar heurísticas basadas en el correo electrónico.
    */
-  private resolveRoleFromClaims(tokenRoles: string[], _email: string): UserRole {
+  private resolveRoleFromClaims(tokenRoles: string[]): UserRole {
     if (tokenRoles.length > 0) {
       if (tokenRoles.some((r) => r.toUpperCase() === 'ADMIN'))      return 'ADMIN';
       if (tokenRoles.some((r) => r.toUpperCase() === 'VENDEDOR'))   return 'VENDEDOR';
@@ -242,20 +235,22 @@ export class AuthService {
   }
 
   /**
-   * Determina el rol basándose en el email (SOLO para login local DB / retrocompatibilidad local).
-   * PROHIBIDO su uso para usuarios de Microsoft.
+   * Sanitiza y valida que un rol pertenezca a los roles autorizados por el sistema.
+   * Ante cualquier valor desconocido, asigna estrictamente el rol con menor privilegio 'CLIENTE'.
    */
-  private determineRoleFromEmail(email?: string): UserRole {
-    if (!email) return 'CLIENTE';
-    const lower = email.toLowerCase();
-    if (lower.includes('admin'))      return 'ADMIN';
-    if (lower.includes('vendedor'))   return 'VENDEDOR';
-    if (lower.includes('repartidor')) return 'REPARTIDOR';
+  private sanitizeRole(roleCandidate?: unknown): UserRole {
+    if (typeof roleCandidate === 'string') {
+      const upper = roleCandidate.trim().toUpperCase();
+      if (upper === 'ADMIN') return 'ADMIN';
+      if (upper === 'VENDEDOR') return 'VENDEDOR';
+      if (upper === 'REPARTIDOR') return 'REPARTIDOR';
+      if (upper === 'CLIENTE') return 'CLIENTE';
+    }
     return 'CLIENTE';
   }
 
   private setSession(user: AppUser, token: string | null): void {
-    const role: UserRole = (user.rol as UserRole) || (user.provider === 'microsoft' ? 'CLIENTE' : this.determineRoleFromEmail(user.email));
+    const role: UserRole = this.sanitizeRole(user.rol);
 
     this._user.set({ ...user, rol: role });
     this._token.set(token);
@@ -275,11 +270,8 @@ export class AuthService {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return;
       const { user, token } = JSON.parse(raw) as { user: AppUser; token: string | null };
-      const role: UserRole =
-        (user.rol as UserRole) ||
-        (user.provider === 'microsoft'
-          ? 'CLIENTE'
-          : this.determineRoleFromEmail(user.email));
+      const role: UserRole = this.sanitizeRole(user?.rol);
+
       this._user.set({ ...user, rol: role });
       this._token.set(token);
       this._isLoggedIn.set(true);

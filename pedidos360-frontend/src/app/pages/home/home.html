@@ -55,7 +55,7 @@
 <section class="container section">
   <h2>Promociones destacadas</h2>
   <div class="promo-grid">
-    @for (promo of catalog.promotions; track promo.id) {
+    @for (promo of catalog.promotions(); track promo.id) {
       <div class="promo-card" [style.background]="promo.color">
         <span class="promo-tag">{{ promo.tag }}</span>
         <p>{{ promo.title }}</p>

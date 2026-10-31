@@ -7,8 +7,6 @@ import { catchError, of } from 'rxjs';
 import { Icon } from '../../shared/icon/icon';
 import { CatalogService } from '../../core/services/catalog.service';
 import { AuthService } from '../../core/services/auth.service';
-import { Product } from '../../core/models/catalog.model';
-import { API_CONFIG } from '../../core/config/api.config';
 import { BackendUrlService } from '../../core/services/backend-url.service';
 
 export interface IncomingOrder {
@@ -21,12 +19,22 @@ export interface IncomingOrder {
   time: string;
 }
 
+interface PedidoItemRaw {
+  id?: number;
+  nombre: string;
+  cantidad: number;
+  precioUnitario: number;
+}
+
 interface PedidoRaw {
   id: number;
   usuarioId: number;
   total: number;
+  subtotal?: number;
+  direccionEntrega?: string;
   estado: string;
   fechaCreacion: string;
+  items?: PedidoItemRaw[];
 }
 
 @Component({
@@ -52,6 +60,7 @@ export class Seller implements OnInit {
   readonly newPrice = signal(1990);
   readonly newStock = signal(100);
   readonly newDescription = signal('');
+  readonly isSubmittingProduct = signal(false);
 
   // Mensaje de notificación
   readonly statusMessage = signal<string | null>(null);
@@ -59,6 +68,7 @@ export class Seller implements OnInit {
   // Pedidos cargados desde el backend
   readonly incomingOrders = signal<IncomingOrder[]>([]);
   readonly isLoadingOrders = signal(false);
+  readonly ordersErrorMessage = signal<string | null>(null);
 
   // Productos con stock bajo (< 50)
   readonly lowStockProducts = computed(() =>
@@ -71,23 +81,35 @@ export class Seller implements OnInit {
 
   cargarPedidos(): void {
     this.isLoadingOrders.set(true);
+    this.ordersErrorMessage.set(null);
+
     this.http
       .get<PedidoRaw[]>(`${this.urls.base('pedidos')}`)
-      .pipe(catchError(() => of([] as PedidoRaw[])))
+      .pipe(
+        catchError((err) => {
+          console.error('[Seller] Error al cargar pedidos:', err);
+          this.ordersErrorMessage.set('No se pudo cargar la lista de pedidos desde el servidor.');
+          return of([] as PedidoRaw[]);
+        })
+      )
       .subscribe((data) => {
         this.isLoadingOrders.set(false);
-        const orders: IncomingOrder[] = (data || []).map((p) => ({
-          id: `PED-${p.id}`,
-          customerName: `Usuario #${p.usuarioId}`,
-          address: 'Dirección de entrega',
-          itemsCount: 1,
-          total: p.total,
-          status: this.mapEstado(p.estado),
-          time: p.fechaCreacion
-            ? this.timeAgo(new Date(p.fechaCreacion))
-            : 'Reciente',
-        }));
-        // Sort newest first
+        const orders: IncomingOrder[] = (data || []).map((p) => {
+          const totalItems = (p.items || []).reduce((acc, it) => acc + (it.cantidad || 1), 0);
+          return {
+            id: `PED-${p.id}`,
+            customerName: `Cliente #${p.usuarioId}`,
+            address: p.direccionEntrega || 'Dirección no especificada',
+            itemsCount: totalItems > 0 ? totalItems : 1,
+            total: p.total,
+            status: this.mapEstado(p.estado),
+            time: p.fechaCreacion
+              ? this.timeAgo(new Date(p.fechaCreacion))
+              : 'Reciente',
+          };
+        });
+
+        // Ordenar con los más recientes primero
         this.incomingOrders.set(orders.sort((a, b) => b.id.localeCompare(a.id)));
       });
   }
@@ -124,7 +146,7 @@ export class Seller implements OnInit {
       .pipe(
         catchError((err) => {
           console.error('[Seller] Error actualizando estado en backend:', err);
-          alert('No se pudo actualizar el estado en el servidor.');
+          alert('No se pudo actualizar el estado en el servidor. ' + (err.error?.message || 'Error de conexión'));
           return of(null);
         })
       )
@@ -139,28 +161,41 @@ export class Seller implements OnInit {
   }
 
   createProduct(): void {
-    if (!this.newSku() || !this.newName() || !this.newPrice()) {
-      alert('Por favor completa los campos requeridos SKU, Nombre y Precio');
+    if (!this.newSku().trim() || !this.newName().trim() || !this.newPrice()) {
+      alert('Por favor completa los campos requeridos: SKU, Nombre y Precio');
       return;
     }
 
     const payload = {
-      sku: this.newSku(),
-      nombre: this.newName(),
+      sku: this.newSku().trim().toUpperCase(),
+      nombre: this.newName().trim(),
       categoria: this.newCategory(),
       precio: Number(this.newPrice()),
       stock: Number(this.newStock()),
-      descripcion: this.newDescription() || 'Producto agregado por el vendedor',
+      descripcion: this.newDescription().trim() || 'Producto agregado por el vendedor',
+      rating: 4.8,
+      deliveryMinutes: 25,
     };
 
+    this.isSubmittingProduct.set(true);
+
     this.http
-      .post(`${this.urls.base('productos')}`, payload)
-      .pipe(catchError(() => of(null)))
-      .subscribe(() => {
-        this.catalog.cargarProductosDeBackend();
-        this.showToast(`Producto "${this.newName()}" publicado en el catálogo.`);
-        this.resetForm();
-        this.activeTab.set('inventory');
+      .post<{ success: boolean; message: string; data: any }>(`${this.urls.base('productos')}`, payload)
+      .subscribe({
+        next: (res) => {
+          this.isSubmittingProduct.set(false);
+          this.catalog.cargarProductosDeBackend();
+          this.showToast(`¡Producto "${payload.nombre}" (${payload.sku}) publicado exitosamente en el catálogo!`);
+          this.resetForm();
+          this.activeTab.set('inventory');
+        },
+        error: (err) => {
+          this.isSubmittingProduct.set(false);
+          const errorMsg =
+            err.error?.message ||
+            (err.status === 409 ? `El SKU '${payload.sku}' ya existe en el sistema` : 'Error al registrar el producto en el backend');
+          alert('Error al publicar el producto: ' + errorMsg);
+        },
       });
   }
 

@@ -97,8 +97,8 @@
             </div>
 
             <div class="form-foot">
-              <button type="submit" class="btn btn-primary">
-                Guardar Datos Personales
+              <button type="submit" class="btn btn-primary" [disabled]="isSavingProfile()">
+                {{ isSavingProfile() ? 'Guardando en servidor...' : 'Guardar Datos Personales' }}
               </button>
             </div>
           </form>
@@ -179,8 +179,8 @@
             </div>
 
             <div class="form-foot">
-              <button type="submit" class="btn btn-secondary">
-                Actualizar Contraseña
+              <button type="submit" class="btn btn-secondary" [disabled]="isChangingPassword()">
+                {{ isChangingPassword() ? 'Actualizando en servidor...' : 'Actualizar Contraseña' }}
               </button>
             </div>
           </form>
@@ -190,7 +190,7 @@
       @case ('resumen') {
         <h1>Resumen</h1>
         <div class="stat-grid">
-          @for (s of stats; track s.label) {
+          @for (s of stats(); track s.label) {
             <div class="stat-card card">
               <div class="stat-card__icon"><app-icon [name]="s.icon" size="18" /></div>
               <p class="stat-card__value">{{ s.value }}</p>
@@ -200,61 +200,65 @@
           }
         </div>
 
-        <div class="card order-track">
-          <div class="order-track__head">
-            <div>
-              <h2>Pedido en camino</h2>
-              <p>#{{ currentOrder.id }}</p>
-            </div>
-            <button type="button" class="btn btn-primary btn-sm">Seguir pedido</button>
-          </div>
-          <p class="order-track__eta">Llega en aproximadamente {{ currentOrder.etaMinutes }} min</p>
-          <p class="order-track__meta">
-            {{ currentOrder.itemsCount }} productos de {{ currentOrder.storesCount }} tiendas cercanas ·
-            Valor total: ${{ currentOrder.total | number }}
-          </p>
-
-          <div class="timeline">
-            @for (step of orderSteps; track step.key; let i = $index) {
-              <div class="timeline__step" [class.timeline__step--done]="i <= stepIndex(currentOrder.status)">
-                <span class="timeline__dot"><app-icon name="check" size="12" /></span>
-                <span>{{ step.label }}</span>
+        @if (currentOrder(); as order) {
+          <div class="card order-track">
+            <div class="order-track__head">
+              <div>
+                <h2>Pedido en curso</h2>
+                <p>#{{ order.id }}</p>
               </div>
-            }
+              <button type="button" class="btn btn-primary btn-sm" (click)="select('pedidos')">Ver pedido</button>
+            </div>
+            <p class="order-track__eta">{{ order.deliveryEta }}</p>
+            <p class="order-track__meta">
+              {{ order.items.length }} productos · Estado: {{ order.statusLabel }} ·
+              Valor total: ${{ order.total | number }}
+            </p>
+
+            <div class="timeline">
+              @for (step of orderSteps; track step.key; let i = $index) {
+                <div class="timeline__step" [class.timeline__step--done]="i <= stepIndex(order.statusStep)">
+                  <span class="timeline__dot"><app-icon name="check" size="12" /></span>
+                  <span>{{ step.label }}</span>
+                </div>
+              }
+            </div>
           </div>
-        </div>
+        }
 
         <div class="two-col">
           <div class="card list-card">
             <div class="list-card__head">
               <h3><app-icon name="map-pin" size="16" /> Mis direcciones</h3>
             </div>
-            @for (a of addresses; track a.id) {
+            @for (a of addresses(); track a.id) {
               <div class="list-row">
                 <div>
                   <p class="list-row__title">{{ a.label }} @if (a.isPrimary) { <span class="tag">Principal</span> }</p>
                   <p class="list-row__sub">{{ a.detail }}</p>
                 </div>
-                <button type="button" class="icon-btn-outline" aria-label="Editar dirección"><app-icon name="edit" size="14" /></button>
               </div>
             }
-            <button type="button" class="btn btn-secondary btn-sm btn-block">Agregar nueva dirección</button>
+            @if (addresses().length === 0) {
+              <p style="padding: 1rem; color: var(--color-text-muted);">No tienes direcciones registradas en tu perfil.</p>
+            }
           </div>
 
           <div class="card list-card">
             <div class="list-card__head">
               <h3><app-icon name="credit-card" size="16" /> Métodos de pago</h3>
             </div>
-            @for (pm of paymentMethods; track pm.id) {
+            @for (pm of paymentMethods(); track pm.id) {
               <div class="list-row">
                 <div>
                   <p class="list-row__title">{{ pm.brand }}</p>
                   <p class="list-row__sub">{{ pm.kind }} •••• {{ pm.last4 }}</p>
                 </div>
-                <button type="button" class="icon-btn-outline" aria-label="Editar método de pago"><app-icon name="edit" size="14" /></button>
               </div>
             }
-            <button type="button" class="btn btn-secondary btn-sm btn-block">Agregar método de pago</button>
+            @if (paymentMethods().length === 0) {
+              <p style="padding: 1rem; color: var(--color-text-muted);">No tienes métodos de pago registrados.</p>
+            }
           </div>
         </div>
       }
@@ -262,21 +266,26 @@
       @case ('pedidos') {
         <h1>Mis pedidos</h1>
         <div class="card list-card">
-          <div class="list-row">
-            <div>
-              <p class="list-row__title">#{{ currentOrder.id }} <span class="tag tag--live">En camino</span></p>
-              <p class="list-row__sub">{{ currentOrder.itemsCount }} productos · ${{ currentOrder.total | number }}</p>
-            </div>
-            <button type="button" class="btn btn-primary btn-sm">Seguir pedido</button>
-          </div>
-          @for (o of pastOrders; track o.id) {
+          @if (currentOrder(); as order) {
             <div class="list-row">
               <div>
-                <p class="list-row__title">#{{ o.id }} <span class="tag">Entregado</span></p>
-                <p class="list-row__sub">{{ o.date }} · {{ o.itemsCount }} productos · ${{ o.total | number }}</p>
+                <p class="list-row__title">#{{ order.id }} <span class="tag tag--live">{{ order.statusLabel }}</span></p>
+                <p class="list-row__sub">{{ order.items.length }} productos · ${{ order.total | number }} · {{ order.date }}</p>
               </div>
-              <button type="button" class="btn btn-secondary btn-sm">Repetir pedido</button>
             </div>
+          }
+          @for (o of pastOrders(); track o.id) {
+            <div class="list-row">
+              <div>
+                <p class="list-row__title">#{{ o.id }} <span class="tag">{{ o.statusLabel }}</span></p>
+                <p class="list-row__sub">{{ o.date }} · {{ o.items.length }} productos · ${{ o.total | number }}</p>
+              </div>
+            </div>
+          }
+          @if (!currentOrder() && pastOrders().length === 0) {
+            <p style="padding: 1.5rem; text-align: center; color: var(--color-text-muted);">
+              Aún no tienes pedidos registrados en tu cuenta.
+            </p>
           }
         </div>
       }
@@ -284,13 +293,20 @@
       @case ('favoritos') {
         <h1>Favoritos</h1>
         <div class="fav-grid">
-          @for (p of catalog.products().slice(0, 4); track p.id) {
+          @for (p of favorites.favorites(); track p.id) {
             <div class="card fav-card">
               <div class="fav-card__img">{{ p.icon }}</div>
               <p class="fav-card__name">{{ p.name }}</p>
               <p class="fav-card__price">${{ p.price | number }}</p>
-              <button type="button" class="btn btn-primary btn-sm btn-block">Agregar al carrito</button>
+              <button type="button" class="btn btn-primary btn-sm btn-block" (click)="cart.add(p)">
+                Agregar al carrito
+              </button>
             </div>
+          }
+          @if (favorites.favorites().length === 0) {
+            <p style="grid-column: 1 / -1; padding: 2rem; text-align: center; color: var(--color-text-muted);">
+              No tienes productos agregados a favoritos. Explora el catálogo y pulsa el corazón para guardar tus productos preferidos.
+            </p>
           }
         </div>
       }
@@ -298,38 +314,38 @@
       @case ('direcciones') {
         <h1>Direcciones</h1>
         <div class="card list-card">
-          @for (a of addresses; track a.id) {
+          @for (a of addresses(); track a.id) {
             <div class="list-row">
               <div>
                 <p class="list-row__title">{{ a.label }} @if (a.isPrimary) { <span class="tag">Principal</span> }</p>
                 <p class="list-row__sub">{{ a.detail }}</p>
               </div>
-              <div class="list-row__actions">
-                <button type="button" class="icon-btn-outline" aria-label="Editar dirección"><app-icon name="edit" size="14" /></button>
-                <button type="button" class="icon-btn-outline" aria-label="Eliminar dirección"><app-icon name="trash" size="14" /></button>
-              </div>
             </div>
           }
-          <button type="button" class="btn btn-secondary btn-sm btn-block">Agregar nueva dirección</button>
+          @if (addresses().length === 0) {
+            <p style="padding: 1.5rem; text-align: center; color: var(--color-text-muted);">
+              No tienes direcciones registradas. Puedes configurar tu dirección en la pestaña "Mi Perfil & Datos".
+            </p>
+          }
         </div>
       }
 
       @case ('pagos') {
         <h1>Métodos de pago</h1>
         <div class="card list-card">
-          @for (pm of paymentMethods; track pm.id) {
+          @for (pm of paymentMethods(); track pm.id) {
             <div class="list-row">
               <div>
                 <p class="list-row__title">{{ pm.brand }}</p>
                 <p class="list-row__sub">{{ pm.kind }} •••• {{ pm.last4 }}</p>
               </div>
-              <div class="list-row__actions">
-                <button type="button" class="icon-btn-outline" aria-label="Editar método de pago"><app-icon name="edit" size="14" /></button>
-                <button type="button" class="icon-btn-outline" aria-label="Eliminar método de pago"><app-icon name="trash" size="14" /></button>
-              </div>
             </div>
           }
-          <button type="button" class="btn btn-secondary btn-sm btn-block">Agregar método de pago</button>
+          @if (paymentMethods().length === 0) {
+            <p style="padding: 1.5rem; text-align: center; color: var(--color-text-muted);">
+              No tienes métodos de pago guardados. Se solicitarán al momento del pago en caja.
+            </p>
+          }
         </div>
       }
 
@@ -378,12 +394,12 @@
             <span class="tag">Activo</span>
           </div>
           <div class="list-row">
-            <p class="list-row__title"><app-icon name="lock" size="16" /> Autenticación Microsoft Entra ID</p>
-            <span class="tag">Activo</span>
+            <p class="list-row__title"><app-icon name="lock" size="16" /> Sesión segura</p>
+            <span class="tag">{{ auth.user()?.provider === 'microsoft' ? 'Microsoft Entra ID' : 'Credenciales BD' }}</span>
           </div>
           <div class="list-row">
-            <p class="list-row__title">Último inicio de sesión</p>
-            <span class="list-row__sub">Hoy · Santiago, Chile</span>
+            <p class="list-row__title">Rol activo</p>
+            <span class="list-row__sub">{{ auth.roleLabel() }}</span>
           </div>
         </div>
       }

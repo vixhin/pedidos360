@@ -167,10 +167,6 @@ public class UsuarioService {
 
     /**
      * Provisioning JIT para usuarios que inician sesión con Microsoft Entra ID.
-     * Si el email no existe en usuario_db lo crea (con contraseña aleatoria
-     * inutilizable, ya que estos usuarios se autentican vía Entra, no localmente).
-     * Si ya existe, actualiza nombre y rol (Entra es la fuente de verdad del rol
-     * para usuarios externos).
      */
     @Transactional
     public UsuarioResponseDTO sincronizarUsuarioExterno(String email, String nombre, String rolNombre) {
@@ -185,6 +181,8 @@ public class UsuarioService {
                     passwordEncoder.encode(java.util.UUID.randomUUID().toString()),
                     rol
             );
+            usuario.setEstado("ACTIVO");
+            usuario.setTurno("FULL_TIME");
             log.info("[USER-SERVICE] Provisioning JIT (Entra ID) — nuevo usuario: {}", email);
         } else {
             usuario.setRol(rol);
@@ -215,13 +213,20 @@ public class UsuarioService {
         }
 
         Rol rolAsignado = (dto.getRol() != null) ? dto.getRol() : Rol.CLIENTE;
+        String rawPassword = (dto.getPassword() != null && !dto.getPassword().isBlank())
+                ? dto.getPassword()
+                : java.util.UUID.randomUUID().toString();
 
         Usuario usuario = new Usuario(
                 null,
                 dto.getNombre(),
                 dto.getEmail(),
-                passwordEncoder.encode(dto.getPassword()),
-                rolAsignado
+                passwordEncoder.encode(rawPassword),
+                rolAsignado,
+                dto.getTelefono(),
+                dto.getDireccion(),
+                dto.getTurno() != null ? dto.getTurno() : "FULL_TIME",
+                dto.getEstado() != null ? dto.getEstado() : "ACTIVO"
         );
 
         Usuario guardado = usuarioRepository.save(usuario);
@@ -259,15 +264,31 @@ public class UsuarioService {
         Usuario usuario = usuarioRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado con ID: " + id));
 
-        if (!usuario.getEmail().equalsIgnoreCase(dto.getEmail()) &&
-                usuarioRepository.findByEmail(dto.getEmail()).isPresent()) {
-            throw new RuntimeException("El email ya se encuentra registrado");
+        if (dto.getEmail() != null && !dto.getEmail().isBlank()) {
+            if (!usuario.getEmail().equalsIgnoreCase(dto.getEmail()) &&
+                    usuarioRepository.findByEmail(dto.getEmail()).isPresent()) {
+                throw new RuntimeException("El email ya se encuentra registrado");
+            }
+            usuario.setEmail(dto.getEmail());
         }
 
-        usuario.setNombre(dto.getNombre());
-        usuario.setEmail(dto.getEmail());
+        if (dto.getNombre() != null && !dto.getNombre().isBlank()) {
+            usuario.setNombre(dto.getNombre());
+        }
         if (dto.getRol() != null) {
             usuario.setRol(dto.getRol());
+        }
+        if (dto.getTelefono() != null) {
+            usuario.setTelefono(dto.getTelefono());
+        }
+        if (dto.getDireccion() != null) {
+            usuario.setDireccion(dto.getDireccion());
+        }
+        if (dto.getTurno() != null && !dto.getTurno().isBlank()) {
+            usuario.setTurno(dto.getTurno());
+        }
+        if (dto.getEstado() != null && !dto.getEstado().isBlank()) {
+            usuario.setEstado(dto.getEstado());
         }
         if (dto.getPassword() != null && !dto.getPassword().isBlank()) {
             usuario.setPasswordHash(passwordEncoder.encode(dto.getPassword()));
@@ -276,6 +297,46 @@ public class UsuarioService {
         Usuario actualizado = usuarioRepository.save(usuario);
         log.info("[USER-SERVICE] User updated successfully ID={}", actualizado.getId());
         return UsuarioResponseDTO.fromEntity(actualizado);
+    }
+
+    @Transactional
+    public void cambiarPassword(Long id, String currentPassword, String newPassword) {
+        Usuario usuario = usuarioRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado con ID: " + id));
+        if (!passwordEncoder.matches(currentPassword, usuario.getPasswordHash())) {
+            throw new IllegalArgumentException("La contraseña actual es incorrecta");
+        }
+        if (newPassword == null || newPassword.length() < 6) {
+            throw new IllegalArgumentException("La nueva contraseña debe tener al menos 6 caracteres");
+        }
+        usuario.setPasswordHash(passwordEncoder.encode(newPassword));
+        usuarioRepository.save(usuario);
+        log.info("[USER-SERVICE] Password changed successfully for user ID={}", id);
+    }
+
+    @Transactional
+    public void cambiarPasswordPorEmail(String email, String currentPassword, String newPassword) {
+        Usuario usuario = usuarioRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado con email: " + email));
+        if (!passwordEncoder.matches(currentPassword, usuario.getPasswordHash())) {
+            throw new IllegalArgumentException("La contraseña actual es incorrecta");
+        }
+        if (newPassword == null || newPassword.length() < 6) {
+            throw new IllegalArgumentException("La nueva contraseña debe tener al menos 6 caracteres");
+        }
+        usuario.setPasswordHash(passwordEncoder.encode(newPassword));
+        usuarioRepository.save(usuario);
+        log.info("[USER-SERVICE] Password changed successfully for user email={}", email);
+    }
+
+    @Transactional
+    public UsuarioResponseDTO actualizarEstado(Long id, String nuevoEstado) {
+        Usuario usuario = usuarioRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado con ID: " + id));
+        usuario.setEstado(nuevoEstado);
+        Usuario guardado = usuarioRepository.save(usuario);
+        log.info("[USER-SERVICE] User ID={} status updated to {}", id, nuevoEstado);
+        return UsuarioResponseDTO.fromEntity(guardado);
     }
 
     @Transactional

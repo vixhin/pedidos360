@@ -27,6 +27,22 @@ public class CarritoController {
         return ResponseEntity.ok(carritoService.agregarOActualizar(item));
     }
 
+    @PutMapping("/{id}")
+    public ResponseEntity<CarritoItem> actualizarCantidad(
+            @PathVariable Long id,
+            @RequestParam(required = false) Integer cantidad,
+            @RequestBody(required = false) CarritoItem body) {
+        Integer qty = cantidad != null ? cantidad : (body != null ? body.getCantidad() : null);
+        if (qty == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        CarritoItem actualizado = carritoService.actualizarCantidad(id, qty);
+        if (actualizado == null) {
+            return ResponseEntity.noContent().build();
+        }
+        return ResponseEntity.ok(actualizado);
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> eliminarItem(@PathVariable Long id) {
         carritoService.eliminarItem(id);

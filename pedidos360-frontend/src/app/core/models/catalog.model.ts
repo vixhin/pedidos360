@@ -29,6 +29,8 @@ export interface BackendProductDTO {
   precio: number;
   stock: number;
   imagenUrl: string;
+  rating?: number;
+  deliveryMinutes?: number;
 }
 
 export interface Promotion {

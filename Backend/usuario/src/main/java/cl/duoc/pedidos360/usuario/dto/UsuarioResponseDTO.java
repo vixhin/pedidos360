@@ -10,16 +10,26 @@ public class UsuarioResponseDTO {
     private String nombre;
     private String email;
     private Rol rol;
+    private String telefono;
+    private String direccion;
+    private String turno;
+    private String estado;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
     public UsuarioResponseDTO() {}
 
-    public UsuarioResponseDTO(Long id, String nombre, String email, Rol rol, LocalDateTime createdAt, LocalDateTime updatedAt) {
+    public UsuarioResponseDTO(Long id, String nombre, String email, Rol rol,
+                              String telefono, String direccion, String turno, String estado,
+                              LocalDateTime createdAt, LocalDateTime updatedAt) {
         this.id = id;
         this.nombre = nombre;
         this.email = email;
         this.rol = rol;
+        this.telefono = telefono;
+        this.direccion = direccion;
+        this.turno = turno;
+        this.estado = estado;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
@@ -30,6 +40,10 @@ public class UsuarioResponseDTO {
                 usuario.getNombre(),
                 usuario.getEmail(),
                 usuario.getRol(),
+                usuario.getTelefono(),
+                usuario.getDireccion(),
+                usuario.getTurno(),
+                usuario.getEstado(),
                 usuario.getCreatedAt(),
                 usuario.getUpdatedAt()
         );
@@ -65,6 +79,38 @@ public class UsuarioResponseDTO {
 
     public void setRol(Rol rol) {
         this.rol = rol;
+    }
+
+    public String getTelefono() {
+        return telefono;
+    }
+
+    public void setTelefono(String telefono) {
+        this.telefono = telefono;
+    }
+
+    public String getDireccion() {
+        return direccion;
+    }
+
+    public void setDireccion(String direccion) {
+        this.direccion = direccion;
+    }
+
+    public String getTurno() {
+        return turno;
+    }
+
+    public void setTurno(String turno) {
+        this.turno = turno;
+    }
+
+    public String getEstado() {
+        return estado;
+    }
+
+    public void setEstado(String estado) {
+        this.estado = estado;
     }
 
     public LocalDateTime getCreatedAt() {

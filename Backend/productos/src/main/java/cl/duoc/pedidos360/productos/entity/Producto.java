@@ -31,6 +31,12 @@ public class Producto {
     @Column(name = "imagen_url")
     private String imagenUrl;
 
+    @Column(precision = 2, scale = 1)
+    private Double rating = 4.8;
+
+    @Column(name = "delivery_minutes")
+    private Integer deliveryMinutes = 25;
+
     public Producto() {}
 
     public Producto(Long id, String sku, String nombre, String categoria, String descripcion, Double precio, Integer stock, String imagenUrl) {
@@ -42,6 +48,21 @@ public class Producto {
         this.precio = precio;
         this.stock = stock;
         this.imagenUrl = imagenUrl;
+        this.rating = 4.8;
+        this.deliveryMinutes = 25;
+    }
+
+    public Producto(Long id, String sku, String nombre, String categoria, String descripcion, Double precio, Integer stock, String imagenUrl, Double rating, Integer deliveryMinutes) {
+        this.id = id;
+        this.sku = sku;
+        this.nombre = nombre;
+        this.categoria = categoria;
+        this.descripcion = descripcion;
+        this.precio = precio;
+        this.stock = stock;
+        this.imagenUrl = imagenUrl;
+        this.rating = rating != null ? rating : 4.8;
+        this.deliveryMinutes = deliveryMinutes != null ? deliveryMinutes : 25;
     }
 
     public Long getId() {
@@ -106,5 +127,21 @@ public class Producto {
 
     public void setImagenUrl(String imagenUrl) {
         this.imagenUrl = imagenUrl;
+    }
+
+    public Double getRating() {
+        return rating;
+    }
+
+    public void setRating(Double rating) {
+        this.rating = rating;
+    }
+
+    public Integer getDeliveryMinutes() {
+        return deliveryMinutes;
+    }
+
+    public void setDeliveryMinutes(Integer deliveryMinutes) {
+        this.deliveryMinutes = deliveryMinutes;
     }
 }

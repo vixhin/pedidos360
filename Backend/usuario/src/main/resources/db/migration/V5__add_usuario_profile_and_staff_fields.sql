@@ -1,0 +1,6 @@
+-- Migración Flyway V5: Agregar campos de perfil y gestión de personal
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS telefono VARCHAR(50);
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS direccion VARCHAR(255);
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS turno VARCHAR(50) DEFAULT 'FULL_TIME';
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS estado VARCHAR(50) DEFAULT 'ACTIVO';
+

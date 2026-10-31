@@ -26,6 +26,8 @@ public class ProductoCreateDTO {
     private Integer stock;
 
     private String imagenUrl;
+    private Double rating;
+    private Integer deliveryMinutes;
 
     public ProductoCreateDTO() {}
 
@@ -37,6 +39,20 @@ public class ProductoCreateDTO {
         this.precio = precio;
         this.stock = stock;
         this.imagenUrl = imagenUrl;
+        this.rating = 4.8;
+        this.deliveryMinutes = 25;
+    }
+
+    public ProductoCreateDTO(String sku, String nombre, String categoria, String descripcion, Double precio, Integer stock, String imagenUrl, Double rating, Integer deliveryMinutes) {
+        this.sku = sku;
+        this.nombre = nombre;
+        this.categoria = categoria;
+        this.descripcion = descripcion;
+        this.precio = precio;
+        this.stock = stock;
+        this.imagenUrl = imagenUrl;
+        this.rating = rating;
+        this.deliveryMinutes = deliveryMinutes;
     }
 
     public String getSku() {
@@ -93,5 +109,21 @@ public class ProductoCreateDTO {
 
     public void setImagenUrl(String imagenUrl) {
         this.imagenUrl = imagenUrl;
+    }
+
+    public Double getRating() {
+        return rating;
+    }
+
+    public void setRating(Double rating) {
+        this.rating = rating;
+    }
+
+    public Integer getDeliveryMinutes() {
+        return deliveryMinutes;
+    }
+
+    public void setDeliveryMinutes(Integer deliveryMinutes) {
+        this.deliveryMinutes = deliveryMinutes;
     }
 }

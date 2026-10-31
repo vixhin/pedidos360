@@ -86,6 +86,10 @@ public class SecurityConfig {
                 // GET: cualquier usuario autenticado con scope
                 .requestMatchers(HttpMethod.GET, "/api/bff/productos/**")
                     .hasAuthority("SCOPE_access_as_user")
+                .requestMatchers(HttpMethod.POST, "/api/bff/productos/favoritos/**")
+                    .hasAuthority("SCOPE_access_as_user")
+                .requestMatchers(HttpMethod.DELETE, "/api/bff/productos/favoritos/**")
+                    .hasAuthority("SCOPE_access_as_user")
                 // POST/PUT: VENDEDOR o ADMIN
                 .requestMatchers(HttpMethod.POST, "/api/bff/productos/**")
                     .hasAnyRole("VENDEDOR", "ADMIN")
@@ -117,6 +121,10 @@ public class SecurityConfig {
                 // ── USUARIOS ──────────────────────────────────────────────
                 // Perfil propio: autenticado
                 .requestMatchers(HttpMethod.GET, "/api/bff/usuarios/me")
+                    .hasAuthority("SCOPE_access_as_user")
+                .requestMatchers(HttpMethod.PUT, "/api/bff/usuarios/me")
+                    .hasAuthority("SCOPE_access_as_user")
+                .requestMatchers(HttpMethod.PUT, "/api/bff/usuarios/me/password")
                     .hasAuthority("SCOPE_access_as_user")
                 // Gestión: solo ADMIN
                 .requestMatchers("/api/bff/usuarios/**")

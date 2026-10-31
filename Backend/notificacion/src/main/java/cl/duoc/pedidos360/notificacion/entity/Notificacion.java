@@ -23,8 +23,12 @@ public class Notificacion {
     @Column(name = "fecha_envio")
     private LocalDateTime fechaEnvio;
 
+    @Column(nullable = false)
+    private Boolean leida = false;
+
     public Notificacion() {
         this.fechaEnvio = LocalDateTime.now();
+        this.leida = false;
     }
 
     public Notificacion(Long id, Long usuarioId, String mensaje, String canal) {
@@ -33,6 +37,16 @@ public class Notificacion {
         this.mensaje = mensaje;
         this.canal = canal;
         this.fechaEnvio = LocalDateTime.now();
+        this.leida = false;
+    }
+
+    public Notificacion(Long id, Long usuarioId, String mensaje, String canal, Boolean leida) {
+        this.id = id;
+        this.usuarioId = usuarioId;
+        this.mensaje = mensaje;
+        this.canal = canal;
+        this.fechaEnvio = LocalDateTime.now();
+        this.leida = leida != null ? leida : false;
     }
 
     public Long getId() {
@@ -73,5 +87,13 @@ public class Notificacion {
 
     public void setFechaEnvio(LocalDateTime fechaEnvio) {
         this.fechaEnvio = fechaEnvio;
+    }
+
+    public Boolean getLeida() {
+        return leida;
+    }
+
+    public void setLeida(Boolean leida) {
+        this.leida = leida;
     }
 }

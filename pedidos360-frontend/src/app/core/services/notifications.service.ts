@@ -11,6 +11,7 @@ export interface NotificacionDB {
   mensaje: string;
   canal: string;
   fechaEnvio: string;
+  leida?: boolean;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -27,14 +28,12 @@ export class NotificationsService {
   readonly unreadCount = computed(() => this._items().filter((n) => !n.read).length);
 
   constructor() {
-    // Intentar cargar notificaciones del backend cuando el usuario esté disponible
     setTimeout(() => this.cargarDeBackend(), 500);
   }
 
   cargarDeBackend(): void {
     const user = this.auth.user();
     if (!user?.id) {
-      // Sin usuario autenticado: sin notificaciones
       this._items.set([]);
       return;
     }
@@ -55,7 +54,7 @@ export class NotificationsService {
           time: n.fechaEnvio
             ? this.timeAgo(new Date(n.fechaEnvio))
             : 'Reciente',
-          read: false,
+          read: n.leida ?? false,
           actionLabel: n.canal === 'PEDIDOS' ? 'Ver pedido' : 'Ver detalle',
         }));
         this._items.set(mapped);
@@ -63,7 +62,7 @@ export class NotificationsService {
   }
 
   enviarNotificacion(usuarioId: number, mensaje: string, canal: string): void {
-    const payload = { usuarioId, mensaje, canal };
+    const payload = { usuarioId, mensaje, canal, leida: false };
     this.http
       .post<NotificacionDB>(`${this.urls.base('notificacion')}`, payload)
       .pipe(catchError(() => of(null)))
@@ -97,10 +96,24 @@ export class NotificationsService {
 
   markAllRead(): void {
     this._items.set(this._items().map((n) => ({ ...n, read: true })));
+    const user = this.auth.user();
+    if (user?.id) {
+      this.http
+        .put(`${this.urls.base('notificacion')}/usuario/${user.id}/marcar-todas-leidas`, {})
+        .pipe(catchError(() => of(null)))
+        .subscribe();
+    }
   }
 
   markRead(id: string): void {
     this._items.set(this._items().map((n) => (n.id === id ? { ...n, read: true } : n)));
+    const numericId = id.replace('n_', '');
+    if (!isNaN(Number(numericId))) {
+      this.http
+        .put(`${this.urls.base('notificacion')}/${numericId}/leida`, {})
+        .pipe(catchError(() => of(null)))
+        .subscribe();
+    }
   }
 
   pushNotification(notif: Omit<AppNotification, 'id' | 'time' | 'read'>): void {

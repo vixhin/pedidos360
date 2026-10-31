@@ -31,4 +31,16 @@ public class NotificacionController {
     public ResponseEntity<Notificacion> enviar(@RequestBody Notificacion notificacion) {
         return ResponseEntity.ok(notificacionService.enviarNotificacion(notificacion));
     }
+
+    @PutMapping("/{id}/leida")
+    public ResponseEntity<Void> marcarLeida(@PathVariable Long id) {
+        notificacionService.marcarLeida(id);
+        return ResponseEntity.ok().build();
+    }
+
+    @PutMapping("/usuario/{usuarioId}/marcar-todas-leidas")
+    public ResponseEntity<Void> marcarTodasLeidas(@PathVariable Long usuarioId) {
+        notificacionService.marcarTodasLeidas(usuarioId);
+        return ResponseEntity.ok().build();
+    }
 }

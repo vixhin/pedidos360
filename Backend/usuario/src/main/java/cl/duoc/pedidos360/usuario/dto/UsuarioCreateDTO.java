@@ -14,11 +14,14 @@ public class UsuarioCreateDTO {
     @Email(message = "El formato de email es inválido")
     private String email;
 
-    @NotBlank(message = "La contraseña no puede estar vacía")
     @Size(min = 6, message = "La contraseña debe tener al menos 6 caracteres")
     private String password;
 
     private Rol rol;
+    private String telefono;
+    private String direccion;
+    private String turno;
+    private String estado;
 
     public UsuarioCreateDTO() {}
 
@@ -27,6 +30,18 @@ public class UsuarioCreateDTO {
         this.email = email;
         this.password = password;
         this.rol = rol;
+    }
+
+    public UsuarioCreateDTO(String nombre, String email, String password, Rol rol,
+                            String telefono, String direccion, String turno, String estado) {
+        this.nombre = nombre;
+        this.email = email;
+        this.password = password;
+        this.rol = rol;
+        this.telefono = telefono;
+        this.direccion = direccion;
+        this.turno = turno;
+        this.estado = estado;
     }
 
     public String getNombre() {
@@ -59,5 +74,37 @@ public class UsuarioCreateDTO {
 
     public void setRol(Rol rol) {
         this.rol = rol;
+    }
+
+    public String getTelefono() {
+        return telefono;
+    }
+
+    public void setTelefono(String telefono) {
+        this.telefono = telefono;
+    }
+
+    public String getDireccion() {
+        return direccion;
+    }
+
+    public void setDireccion(String direccion) {
+        this.direccion = direccion;
+    }
+
+    public String getTurno() {
+        return turno;
+    }
+
+    public void setTurno(String turno) {
+        this.turno = turno;
+    }
+
+    public String getEstado() {
+        return estado;
+    }
+
+    public void setEstado(String estado) {
+        this.estado = estado;
     }
 }

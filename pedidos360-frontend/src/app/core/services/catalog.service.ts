@@ -13,6 +13,7 @@ export interface ApiResponse<T> {
 @Injectable({ providedIn: 'root' })
 export class CatalogService {
   private readonly _allProducts = signal<Product[]>([]);
+  private readonly _promotions = signal<Promotion[]>([]);
   private readonly _isLoading = signal<boolean>(false);
   private readonly _searchQuery = signal<string>('');
   private readonly _selectedCategory = signal<string>('TODAS');
@@ -30,7 +31,6 @@ export class CatalogService {
       return list;
     }
 
-    // Mapeo semántico de palabras clave a conceptos y categorías
     const semanticMatches: string[] = [];
     if (this.matchesAny(rawQuery, ['chela', 'gaseosa', 'refresco', 'bebida', 'jugo', 'coca', 'fanta', 'sprite', 'cerveza', 'agua', 'trago'])) {
       semanticMatches.push('BEBIDAS');
@@ -75,6 +75,7 @@ export class CatalogService {
   readonly isLoading = this._isLoading.asReadonly();
   readonly searchQuery = this._searchQuery.asReadonly();
   readonly selectedCategory = this._selectedCategory.asReadonly();
+  readonly promotions = this._promotions.asReadonly();
 
   readonly categories: Category[] = [
     { id: 'TODAS', name: 'Todos los productos', icon: 'ALL' },
@@ -132,17 +133,13 @@ export class CatalogService {
     },
   ];
 
-  readonly promotions: Promotion[] = [
-    { id: 'p1', title: 'Hasta 40% de descuento en productos de supermercado', tag: 'Termina hoy', color: '#fde7c8' },
-    { id: 'p2', title: 'Envío gratis en tu primera compra de abarrotes', tag: 'Nuevo', color: '#d7f7e9' },
-    { id: 'p3', title: 'Ofertas especiales en carnes y lácteos', tag: 'Destacado', color: '#e4e6ff' },
-    { id: 'p4', title: 'Compra 2 y obtén un precio especial en bebidas', tag: 'Termina hoy', color: '#ffe3e6' },
-  ];
+  readonly errorMessage = signal<string | null>(null);
 
   private readonly urls = inject(BackendUrlService);
 
   constructor(private http: HttpClient) {
     this.cargarProductosDeBackend();
+    this.cargarPromocionesDeBackend();
   }
 
   setSearchQuery(query: string): void {
@@ -163,8 +160,6 @@ export class CatalogService {
   selectCategory(categoryId: string): void {
     this._selectedCategory.set(categoryId);
   }
-
-  readonly errorMessage = signal<string | null>(null);
 
   cargarProductosDeBackend(): void {
     this._isLoading.set(true);
@@ -188,6 +183,28 @@ export class CatalogService {
           if (!res.success && res.message !== 'Error de conexión') {
             this.errorMessage.set('No se encontraron productos en la base de datos.');
           }
+        }
+      });
+  }
+
+  cargarPromocionesDeBackend(): void {
+    this.http
+      .get<ApiResponse<Array<{ id: string; titulo: string; tag: string; color: string }>>>(
+        `${this.urls.base('productos')}/promociones`
+      )
+      .pipe(catchError(() => of(null)))
+      .subscribe((res) => {
+        if (res?.success && res.data && res.data.length > 0) {
+          this._promotions.set(
+            res.data.map((p) => ({
+              id: p.id,
+              title: p.titulo,
+              tag: p.tag,
+              color: p.color,
+            }))
+          );
+        } else {
+          this._promotions.set([]);
         }
       });
   }
@@ -268,23 +285,12 @@ export class CatalogService {
       brand: dto.categoria.replace(/_/g, ' '),
       price: dto.precio,
       icon: iconMap[dto.nombre] || categoryIcons[dto.categoria] || 'P360',
-      rating: 4.8,
-      deliveryMinutes: 20,
+      rating: dto.rating ?? 4.8,
+      deliveryMinutes: dto.deliveryMinutes ?? 25,
       categoria: dto.categoria,
       descripcion: dto.descripcion,
       stock: dto.stock,
       imagenUrl: dto.imagenUrl,
     };
-  }
-
-  private obtenerProductosFallback(): Product[] {
-    return [
-      { id: '1', sku: 'SUP-LAC-001', name: 'Leche Entera Colun 1L', brand: 'LÁCTEOS', price: 1190, icon: 'COL', rating: 4.8, deliveryMinutes: 20, categoria: 'LACTEOS_Y_HUEVOS', stock: 150 },
-      { id: '2', sku: 'SUP-LAC-002', name: 'Queso Gauda Soprole 250g', brand: 'LÁCTEOS', price: 2890, icon: 'SOP', rating: 4.7, deliveryMinutes: 20, categoria: 'LACTEOS_Y_HUEVOS', stock: 80 },
-      { id: '6', sku: 'SUP-ABA-001', name: 'Arroz Grado 1 Tucapel 1kg', brand: 'ABARROTES', price: 1590, icon: 'TUC', rating: 4.9, deliveryMinutes: 25, categoria: 'ABARROTES', stock: 200 },
-      { id: '14', sku: 'SUP-BEB-001', name: 'Coca-Cola Sabor Original 2.5L', brand: 'BEBIDAS', price: 2490, icon: 'COC', rating: 4.8, deliveryMinutes: 15, categoria: 'BEBIDAS', stock: 180 },
-      { id: '21', sku: 'SUP-CAR-001', name: 'Pechuga de Pollo Ariztía 1kg', brand: 'CARNES', price: 5990, icon: 'ARZ', rating: 4.9, deliveryMinutes: 30, categoria: 'CARNES_Y_PESCADOS', stock: 60 },
-      { id: '24', sku: 'SUP-LIM-001', name: 'Detergente Líquido Omo 3L', brand: 'LIMPIEZA', price: 8990, icon: 'OMO', rating: 4.6, deliveryMinutes: 25, categoria: 'LIMPIEZA', stock: 45 },
-    ];
   }
 }

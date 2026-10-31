@@ -7,7 +7,7 @@ import { BackendUrlService } from './backend-url.service';
 export interface CartLine {
   product: Product;
   quantity: number;
-  backendId?: number; // ID del item en la tabla carrito_items
+  backendId?: number; // ID del item en la tabla carrito_items en PostgreSQL
 }
 
 interface CarritoItemDB {
@@ -36,7 +36,7 @@ export class CartService {
   );
 
   /**
-   * Set the current user ID and load their cart from the backend.
+   * Set the current user ID and load their cart from PostgreSQL.
    * Called from AuthService / AppComponent after login.
    */
   setUsuario(usuarioId: number | null, productos?: Product[]): void {
@@ -75,7 +75,7 @@ export class CartService {
     const newLine: CartLine = { product, quantity: 1 };
     this._lines.set([...lines, newLine]);
 
-    // Sincronizar con backend si hay usuario
+    // Sincronizar persistencia con PostgreSQL
     if (this._usuarioId) {
       this.http
         .post<CarritoItemDB>(`${this.urls.base('carrito')}`, {
@@ -87,7 +87,6 @@ export class CartService {
         .pipe(catchError(() => of(null)))
         .subscribe((res) => {
           if (res) {
-            // Actualizar backendId
             this._lines.update((ls) =>
               ls.map((l) =>
                 l.product.id === product.id ? { ...l, backendId: res.id } : l
@@ -103,17 +102,51 @@ export class CartService {
       this.remove(productId);
       return;
     }
+
+    const currentLine = this._lines().find((l) => l.product.id === productId);
+
     this._lines.set(
       this._lines().map((l) => (l.product.id === productId ? { ...l, quantity } : l))
     );
-    // No hay endpoint PATCH en el backend, así que solo actualizamos localmente
+
+    // Sincronizar actualización de cantidad con PostgreSQL
+    if (this._usuarioId) {
+      if (currentLine?.backendId) {
+        this.http
+          .put<CarritoItemDB>(
+            `${this.urls.base('carrito')}/${currentLine.backendId}?cantidad=${quantity}`,
+            {}
+          )
+          .pipe(catchError(() => of(null)))
+          .subscribe();
+      } else {
+        // Si no tenía backendId, enviamos agregarOActualizar
+        this.http
+          .post<CarritoItemDB>(`${this.urls.base('carrito')}`, {
+            usuarioId: this._usuarioId,
+            productoId: Number(productId),
+            cantidad: quantity,
+            precioUnitario: currentLine?.product.price || 0,
+          })
+          .pipe(catchError(() => of(null)))
+          .subscribe((res) => {
+            if (res) {
+              this._lines.update((ls) =>
+                ls.map((l) =>
+                  l.product.id === productId ? { ...l, backendId: res.id } : l
+                )
+              );
+            }
+          });
+      }
+    }
   }
 
   remove(productId: string): void {
     const line = this._lines().find((l) => l.product.id === productId);
     this._lines.set(this._lines().filter((l) => l.product.id !== productId));
 
-    // Eliminar del backend si tiene ID
+    // Eliminar de PostgreSQL si está persistido
     if (this._usuarioId && line?.backendId) {
       this.http
         .delete(`${this.urls.base('carrito')}/${line.backendId}`)
@@ -124,7 +157,7 @@ export class CartService {
 
   clear(): void {
     this._lines.set([]);
-    // Vaciar carrito en el backend
+    // Vaciar carrito en PostgreSQL para el usuario
     if (this._usuarioId) {
       this.http
         .delete(`${this.urls.base('carrito')}/usuario/${this._usuarioId}`)

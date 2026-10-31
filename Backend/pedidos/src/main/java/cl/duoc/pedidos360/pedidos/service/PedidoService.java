@@ -217,6 +217,11 @@ public class PedidoService {
 
     @Transactional
     public Pedido asignarRepartidor(Long id, Long repartidorId, String nombreRepartidor) {
+        return asignarRepartidor(id, repartidorId, nombreRepartidor, null);
+    }
+
+    @Transactional
+    public Pedido asignarRepartidor(Long id, Long repartidorId, String nombreRepartidor, String telefonoRepartidor) {
         Pedido pedido = pedidoRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Pedido no encontrado con ID: " + id));
 
@@ -225,6 +230,12 @@ public class PedidoService {
         }
 
         pedido.setRepartidorId(repartidorId);
+        if (nombreRepartidor != null) {
+            pedido.setRepartidorNombre(nombreRepartidor);
+        }
+        if (telefonoRepartidor != null) {
+            pedido.setRepartidorTelefono(telefonoRepartidor);
+        }
         pedido.setEstado("EN_CAMINO");
         Pedido actualizado = pedidoRepository.save(pedido);
         log.info("[PEDIDOS-SERVICE] Order ID={} assigned to driver ID={} ({})", id, repartidorId, nombreRepartidor);

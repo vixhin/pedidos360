@@ -22,8 +22,9 @@ export class BackendUrlService {
   /** Prefijo completo del recurso, ej: base('carrito') → ".../carrito" */
   base(resource: DirectResource): string {
     if (environment.useBff && this.auth.user()?.provider === 'microsoft') {
-      // BFF expone /api/bff/<recurso>/**  (notificaciones en plural en el BFF)
-      const bffSegment = resource === 'notificacion' ? 'notificaciones' : resource;
+      let bffSegment: string = resource;
+      if (resource === 'notificacion') bffSegment = 'notificaciones';
+      if (resource === 'usuario') bffSegment = 'usuarios';
       return `${API_CONFIG.bff}/${bffSegment}`;
     }
     // Directo: API_CONFIG.<recurso> = "http://host:puerto/api", se le suma "/<recurso>"

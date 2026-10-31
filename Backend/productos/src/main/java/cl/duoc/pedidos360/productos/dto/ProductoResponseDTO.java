@@ -12,10 +12,16 @@ public class ProductoResponseDTO {
     private Double precio;
     private Integer stock;
     private String imagenUrl;
+    private Double rating;
+    private Integer deliveryMinutes;
 
     public ProductoResponseDTO() {}
 
     public ProductoResponseDTO(Long id, String sku, String nombre, String categoria, String descripcion, Double precio, Integer stock, String imagenUrl) {
+        this(id, sku, nombre, categoria, descripcion, precio, stock, imagenUrl, 4.8, 25);
+    }
+
+    public ProductoResponseDTO(Long id, String sku, String nombre, String categoria, String descripcion, Double precio, Integer stock, String imagenUrl, Double rating, Integer deliveryMinutes) {
         this.id = id;
         this.sku = sku;
         this.nombre = nombre;
@@ -24,6 +30,8 @@ public class ProductoResponseDTO {
         this.precio = precio;
         this.stock = stock;
         this.imagenUrl = imagenUrl;
+        this.rating = rating != null ? rating : 4.8;
+        this.deliveryMinutes = deliveryMinutes != null ? deliveryMinutes : 25;
     }
 
     public static ProductoResponseDTO fromEntity(Producto p) {
@@ -35,7 +43,9 @@ public class ProductoResponseDTO {
                 p.getDescripcion(),
                 p.getPrecio(),
                 p.getStock(),
-                p.getImagenUrl()
+                p.getImagenUrl(),
+                p.getRating(),
+                p.getDeliveryMinutes()
         );
     }
 
@@ -101,5 +111,21 @@ public class ProductoResponseDTO {
 
     public void setImagenUrl(String imagenUrl) {
         this.imagenUrl = imagenUrl;
+    }
+
+    public Double getRating() {
+        return rating;
+    }
+
+    public void setRating(Double rating) {
+        this.rating = rating;
+    }
+
+    public Integer getDeliveryMinutes() {
+        return deliveryMinutes;
+    }
+
+    public void setDeliveryMinutes(Integer deliveryMinutes) {
+        this.deliveryMinutes = deliveryMinutes;
     }
 }

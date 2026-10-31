@@ -27,8 +27,7 @@ export class Cart {
   readonly selectedAddress = signal('a1');
 
   readonly addresses = [
-    { id: 'a1', label: 'Casa · Santiago Centro', detail: 'Av. Ejemplo 1234, Depto. 506' },
-    { id: 'a2', label: 'Universidad · Santiago Centro', detail: 'Sede Duoc UC' },
+    { id: 'a1', label: 'Dirección Principal', detail: 'Santiago Centro, Chile' },
   ];
 
   readonly shippingCost = computed(() =>
@@ -73,6 +72,7 @@ export class Cart {
     if (this.cart.itemCount() === 0) return;
 
     const cartLines = this.cart.lines().map((l) => ({
+      productId: l.product.id,
       name: l.product.name,
       icon: l.product.icon,
       quantity: l.quantity,
@@ -80,7 +80,7 @@ export class Cart {
     }));
 
     this.pedidoSvc.crearPedidoDesdeCarrito(cartLines);
-    // Wait a tick for the service to update lastOrderId, then clear cart and show success
+
     setTimeout(() => {
       this.confirmedOrderId.set(this.pedidoSvc.lastOrderId());
       this.cart.clear();
