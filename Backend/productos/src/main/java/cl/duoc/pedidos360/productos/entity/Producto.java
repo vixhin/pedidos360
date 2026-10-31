@@ -31,7 +31,7 @@ public class Producto {
     @Column(name = "imagen_url")
     private String imagenUrl;
 
-    @Column(precision = 2, scale = 1)
+    @Column(name = "rating")
     private Double rating = 4.8;
 
     @Column(name = "delivery_minutes")

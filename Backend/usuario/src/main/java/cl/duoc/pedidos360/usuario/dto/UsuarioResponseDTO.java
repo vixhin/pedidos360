@@ -20,6 +20,11 @@ public class UsuarioResponseDTO {
     public UsuarioResponseDTO() {}
 
     public UsuarioResponseDTO(Long id, String nombre, String email, Rol rol,
+                              LocalDateTime createdAt, LocalDateTime updatedAt) {
+        this(id, nombre, email, rol, null, null, "FULL_TIME", "ACTIVO", createdAt, updatedAt);
+    }
+
+    public UsuarioResponseDTO(Long id, String nombre, String email, Rol rol,
                               String telefono, String direccion, String turno, String estado,
                               LocalDateTime createdAt, LocalDateTime updatedAt) {
         this.id = id;
