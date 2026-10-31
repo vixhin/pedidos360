@@ -1,7 +1,7 @@
 package cl.duoc.pedidos360.analitica.kafka.consumer;
 
 import cl.duoc.pedidos360.analitica.entity.AnaliticaEvento;
-import cl.duoc.pedidos360.analitica.service.AnaliticaService;
+import cl.duoc.pedidos360.analitica.entity.ProcessedEvent;
 import cl.duoc.pedidos360.analitica.service.IdempotencyService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -24,9 +24,6 @@ import static org.mockito.Mockito.*;
 class AnaliticaKafkaConsumerTest {
 
     @Mock
-    private AnaliticaService analiticaService;
-
-    @Mock
     private IdempotencyService idempotencyService;
 
     @Mock
@@ -39,11 +36,11 @@ class AnaliticaKafkaConsumerTest {
 
     @BeforeEach
     void setUp() {
-        consumer = new AnaliticaKafkaConsumer(analiticaService, idempotencyService, objectMapper);
+        consumer = new AnaliticaKafkaConsumer(idempotencyService, objectMapper);
     }
 
     @Test
-    @DisplayName("consume - procesa pedido.creado, registra métrica, guarda idempotencia y envía ACK")
+    @DisplayName("consume - procesa pedido.creado atómicamente y envía ACK")
     void testConsumePedidoCreado() {
         String json = """
             {
@@ -61,16 +58,20 @@ class AnaliticaKafkaConsumerTest {
             """;
 
         ConsumerRecord<String, String> record = new ConsumerRecord<>("pedidos360.pedidos.v1", 0, 100L, "50", json);
-        when(idempotencyService.isAlreadyProcessed("evt-001")).thenReturn(false);
+        when(idempotencyService.processEventTransactional(any(ProcessedEvent.class), any(AnaliticaEvento.class)))
+                .thenReturn(true);
 
         consumer.consume(record, acknowledgment);
 
-        ArgumentCaptor<AnaliticaEvento> captor = ArgumentCaptor.forClass(AnaliticaEvento.class);
-        verify(analiticaService).registrarEvento(captor.capture());
-        assertThat(captor.getValue().getTipoEvento()).isEqualTo("PEDIDO_CREADO");
-        assertThat(captor.getValue().getDescripcion()).contains("Pedido #50").contains("usuarioId=12").contains("35000");
+        ArgumentCaptor<ProcessedEvent> eventCaptor = ArgumentCaptor.forClass(ProcessedEvent.class);
+        ArgumentCaptor<AnaliticaEvento> metricCaptor = ArgumentCaptor.forClass(AnaliticaEvento.class);
 
-        verify(idempotencyService).markAsProcessed("evt-001", "KAFKA", "pedido.creado", "50", "corr-001", "analitica-group");
+        verify(idempotencyService).processEventTransactional(eventCaptor.capture(), metricCaptor.capture());
+        assertThat(eventCaptor.getValue().getEventId()).isEqualTo("evt-001");
+        assertThat(eventCaptor.getValue().getSourceChannel()).isEqualTo("KAFKA");
+        assertThat(metricCaptor.getValue().getTipoEvento()).isEqualTo("PEDIDO_CREADO");
+        assertThat(metricCaptor.getValue().getDescripcion()).contains("Pedido #50").contains("35000");
+
         verify(acknowledgment).acknowledge();
     }
 
@@ -93,16 +94,16 @@ class AnaliticaKafkaConsumerTest {
             """;
 
         ConsumerRecord<String, String> record = new ConsumerRecord<>("pedidos360.pedidos.v1", 0, 101L, "50", json);
-        when(idempotencyService.isAlreadyProcessed("evt-002")).thenReturn(false);
+        when(idempotencyService.processEventTransactional(any(ProcessedEvent.class), any(AnaliticaEvento.class)))
+                .thenReturn(true);
 
         consumer.consume(record, acknowledgment);
 
-        ArgumentCaptor<AnaliticaEvento> captor = ArgumentCaptor.forClass(AnaliticaEvento.class);
-        verify(analiticaService).registrarEvento(captor.capture());
-        assertThat(captor.getValue().getTipoEvento()).isEqualTo("PEDIDO_ESTADO_ACTUALIZADO");
-        assertThat(captor.getValue().getDescripcion()).contains("Pedido #50").contains("EN_CAMINO");
+        ArgumentCaptor<AnaliticaEvento> metricCaptor = ArgumentCaptor.forClass(AnaliticaEvento.class);
+        verify(idempotencyService).processEventTransactional(any(ProcessedEvent.class), metricCaptor.capture());
+        assertThat(metricCaptor.getValue().getTipoEvento()).isEqualTo("PEDIDO_ESTADO_ACTUALIZADO");
+        assertThat(metricCaptor.getValue().getDescripcion()).contains("Pedido #50").contains("EN_CAMINO");
 
-        verify(idempotencyService).markAsProcessed("evt-002", "KAFKA", "pedido.estado.actualizado", "50", "corr-002", "analitica-group");
         verify(acknowledgment).acknowledge();
     }
 
@@ -126,21 +127,21 @@ class AnaliticaKafkaConsumerTest {
             """;
 
         ConsumerRecord<String, String> record = new ConsumerRecord<>("pedidos360.pedidos.v1", 0, 102L, "50", json);
-        when(idempotencyService.isAlreadyProcessed("evt-003")).thenReturn(false);
+        when(idempotencyService.processEventTransactional(any(ProcessedEvent.class), any(AnaliticaEvento.class)))
+                .thenReturn(true);
 
         consumer.consume(record, acknowledgment);
 
-        ArgumentCaptor<AnaliticaEvento> captor = ArgumentCaptor.forClass(AnaliticaEvento.class);
-        verify(analiticaService).registrarEvento(captor.capture());
-        assertThat(captor.getValue().getTipoEvento()).isEqualTo("REPARTIDOR_ASIGNADO");
-        assertThat(captor.getValue().getDescripcion()).contains("Juan Repartidor").contains("88").contains("#50");
+        ArgumentCaptor<AnaliticaEvento> metricCaptor = ArgumentCaptor.forClass(AnaliticaEvento.class);
+        verify(idempotencyService).processEventTransactional(any(ProcessedEvent.class), metricCaptor.capture());
+        assertThat(metricCaptor.getValue().getTipoEvento()).isEqualTo("REPARTIDOR_ASIGNADO");
+        assertThat(metricCaptor.getValue().getDescripcion()).contains("Juan Repartidor").contains("88");
 
-        verify(idempotencyService).markAsProcessed("evt-003", "KAFKA", "pedido.repartidor.asignado", "50", "corr-003", "analitica-group");
         verify(acknowledgment).acknowledge();
     }
 
     @Test
-    @DisplayName("consume - descarta evento duplicado sin registrar métrica adicional y envía ACK")
+    @DisplayName("consume - reconoce (ACK) duplicado sin volver a registrar métrica")
     void testConsumeDuplicateEventIgnored() {
         String json = """
             {
@@ -154,17 +155,16 @@ class AnaliticaKafkaConsumerTest {
             """;
 
         ConsumerRecord<String, String> record = new ConsumerRecord<>("pedidos360.pedidos.v1", 0, 103L, "50", json);
-        when(idempotencyService.isAlreadyProcessed("evt-duplicate")).thenReturn(true);
+        when(idempotencyService.processEventTransactional(any(ProcessedEvent.class), any(AnaliticaEvento.class)))
+                .thenReturn(false); // Duplicado detectado por restricción UNIQUE
 
         consumer.consume(record, acknowledgment);
 
-        verify(analiticaService, never()).registrarEvento(any());
-        verify(idempotencyService, never()).markAsProcessed(any(), any(), any(), any(), any(), any());
         verify(acknowledgment).acknowledge();
     }
 
     @Test
-    @DisplayName("consume - si ocurre error inesperado, lanza excepción para activar reintentos/DLT")
+    @DisplayName("consume - si ocurre error inesperado, lanza excepción para activar DefaultErrorHandler (reintentos/DLT)")
     void testConsumeErrorTriggersRetry() {
         String invalidJson = "{ malformed json }";
         ConsumerRecord<String, String> record = new ConsumerRecord<>("pedidos360.pedidos.v1", 0, 104L, "50", invalidJson);
@@ -173,4 +173,3 @@ class AnaliticaKafkaConsumerTest {
         verify(acknowledgment, never()).acknowledge();
     }
 }
-

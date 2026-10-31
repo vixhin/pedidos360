@@ -1,6 +1,7 @@
 package cl.duoc.pedidos360.analitica.listener;
 
 import cl.duoc.pedidos360.analitica.entity.AnaliticaEvento;
+import cl.duoc.pedidos360.analitica.entity.ProcessedEvent;
 import cl.duoc.pedidos360.analitica.event.PedidoCreadoEvent;
 import cl.duoc.pedidos360.analitica.kafka.consumer.AnaliticaKafkaConsumer;
 import cl.duoc.pedidos360.analitica.service.AnaliticaService;
@@ -49,17 +50,20 @@ class AnaliticaKafkaRabbitSimultaneousTest {
 
     @BeforeEach
     void setUp() {
-        kafkaConsumer = new AnaliticaKafkaConsumer(analiticaService, idempotencyService, objectMapper);
+        kafkaConsumer = new AnaliticaKafkaConsumer(idempotencyService, objectMapper);
         rabbitListener = new AnaliticaEventListener(analiticaService, idempotencyService);
 
-        // Simular base de datos persistente compartida
-        when(idempotencyService.isAlreadyProcessed(anyString()))
-                .thenAnswer(inv -> simulatedDb.contains(inv.getArgument(0)));
-
-        doAnswer(inv -> {
-            simulatedDb.add(inv.getArgument(0));
-            return null;
-        }).when(idempotencyService).markAsProcessed(anyString(), anyString(), anyString(), any(), any(), any());
+        // Simular base de datos persistente compartida con restricción UNIQUE atómica
+        when(idempotencyService.processEventTransactional(any(ProcessedEvent.class), any(AnaliticaEvento.class)))
+                .thenAnswer(inv -> {
+                    ProcessedEvent event = inv.getArgument(0);
+                    AnaliticaEvento metric = inv.getArgument(1);
+                    boolean isNew = simulatedDb.add(event.getEventId());
+                    if (isNew && metric != null) {
+                        analiticaService.registrarEvento(metric);
+                    }
+                    return isNew;
+                });
     }
 
     @Test
@@ -73,26 +77,24 @@ class AnaliticaKafkaRabbitSimultaneousTest {
                 "timestamp": "2026-10-30T22:00:00Z",
                 "correlationId": "corr-999",
                 "resourceId": 999,
-                "payload": {"usuarioId": 5, "total": 20000.0}
+                "payload": {"usuarioId": 5, "total": 45000.0, "estado": "PENDIENTE"}
             }
             """, eventId);
 
         ConsumerRecord<String, String> kafkaRecord =
                 new ConsumerRecord<>("pedidos360.pedidos.v1", 0, 10L, "999", kafkaJson);
 
-        // 1. Llega evento por Apache Kafka
+        // 1. Entrega por Kafka primero
         kafkaConsumer.consume(kafkaRecord, kafkaAck);
+        verify(kafkaAck).acknowledge();
+
+        // 2. Entrega por RabbitMQ del mismo eventId posteriormente
+        PedidoCreadoEvent rabbitEvent = new PedidoCreadoEvent(eventId, "pedido.creado", "2026-10-30T22:00:00Z", 999L, 5L, 45000.0);
+        rabbitListener.handlePedidoCreado(rabbitEvent, rabbitChannel, 101L);
+
+        // Verificar que Rabbit envía ACK pero no duplica la métrica en Analitica
+        verify(rabbitChannel).basicAck(101L, false);
         verify(analiticaService, times(1)).registrarEvento(any(AnaliticaEvento.class));
-        verify(kafkaAck, times(1)).acknowledge();
-
-        // 2. Llega el mismo evento de dominio por RabbitMQ
-        PedidoCreadoEvent rabbitEvent = new PedidoCreadoEvent(eventId, "pedido.creado", "2026-10-30T22:00:00Z", 999L, 5L, 20000.0);
-
-        rabbitListener.handlePedidoCreado(rabbitEvent, rabbitChannel, 1L);
-
-        // Verificar que RabbitMQ envió ACK pero NO registró una segunda métrica en Analítica
-        verify(rabbitChannel, times(1)).basicAck(1L, false);
-        verify(analiticaService, times(1)).registrarEvento(any(AnaliticaEvento.class)); // Sigue siendo 1!
     }
 
     @Test
@@ -100,14 +102,13 @@ class AnaliticaKafkaRabbitSimultaneousTest {
     void testRabbitFirstThenKafka() throws IOException {
         String eventId = "evt-order-888";
 
-        // 1. Llega evento por RabbitMQ
-        PedidoCreadoEvent rabbitEvent = new PedidoCreadoEvent(eventId, "pedido.creado", "2026-10-30T22:00:00Z", 888L, 7L, 45000.0);
+        // 1. Entrega por RabbitMQ primero
+        PedidoCreadoEvent rabbitEvent = new PedidoCreadoEvent(eventId, "pedido.creado", "2026-10-30T22:00:00Z", 888L, 7L, 20000.0);
+        rabbitListener.handlePedidoCreado(rabbitEvent, rabbitChannel, 201L);
 
-        rabbitListener.handlePedidoCreado(rabbitEvent, rabbitChannel, 2L);
-        verify(analiticaService, times(1)).registrarEvento(any(AnaliticaEvento.class));
-        verify(rabbitChannel, times(1)).basicAck(2L, false);
+        verify(rabbitChannel).basicAck(201L, false);
 
-        // 2. Llega el mismo evento por Apache Kafka
+        // 2. Entrega por Kafka del mismo eventId posteriormente
         String kafkaJson = String.format("""
             {
                 "eventId": "%s",
@@ -115,17 +116,17 @@ class AnaliticaKafkaRabbitSimultaneousTest {
                 "timestamp": "2026-10-30T22:00:00Z",
                 "correlationId": "corr-888",
                 "resourceId": 888,
-                "payload": {"usuarioId": 7, "total": 45000.0}
+                "payload": {"usuarioId": 7, "total": 20000.0, "estado": "PENDIENTE"}
             }
             """, eventId);
 
         ConsumerRecord<String, String> kafkaRecord =
-                new ConsumerRecord<>("pedidos360.pedidos.v1", 0, 11L, "888", kafkaJson);
+                new ConsumerRecord<>("pedidos360.pedidos.v1", 0, 20L, "888", kafkaJson);
 
         kafkaConsumer.consume(kafkaRecord, kafkaAck);
+        verify(kafkaAck).acknowledge();
 
-        // Verificar que Kafka envió ACK pero NO registró una segunda métrica
-        verify(kafkaAck, times(1)).acknowledge();
-        verify(analiticaService, times(1)).registrarEvento(any(AnaliticaEvento.class)); // Sigue siendo 1!
+        // Total de métricas registradas en analitica debe ser exactamente 1
+        verify(analiticaService, times(1)).registrarEvento(any(AnaliticaEvento.class));
     }
 }

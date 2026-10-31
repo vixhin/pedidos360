@@ -17,6 +17,7 @@ import org.springframework.kafka.core.*;
 import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
+import org.springframework.kafka.support.serializer.ErrorHandlingDeserializer;
 import org.springframework.util.backoff.FixedBackOff;
 
 import java.util.HashMap;
@@ -38,13 +39,24 @@ public class KafkaConsumerConfig {
     @Value("${kafka.topics.pedidos-dlt:pedidos360.pedidos.dlt.v1}")
     private String dltTopic;
 
+    @Value("${kafka.consumer.retry.interval-ms:1000}")
+    private long retryIntervalMs;
+
+    @Value("${kafka.consumer.retry.max-attempts:3}")
+    private long maxAttempts;
+
     @Bean
     public ConsumerFactory<String, String> consumerFactory() {
         Map<String, Object> props = new HashMap<>();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ConsumerConfig.GROUP_ID_CONFIG, defaultGroupId);
-        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+
+        // Deserializador seguro con manejo de errores (poison pills)
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ErrorHandlingDeserializer.class);
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ErrorHandlingDeserializer.class);
+        props.put(ErrorHandlingDeserializer.KEY_DESERIALIZER_CLASS, StringDeserializer.class);
+        props.put(ErrorHandlingDeserializer.VALUE_DESERIALIZER_CLASS, StringDeserializer.class);
+
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
         props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 20);
@@ -57,6 +69,7 @@ public class KafkaConsumerConfig {
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        props.put(ProducerConfig.ACKS_CONFIG, "all");
         return new DefaultKafkaProducerFactory<>(props);
     }
 
@@ -67,23 +80,26 @@ public class KafkaConsumerConfig {
 
     @Bean
     public DefaultErrorHandler kafkaErrorHandler(KafkaTemplate<String, String> dltKafkaTemplate) {
-        // Enviar a DLT al agotarse los 3 reintentos
         DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(
                 dltKafkaTemplate,
                 (record, exception) -> {
-                    log.error("[KAFKA-ERROR-HANDLER] Routing unrecoverable record key={} from topic={} to DLT={}. Reason: {}",
-                            record.key(), record.topic(), dltTopic, exception.getMessage());
+                    log.error("[KAFKA-ERROR-HANDLER] Routing unrecoverable record key={} from topic={} partition={} offset={} to DLT={}. Reason: {}",
+                            record.key(), record.topic(), record.partition(), record.offset(), dltTopic, exception.getMessage());
+                    // Preservar la partición si está disponible o resolver automáticamente
                     return new TopicPartition(dltTopic, record.partition());
                 }
         );
 
-        // 3 reintentos con intervalo fijo de 1000ms
-        FixedBackOff backOff = new FixedBackOff(1000L, 3L);
+        // Garantizar confirmación estricta de la publicación al DLT antes de dar por recuperado el mensaje
+        recoverer.setFailIfSendResultIsError(true);
+
+        // Reintentos controlados con backoff configurable
+        FixedBackOff backOff = new FixedBackOff(retryIntervalMs, maxAttempts);
         DefaultErrorHandler errorHandler = new DefaultErrorHandler(recoverer, backOff);
 
         errorHandler.setRetryListeners((record, ex, attempt) -> {
-            log.warn("[KAFKA-RETRY] Retrying message key={} from topic={} (attempt {}/3): {}",
-                    record.key(), record.topic(), attempt, ex.getMessage());
+            log.warn("[KAFKA-RETRY] Retrying message key={} from topic={} partition={} (attempt {}/{}): {}",
+                    record.key(), record.topic(), record.partition(), attempt, maxAttempts, ex.getMessage());
         });
 
         return errorHandler;
@@ -98,8 +114,7 @@ public class KafkaConsumerConfig {
         factory.setConsumerFactory(consumerFactory);
         factory.setCommonErrorHandler(kafkaErrorHandler);
         factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
-        factory.setConcurrency(2); // Consumo concurrente optimizado
+        factory.setConcurrency(2);
         return factory;
     }
 }
-

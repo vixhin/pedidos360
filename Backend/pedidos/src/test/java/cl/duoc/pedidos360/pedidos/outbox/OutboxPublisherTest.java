@@ -5,6 +5,7 @@ import cl.duoc.pedidos360.pedidos.outbox.publisher.OutboxPublisher;
 import cl.duoc.pedidos360.pedidos.outbox.service.OutboxService;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.SerializationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -17,9 +18,9 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeoutException;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -39,6 +40,9 @@ class OutboxPublisherTest {
     void setUp() {
         outboxPublisher = new OutboxPublisher(outboxService, kafkaTemplate);
         ReflectionTestUtils.setField(outboxPublisher, "kafkaEnabled", true);
+        ReflectionTestUtils.setField(outboxPublisher, "timeoutSeconds", 5);
+        ReflectionTestUtils.setField(outboxPublisher, "batchSize", 50);
+        ReflectionTestUtils.setField(outboxPublisher, "stuckTimeoutSeconds", 300L);
 
         mockEvent = new OutboxEvent(
                 "evt-123",
@@ -54,9 +58,10 @@ class OutboxPublisherTest {
     }
 
     @Test
-    @DisplayName("processOutbox - publica a Kafka y marca PUBLISHED al recibir ACK")
+    @DisplayName("processOutbox - publica a Kafka y marca PUBLISHED al recibir ACK síncrono")
     void testProcessOutboxSuccess() throws Exception {
-        when(outboxService.findPendingEvents()).thenReturn(List.of(mockEvent));
+        when(outboxService.reserveBatchForPublishing(anyString(), anyInt(), anyLong()))
+                .thenReturn(List.of(mockEvent));
 
         RecordMetadata metadata = new RecordMetadata(new TopicPartition("pedidos360.pedidos.v1", 0), 0, 0, 0, 0, 0);
         SendResult<String, String> sendResult = new SendResult<>(null, metadata);
@@ -68,22 +73,40 @@ class OutboxPublisherTest {
 
         verify(kafkaTemplate).send("pedidos360.pedidos.v1", "100", mockEvent.getPayload());
         verify(outboxService).markAsPublished(10L);
-        verify(outboxService, never()).markAsFailed(anyLong(), anyString());
+        verify(outboxService, never()).markAsFailed(anyLong(), anyString(), anyBoolean());
     }
 
     @Test
-    @DisplayName("processOutbox - marca FAILED/reintento si Kafka falla o desconecta")
-    void testProcessOutboxFailure() {
-        when(outboxService.findPendingEvents()).thenReturn(List.of(mockEvent));
+    @DisplayName("processOutbox - marca error transitorio si Kafka falla por timeout")
+    void testProcessOutboxTimeoutFailure() {
+        when(outboxService.reserveBatchForPublishing(anyString(), anyInt(), anyLong()))
+                .thenReturn(List.of(mockEvent));
 
         CompletableFuture<SendResult<String, String>> future = new CompletableFuture<>();
-        future.completeExceptionally(new RuntimeException("Connection refused to Kafka broker"));
+        future.completeExceptionally(new TimeoutException("Kafka broker ACK timeout"));
 
         when(kafkaTemplate.send(any(), any(), any())).thenReturn(future);
 
         outboxPublisher.processOutbox();
 
-        verify(outboxService).markAsFailed(eq(10L), contains("Connection refused"));
+        verify(outboxService).markAsFailed(eq(10L), contains("Kafka broker ACK timeout"), eq(false));
+        verify(outboxService, never()).markAsPublished(10L);
+    }
+
+    @Test
+    @DisplayName("processOutbox - marca error permanente si ocurre fallo de serialización")
+    void testProcessOutboxSerializationFailure() {
+        when(outboxService.reserveBatchForPublishing(anyString(), anyInt(), anyLong()))
+                .thenReturn(List.of(mockEvent));
+
+        CompletableFuture<SendResult<String, String>> future = new CompletableFuture<>();
+        future.completeExceptionally(new SerializationException("Cannot serialize payload"));
+
+        when(kafkaTemplate.send(any(), any(), any())).thenReturn(future);
+
+        outboxPublisher.processOutbox();
+
+        verify(outboxService).markAsFailed(eq(10L), contains("Cannot serialize payload"), eq(true));
         verify(outboxService, never()).markAsPublished(10L);
     }
 
@@ -94,8 +117,7 @@ class OutboxPublisherTest {
 
         outboxPublisher.processOutbox();
 
-        verify(outboxService, never()).findPendingEvents();
+        verify(outboxService, never()).reserveBatchForPublishing(any(), anyInt(), anyLong());
         verifyNoInteractions(kafkaTemplate);
     }
 }
-

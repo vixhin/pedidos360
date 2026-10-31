@@ -11,6 +11,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 import java.util.Optional;
@@ -32,6 +33,10 @@ class OutboxServiceTest {
 
     @BeforeEach
     void setUp() {
+        ReflectionTestUtils.setField(outboxService, "maxRetries", 5);
+        ReflectionTestUtils.setField(outboxService, "initialBackoffMs", 1000L);
+        ReflectionTestUtils.setField(outboxService, "maxBackoffMs", 60000L);
+
         mockEvent = new OutboxEvent(
                 "evt-123",
                 "PEDIDO",
@@ -62,41 +67,76 @@ class OutboxServiceTest {
     }
 
     @Test
-    @DisplayName("markAsPublished - actualiza estado a PUBLISHED y asigna publishedAt")
+    @DisplayName("reserveBatchForPublishing - reserva lote en estado PROCESSING con lockedBy y timestamp")
+    void testReserveBatchForPublishing() {
+        when(outboxEventRepository.findAndLockBatchForProcessing(any(), any(), anyInt()))
+                .thenReturn(List.of(mockEvent));
+        when(outboxEventRepository.save(any(OutboxEvent.class))).thenAnswer(i -> i.getArguments()[0]);
+
+        List<OutboxEvent> reserved = outboxService.reserveBatchForPublishing("worker-1", 10, 300L);
+
+        assertThat(reserved).hasSize(1);
+        assertThat(reserved.get(0).getStatus()).isEqualTo(OutboxStatus.PROCESSING);
+        assertThat(reserved.get(0).getLockedBy()).isEqualTo("worker-1");
+        assertThat(reserved.get(0).getProcessingStartedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("markAsPublished - actualiza estado a PUBLISHED y libera lockedBy")
     void testMarkAsPublished() {
+        mockEvent.setStatus(OutboxStatus.PROCESSING);
+        mockEvent.setLockedBy("worker-1");
         when(outboxEventRepository.findById(1L)).thenReturn(Optional.of(mockEvent));
 
         outboxService.markAsPublished(1L);
 
         assertThat(mockEvent.getStatus()).isEqualTo(OutboxStatus.PUBLISHED);
         assertThat(mockEvent.getPublishedAt()).isNotNull();
+        assertThat(mockEvent.getLockedBy()).isNull();
         verify(outboxEventRepository).save(mockEvent);
     }
 
     @Test
-    @DisplayName("markAsFailed - incrementa retryCount y marca FAILED al superar max retries")
-    void testMarkAsFailedMaxRetries() {
-        mockEvent.setRetryCount(4); // Siguiente intento será 5 (MAX_RETRIES)
+    @DisplayName("markAsFailed - reintento transitorio calcula backoff exponencial y mantiene PENDING")
+    void testMarkAsFailedTemporary() {
+        mockEvent.setRetryCount(1);
         when(outboxEventRepository.findById(1L)).thenReturn(Optional.of(mockEvent));
 
-        outboxService.markAsFailed(1L, "Kafka broker timeout");
+        outboxService.markAsFailed(1L, "Kafka timeout", false);
 
-        assertThat(mockEvent.getStatus()).isEqualTo(OutboxStatus.FAILED);
-        assertThat(mockEvent.getRetryCount()).isEqualTo(5);
-        assertThat(mockEvent.getErrorMessage()).isEqualTo("Kafka broker timeout");
+        assertThat(mockEvent.getStatus()).isEqualTo(OutboxStatus.PENDING);
+        assertThat(mockEvent.getRetryCount()).isEqualTo(2);
+        assertThat(mockEvent.getNextRetryAt()).isNotNull();
+        assertThat(mockEvent.getErrorType()).isEqualTo("TEMPORARY");
         verify(outboxEventRepository).save(mockEvent);
     }
 
     @Test
-    @DisplayName("findPendingEvents - retorna lista de eventos en estado PENDING")
-    void testFindPendingEvents() {
-        when(outboxEventRepository.findTop50ByStatusOrderByCreatedAtAsc(OutboxStatus.PENDING))
-                .thenReturn(List.of(mockEvent));
+    @DisplayName("markAsFailed - error permanente marca FAILED inmediatamente")
+    void testMarkAsFailedPermanent() {
+        when(outboxEventRepository.findById(1L)).thenReturn(Optional.of(mockEvent));
 
-        List<OutboxEvent> result = outboxService.findPendingEvents();
+        outboxService.markAsFailed(1L, "Serialization error", true);
 
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).getStatus()).isEqualTo(OutboxStatus.PENDING);
+        assertThat(mockEvent.getStatus()).isEqualTo(OutboxStatus.FAILED);
+        assertThat(mockEvent.getErrorType()).isEqualTo("PERMANENT");
+        verify(outboxEventRepository).save(mockEvent);
+    }
+
+    @Test
+    @DisplayName("reprocessFailedEvents - recupera eventos FAILED cambiándolos a PENDING con reintentos en 0")
+    void testReprocessFailedEvents() {
+        mockEvent.setStatus(OutboxStatus.FAILED);
+        mockEvent.setRetryCount(5);
+        mockEvent.setErrorMessage("Broker connection error");
+        when(outboxEventRepository.findByStatus(OutboxStatus.FAILED)).thenReturn(List.of(mockEvent));
+
+        int reprocessed = outboxService.reprocessFailedEvents(10);
+
+        assertThat(reprocessed).isEqualTo(1);
+        assertThat(mockEvent.getStatus()).isEqualTo(OutboxStatus.PENDING);
+        assertThat(mockEvent.getRetryCount()).isEqualTo(0);
+        assertThat(mockEvent.getErrorMessage()).isNull();
+        verify(outboxEventRepository).save(mockEvent);
     }
 }
-

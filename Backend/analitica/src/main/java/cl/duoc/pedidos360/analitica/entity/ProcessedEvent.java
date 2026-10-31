@@ -33,12 +33,27 @@ public class ProcessedEvent {
     @Column(name = "processed_at", nullable = false)
     private Instant processedAt = Instant.now();
 
+    @Column(name = "status", length = 20)
+    private String status = "COMPLETED";
+
+    @Column(name = "error_message", columnDefinition = "TEXT")
+    private String errorMessage;
+
+    @Column(name = "execution_duration_ms")
+    private Long executionDurationMs;
+
     public ProcessedEvent() {
     }
 
     public ProcessedEvent(String eventId, String sourceChannel, String eventType,
                           String resourceId, String correlationId, String consumerGroup,
                           Instant processedAt) {
+        this(eventId, sourceChannel, eventType, resourceId, correlationId, consumerGroup, processedAt, "COMPLETED", null, null);
+    }
+
+    public ProcessedEvent(String eventId, String sourceChannel, String eventType,
+                          String resourceId, String correlationId, String consumerGroup,
+                          Instant processedAt, String status, String errorMessage, Long executionDurationMs) {
         this.eventId = eventId;
         this.sourceChannel = sourceChannel;
         this.eventType = eventType;
@@ -46,6 +61,9 @@ public class ProcessedEvent {
         this.correlationId = correlationId;
         this.consumerGroup = consumerGroup;
         this.processedAt = processedAt != null ? processedAt : Instant.now();
+        this.status = status != null ? status : "COMPLETED";
+        this.errorMessage = errorMessage;
+        this.executionDurationMs = executionDurationMs;
     }
 
     public String getEventId() {
@@ -103,5 +121,28 @@ public class ProcessedEvent {
     public void setProcessedAt(Instant processedAt) {
         this.processedAt = processedAt;
     }
-}
 
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public String getErrorMessage() {
+        return errorMessage;
+    }
+
+    public void setErrorMessage(String errorMessage) {
+        this.errorMessage = errorMessage;
+    }
+
+    public Long getExecutionDurationMs() {
+        return executionDurationMs;
+    }
+
+    public void setExecutionDurationMs(Long executionDurationMs) {
+        this.executionDurationMs = executionDurationMs;
+    }
+}

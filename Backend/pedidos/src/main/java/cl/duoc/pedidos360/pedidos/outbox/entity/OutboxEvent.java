@@ -48,6 +48,21 @@ public class OutboxEvent {
     @Column(name = "published_at")
     private Instant publishedAt;
 
+    @Column(name = "next_retry_at")
+    private Instant nextRetryAt;
+
+    @Column(name = "processing_started_at")
+    private Instant processingStartedAt;
+
+    @Column(name = "locked_by", length = 100)
+    private String lockedBy;
+
+    @Column(name = "last_attempted_at")
+    private Instant lastAttemptedAt;
+
+    @Column(name = "error_type", length = 50)
+    private String errorType;
+
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 
@@ -173,6 +188,46 @@ public class OutboxEvent {
         this.publishedAt = publishedAt;
     }
 
+    public Instant getNextRetryAt() {
+        return nextRetryAt;
+    }
+
+    public void setNextRetryAt(Instant nextRetryAt) {
+        this.nextRetryAt = nextRetryAt;
+    }
+
+    public Instant getProcessingStartedAt() {
+        return processingStartedAt;
+    }
+
+    public void setProcessingStartedAt(Instant processingStartedAt) {
+        this.processingStartedAt = processingStartedAt;
+    }
+
+    public String getLockedBy() {
+        return lockedBy;
+    }
+
+    public void setLockedBy(String lockedBy) {
+        this.lockedBy = lockedBy;
+    }
+
+    public Instant getLastAttemptedAt() {
+        return lastAttemptedAt;
+    }
+
+    public void setLastAttemptedAt(Instant lastAttemptedAt) {
+        this.lastAttemptedAt = lastAttemptedAt;
+    }
+
+    public String getErrorType() {
+        return errorType;
+    }
+
+    public void setErrorType(String errorType) {
+        this.errorType = errorType;
+    }
+
     public String getErrorMessage() {
         return errorMessage;
     }
@@ -181,4 +236,3 @@ public class OutboxEvent {
         this.errorMessage = errorMessage;
     }
 }
-

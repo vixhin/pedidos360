@@ -3,7 +3,7 @@ version: '3.8'
 # ==============================================================================
 # APACHE KAFKA (KRAFT) + KAFKA UI - PEDIDOS360 LOCAL OVERLAY
 # ==============================================================================
-# Uso:
+# Uso básico:
 #   docker compose -f docker-compose.yml -f docker-compose.kafka.yml up -d
 #
 # Para levantar Kafka UI opcional:
@@ -15,18 +15,20 @@ services:
     image: apache/kafka:3.7.0
     container_name: pedidos360-kafka
     restart: unless-stopped
+    mem_limit: 1024m
     ports:
-      - "9092:9092"
-      - "9094:9094"
+      # Listener externo disponible exclusivamente en localhost (127.0.0.1) para seguridad
+      - "127.0.0.1:9094:9094"
+      # El puerto interno 9092 NO se expone al host para evitar interferencias
     environment:
-      # KRaft mode configuration (ZooKeeper-less)
+      # KRaft mode configuration (sin ZooKeeper)
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      # Listeners internos y externos
+      # Listeners internos y externos desacoplados
       KAFKA_LISTENERS: PLAINTEXT://:9092,PLAINTEXT_HOST://:9094,CONTROLLER://:9093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://127.0.0.1:9094
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       # Single-broker tuning
@@ -38,8 +40,8 @@ services:
       # Retención y gestión de segmentos
       KAFKA_LOG_RETENTION_HOURS: 24
       KAFKA_LOG_SEGMENT_BYTES: 104857600
-      # Optimización de memoria (512MB heap inicial para bajo consumo)
-      KAFKA_HEAP_OPTS: "-Xmx512m -Xms512m"
+      # Optimización de memoria (512MB heap inicial configurable)
+      KAFKA_HEAP_OPTS: "${KAFKA_HEAP_OPTS:--Xmx512m -Xms512m}"
     volumes:
       - kafka_data:/var/lib/kafka/data
     healthcheck:
@@ -58,19 +60,21 @@ services:
     entrypoint: [ "/bin/sh", "-c" ]
     command: |
       "
-      echo 'Creating Kafka topics...'
+      echo 'Provisioning Kafka topics...'
       /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic pedidos360.pedidos.v1 --partitions 3 --replication-factor 1 --config retention.ms=86400000
       /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic pedidos360.pedidos.dlt.v1 --partitions 3 --replication-factor 1 --config retention.ms=604800000
-      echo 'Topics created and verified successfully.'
+      echo 'Topics provisioned successfully.'
       "
     restart: "no"
 
   kafka-ui:
-    image: provectuslabs/kafka-ui:latest
+    image: provectuslabs/kafka-ui:v0.7.2
     container_name: pedidos360-kafka-ui
     restart: unless-stopped
+    mem_limit: 512m
     ports:
-      - "8089:8080"
+      # Kafka UI expuesto únicamente en localhost (127.0.0.1)
+      - "127.0.0.1:8089:8080"
     environment:
       KAFKA_CLUSTERS_0_NAME: pedidos360-local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
@@ -81,11 +85,11 @@ services:
     profiles:
       - kafka-ui
 
-  # Overlays para conectar pedidos y analítica a Kafka cuando se levante este compose
+  # Overlays para conectar pedidos y analítica a Kafka
   pedidos:
     environment:
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
-      KAFKA_ENABLED: ${KAFKA_ENABLED:-true}
+      KAFKA_ENABLED: ${KAFKA_ENABLED:-false}
     depends_on:
       kafka:
         condition: service_healthy
@@ -93,11 +97,10 @@ services:
   analitica:
     environment:
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
-      KAFKA_ENABLED: ${KAFKA_ENABLED:-true}
+      KAFKA_ENABLED: ${KAFKA_ENABLED:-false}
     depends_on:
       kafka:
         condition: service_healthy
 
 volumes:
   kafka_data:
-

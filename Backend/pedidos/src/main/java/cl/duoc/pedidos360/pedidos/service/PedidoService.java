@@ -19,6 +19,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
 import java.util.List;
@@ -40,7 +42,7 @@ public class PedidoService {
 
     public PedidoService(PedidoRepository pedidoRepository,
                          RabbitTemplate rabbitTemplate,
-                         OutboxService outboxService,
+                         @Autowired(required = false) OutboxService outboxService,
                          @Autowired(required = false) ObjectMapper objectMapper) {
         this.pedidoRepository = pedidoRepository;
         this.rabbitTemplate = rabbitTemplate;
@@ -73,60 +75,57 @@ public class PedidoService {
         String correlationId = UUID.randomUUID().toString();
 
         // 1. Transactional Outbox (Apache Kafka): persistir evento dentro de la misma transacción PostgreSQL
-        try {
-            PedidoCreadoPayload payload = new PedidoCreadoPayload(
-                    guardado.getUsuarioId(),
-                    guardado.getTotal(),
-                    guardado.getEstado()
-            );
+        if (outboxService != null) {
+            try {
+                PedidoCreadoPayload payload = new PedidoCreadoPayload(
+                        guardado.getUsuarioId(),
+                        guardado.getTotal(),
+                        guardado.getEstado()
+                );
 
-            KafkaEvent<PedidoCreadoPayload> kafkaEvent = new KafkaEvent<>(
-                    eventId,
-                    "pedido.creado",
-                    Instant.now().toString(),
-                    correlationId,
-                    guardado.getId(),
-                    payload
-            );
+                KafkaEvent<PedidoCreadoPayload> kafkaEvent = new KafkaEvent<>(
+                        eventId,
+                        "pedido.creado",
+                        Instant.now().toString(),
+                        correlationId,
+                        guardado.getId(),
+                        payload
+                );
 
-            String jsonPayload = objectMapper.writeValueAsString(kafkaEvent);
-            outboxService.saveEvent(
-                    eventId,
-                    "PEDIDO",
-                    guardado.getId().toString(),
-                    "pedido.creado",
-                    pedidosTopic,
-                    guardado.getId().toString(),
-                    correlationId,
-                    jsonPayload
-            );
-        } catch (Exception ex) {
-            log.error("[PEDIDOS-SERVICE] Error serializing/saving outbox event for order ID={}: {}",
-                    guardado.getId(), ex.getMessage(), ex);
-            throw new RuntimeException("Error en persistencia outbox de pedido", ex);
+                String jsonPayload = objectMapper.writeValueAsString(kafkaEvent);
+                outboxService.saveEvent(
+                        eventId,
+                        "PEDIDO",
+                        guardado.getId().toString(),
+                        "pedido.creado",
+                        pedidosTopic,
+                        guardado.getId().toString(),
+                        correlationId,
+                        jsonPayload
+                );
+            } catch (Exception ex) {
+                log.error("[PEDIDOS-SERVICE] Error serializing/saving outbox event for order ID={}: {}",
+                        guardado.getId(), ex.getMessage(), ex);
+                throw new RuntimeException("Error en persistencia outbox de pedido", ex);
+            }
         }
 
-        // 2. Publicar evento a RabbitMQ para mantener retrocompatibilidad (notificación, carrito, chat)
-        try {
-            PedidoCreadoEvent rabbitEvent = new PedidoCreadoEvent(
-                    guardado.getId(),
-                    guardado.getUsuarioId(),
-                    guardado.getTotal()
-            );
-            rabbitEvent.setEventId(eventId);
+        // 2. Publicación a RabbitMQ posterior al commit de PostgreSQL
+        PedidoCreadoEvent rabbitEvent = new PedidoCreadoEvent(
+                guardado.getId(),
+                guardado.getUsuarioId(),
+                guardado.getTotal()
+        );
+        rabbitEvent.setEventId(eventId);
 
-            rabbitTemplate.convertAndSend(
-                    RabbitMQConfig.EXCHANGE_EVENTS,
-                    RabbitMQConfig.ROUTING_KEY_PEDIDO_CREADO,
-                    rabbitEvent
-            );
-
-            log.info("[PEDIDOS-SERVICE] Domain event published to RabbitMQ: eventType={} eventId={} resourceId={}",
-                    rabbitEvent.getEventType(), rabbitEvent.getEventId(), rabbitEvent.getResourceId());
-        } catch (Exception ex) {
-            log.warn("[PEDIDOS-SERVICE] Failed to publish domain event to RabbitMQ for order ID={}: {}",
-                    guardado.getId(), ex.getMessage());
-        }
+        publishRabbitEventAfterCommit(
+                RabbitMQConfig.EXCHANGE_EVENTS,
+                RabbitMQConfig.ROUTING_KEY_PEDIDO_CREADO,
+                rabbitEvent,
+                rabbitEvent.getEventType(),
+                eventId,
+                guardado.getId()
+        );
 
         return guardado;
     }
@@ -141,76 +140,77 @@ public class PedidoService {
         Pedido pedido = pedidoRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Pedido no encontrado con ID: " + id));
 
-        if (callerRoles != null && callerRoles.toUpperCase().contains("REPARTIDOR") && callerUserId != null) {
-            if (pedido.getRepartidorId() == null || !pedido.getRepartidorId().equals(callerUserId)) {
-                throw new SecurityException("Acceso denegado: El repartidor no puede modificar pedidos asignados a otros repartidores.");
+        if (callerRoles != null && !callerRoles.isBlank()) {
+            boolean esAdmin = callerRoles.contains("ADMIN");
+            boolean esRepartidor = callerRoles.contains("REPARTIDOR");
+            if (esRepartidor && !esAdmin) {
+                if (pedido.getRepartidorId() != null && callerUserId != null && !pedido.getRepartidorId().equals(callerUserId)) {
+                    throw new SecurityException("El repartidor no tiene permiso para actualizar este pedido asignado a otro repartidor.");
+                }
             }
         }
 
-        String anteriorEstado = pedido.getEstado();
+        String estadoAnterior = pedido.getEstado();
         pedido.setEstado(nuevoEstado);
         Pedido actualizado = pedidoRepository.save(pedido);
-        log.info("[PEDIDOS-SERVICE] Order ID={} status updated to {}", id, nuevoEstado);
+        log.info("[PEDIDOS-SERVICE] Order ID={} state updated: {} -> {}", id, estadoAnterior, nuevoEstado);
 
         String eventId = UUID.randomUUID().toString();
         String correlationId = UUID.randomUUID().toString();
 
         // 1. Transactional Outbox (Apache Kafka)
-        try {
-            PedidoEstadoActualizadoPayload payload = new PedidoEstadoActualizadoPayload(
-                    actualizado.getUsuarioId(),
-                    actualizado.getEstado(),
-                    anteriorEstado
-            );
+        if (outboxService != null) {
+            try {
+                PedidoEstadoActualizadoPayload payload = new PedidoEstadoActualizadoPayload(
+                        actualizado.getId(),
+                        estadoAnterior,
+                        nuevoEstado
+                );
 
-            KafkaEvent<PedidoEstadoActualizadoPayload> kafkaEvent = new KafkaEvent<>(
-                    eventId,
-                    "pedido.estado.actualizado",
-                    Instant.now().toString(),
-                    correlationId,
-                    actualizado.getId(),
-                    payload
-            );
+                KafkaEvent<PedidoEstadoActualizadoPayload> kafkaEvent = new KafkaEvent<>(
+                        eventId,
+                        "pedido.estado.actualizado",
+                        Instant.now().toString(),
+                        correlationId,
+                        actualizado.getId(),
+                        payload
+                );
 
-            String jsonPayload = objectMapper.writeValueAsString(kafkaEvent);
-            outboxService.saveEvent(
-                    eventId,
-                    "PEDIDO",
-                    actualizado.getId().toString(),
-                    "pedido.estado.actualizado",
-                    pedidosTopic,
-                    actualizado.getId().toString(),
-                    correlationId,
-                    jsonPayload
-            );
-        } catch (Exception ex) {
-            log.error("[PEDIDOS-SERVICE] Error saving outbox event for status update ID={}: {}",
-                    id, ex.getMessage(), ex);
-            throw new RuntimeException("Error en persistencia outbox de actualizacion de estado", ex);
+                String jsonPayload = objectMapper.writeValueAsString(kafkaEvent);
+                outboxService.saveEvent(
+                        eventId,
+                        "PEDIDO",
+                        actualizado.getId().toString(),
+                        "pedido.estado.actualizado",
+                        pedidosTopic,
+                        actualizado.getId().toString(),
+                        correlationId,
+                        jsonPayload
+                );
+            } catch (Exception ex) {
+                log.error("[PEDIDOS-SERVICE] Error saving outbox event for status update ID={}: {}",
+                        id, ex.getMessage(), ex);
+                throw new RuntimeException("Error en persistencia outbox de actualizacion de estado", ex);
+            }
         }
 
-        // 2. RabbitMQ
-        try {
-            PedidoEstadoActualizadoEvent rabbitEvent =
-                    new PedidoEstadoActualizadoEvent(
-                            actualizado.getId(),
-                            actualizado.getUsuarioId(),
-                            actualizado.getEstado()
-                    );
-            rabbitEvent.setEventId(eventId);
+        // 2. RabbitMQ posterior al commit
+        PedidoEstadoActualizadoEvent rabbitEvent =
+                new PedidoEstadoActualizadoEvent(
+                        actualizado.getId(),
+                        actualizado.getUsuarioId(),
+                        actualizado.getEstado()
+                );
+        rabbitEvent.setEventId(eventId);
 
-            rabbitTemplate.convertAndSend(
-                    RabbitMQConfig.EXCHANGE_EVENTS,
-                    RabbitMQConfig.ROUTING_KEY_PEDIDO_ESTADO_ACTUALIZADO,
-                    rabbitEvent
-            );
-
-            log.info("[PEDIDOS-SERVICE] Domain event published to RabbitMQ: eventType={} eventId={} resourceId={} nuevoEstado={}",
-                    rabbitEvent.getEventType(), rabbitEvent.getEventId(), rabbitEvent.getResourceId(), rabbitEvent.getNuevoEstado());
-        } catch (Exception ex) {
-            log.warn("[PEDIDOS-SERVICE] Failed to publish event pedido.estado.actualizado to RabbitMQ for order ID={}: {}",
-                    id, ex.getMessage());
-        }
+        publishRabbitEventAfterCommit(
+                RabbitMQConfig.EXCHANGE_EVENTS,
+                RabbitMQConfig.ROUTING_KEY_PEDIDO_ESTADO_ACTUALIZADO,
+                rabbitEvent,
+                rabbitEvent.getEventType(),
+                eventId,
+                actualizado.getId()
+        );
 
         return actualizado;
     }
@@ -233,65 +233,94 @@ public class PedidoService {
         String correlationId = UUID.randomUUID().toString();
 
         // 1. Transactional Outbox (Apache Kafka)
-        try {
-            RepartidorAsignadoPayload payload = new RepartidorAsignadoPayload(
-                    actualizado.getUsuarioId(),
-                    repartidorId,
-                    nombreRepartidor,
-                    "EN_CAMINO"
-            );
+        if (outboxService != null) {
+            try {
+                RepartidorAsignadoPayload payload = new RepartidorAsignadoPayload(
+                        actualizado.getUsuarioId(),
+                        repartidorId,
+                        nombreRepartidor,
+                        "EN_CAMINO"
+                );
 
-            KafkaEvent<RepartidorAsignadoPayload> kafkaEvent = new KafkaEvent<>(
-                    eventId,
-                    "pedido.repartidor.asignado",
-                    Instant.now().toString(),
-                    correlationId,
-                    actualizado.getId(),
-                    payload
-            );
+                KafkaEvent<RepartidorAsignadoPayload> kafkaEvent = new KafkaEvent<>(
+                        eventId,
+                        "pedido.repartidor.asignado",
+                        Instant.now().toString(),
+                        correlationId,
+                        actualizado.getId(),
+                        payload
+                );
 
-            String jsonPayload = objectMapper.writeValueAsString(kafkaEvent);
-            outboxService.saveEvent(
-                    eventId,
-                    "PEDIDO",
-                    actualizado.getId().toString(),
-                    "pedido.repartidor.asignado",
-                    pedidosTopic,
-                    actualizado.getId().toString(),
-                    correlationId,
-                    jsonPayload
-            );
-        } catch (Exception ex) {
-            log.error("[PEDIDOS-SERVICE] Error saving outbox event for driver assignment ID={}: {}",
-                    id, ex.getMessage(), ex);
-            throw new RuntimeException("Error en persistencia outbox de asignacion de repartidor", ex);
+                String jsonPayload = objectMapper.writeValueAsString(kafkaEvent);
+                outboxService.saveEvent(
+                        eventId,
+                        "PEDIDO",
+                        actualizado.getId().toString(),
+                        "pedido.repartidor.asignado",
+                        pedidosTopic,
+                        actualizado.getId().toString(),
+                        correlationId,
+                        jsonPayload
+                );
+            } catch (Exception ex) {
+                log.error("[PEDIDOS-SERVICE] Error saving outbox event for driver assignment ID={}: {}",
+                        id, ex.getMessage(), ex);
+                throw new RuntimeException("Error en persistencia outbox de asignacion de repartidor", ex);
+            }
         }
 
-        // 2. RabbitMQ
-        try {
-            RepartidorAsignadoEvent rabbitEvent =
-                    new RepartidorAsignadoEvent(
-                            actualizado.getId(),
-                            actualizado.getUsuarioId(),
-                            repartidorId,
-                            nombreRepartidor
-                    );
-            rabbitEvent.setEventId(eventId);
+        // 2. RabbitMQ posterior al commit
+        RepartidorAsignadoEvent rabbitEvent =
+                new RepartidorAsignadoEvent(
+                        actualizado.getId(),
+                        actualizado.getUsuarioId(),
+                        repartidorId,
+                        nombreRepartidor
+                );
+        rabbitEvent.setEventId(eventId);
 
-            rabbitTemplate.convertAndSend(
-                    RabbitMQConfig.EXCHANGE_EVENTS,
-                    RabbitMQConfig.ROUTING_KEY_REPARTIDOR_ASIGNADO,
-                    rabbitEvent
-            );
-
-            log.info("[PEDIDOS-SERVICE] Domain event published to RabbitMQ: eventType={} eventId={} resourceId={} repartidorId={}",
-                    rabbitEvent.getEventType(), rabbitEvent.getEventId(), rabbitEvent.getResourceId(), rabbitEvent.getRepartidorId());
-        } catch (Exception ex) {
-            log.warn("[PEDIDOS-SERVICE] Failed to publish event pedido.repartidor.asignado to RabbitMQ for order ID={}: {}",
-                    id, ex.getMessage());
-        }
+        publishRabbitEventAfterCommit(
+                RabbitMQConfig.EXCHANGE_EVENTS,
+                RabbitMQConfig.ROUTING_KEY_REPARTIDOR_ASIGNADO,
+                rabbitEvent,
+                rabbitEvent.getEventType(),
+                eventId,
+                actualizado.getId()
+        );
 
         return actualizado;
+    }
+
+    /**
+     * Publica el evento a RabbitMQ de forma confiable únicamente tras el commit exitoso de PostgreSQL.
+     * Si la transacción de base de datos hace rollback, el evento no se emite, evitando eventos fantasma.
+     */
+    private void publishRabbitEventAfterCommit(String exchange, String routingKey, Object event,
+                                               String eventType, String eventId, Long resourceId) {
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    try {
+                        rabbitTemplate.convertAndSend(exchange, routingKey, event);
+                        log.info("[PEDIDOS-SERVICE] Domain event published to RabbitMQ (after-commit): eventType={} eventId={} resourceId={}",
+                                eventType, eventId, resourceId);
+                    } catch (Exception ex) {
+                        log.error("[PEDIDOS-SERVICE] Failed to publish domain event to RabbitMQ after commit for order ID={}: {}",
+                                resourceId, ex.getMessage());
+                    }
+                }
+            });
+        } else {
+            try {
+                rabbitTemplate.convertAndSend(exchange, routingKey, event);
+                log.info("[PEDIDOS-SERVICE] Domain event published to RabbitMQ (immediate): eventType={} eventId={} resourceId={}",
+                        eventType, eventId, resourceId);
+            } catch (Exception ex) {
+                log.error("[PEDIDOS-SERVICE] Failed to publish domain event to RabbitMQ for order ID={}: {}",
+                        resourceId, ex.getMessage());
+            }
+        }
     }
 
     public void eliminar(Long id) {
