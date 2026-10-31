@@ -55,10 +55,11 @@ class OutboxPublisherTest {
                 "{\"resourceId\":100}"
         );
         mockEvent.setId(10L);
+        mockEvent.setReservationId("res-token-123");
     }
 
     @Test
-    @DisplayName("processOutbox - publica a Kafka y marca PUBLISHED al recibir ACK síncrono")
+    @DisplayName("processOutbox - publica a Kafka y marca PUBLISHED con token de reserva al recibir ACK")
     void testProcessOutboxSuccess() throws Exception {
         when(outboxService.reserveBatchForPublishing(anyString(), anyInt(), anyLong()))
                 .thenReturn(List.of(mockEvent));
@@ -72,8 +73,8 @@ class OutboxPublisherTest {
         outboxPublisher.processOutbox();
 
         verify(kafkaTemplate).send("pedidos360.pedidos.v1", "100", mockEvent.getPayload());
-        verify(outboxService).markAsPublished(10L);
-        verify(outboxService, never()).markAsFailed(anyLong(), anyString(), anyBoolean());
+        verify(outboxService).markAsPublished(10L, "res-token-123");
+        verify(outboxService, never()).markAsFailed(anyLong(), anyString(), anyString(), anyBoolean());
     }
 
     @Test
@@ -89,8 +90,8 @@ class OutboxPublisherTest {
 
         outboxPublisher.processOutbox();
 
-        verify(outboxService).markAsFailed(eq(10L), contains("Kafka broker ACK timeout"), eq(false));
-        verify(outboxService, never()).markAsPublished(10L);
+        verify(outboxService).markAsFailed(eq(10L), eq("res-token-123"), contains("Kafka broker ACK timeout"), eq(false));
+        verify(outboxService, never()).markAsPublished(anyLong(), anyString());
     }
 
     @Test
@@ -106,8 +107,8 @@ class OutboxPublisherTest {
 
         outboxPublisher.processOutbox();
 
-        verify(outboxService).markAsFailed(eq(10L), contains("Cannot serialize payload"), eq(true));
-        verify(outboxService, never()).markAsPublished(10L);
+        verify(outboxService).markAsFailed(eq(10L), eq("res-token-123"), contains("Cannot serialize payload"), eq(true));
+        verify(outboxService, never()).markAsPublished(anyLong(), anyString());
     }
 
     @Test

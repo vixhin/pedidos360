@@ -57,6 +57,9 @@ public class OutboxEvent {
     @Column(name = "locked_by", length = 100)
     private String lockedBy;
 
+    @Column(name = "reservation_id", length = 100)
+    private String reservationId;
+
     @Column(name = "last_attempted_at")
     private Instant lastAttemptedAt;
 
@@ -210,6 +213,14 @@ public class OutboxEvent {
 
     public void setLockedBy(String lockedBy) {
         this.lockedBy = lockedBy;
+    }
+
+    public String getReservationId() {
+        return reservationId;
+    }
+
+    public void setReservationId(String reservationId) {
+        this.reservationId = reservationId;
     }
 
     public Instant getLastAttemptedAt() {

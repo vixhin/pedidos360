@@ -17,11 +17,11 @@ services:
     restart: unless-stopped
     mem_limit: 1024m
     ports:
-      # Listener externo disponible exclusivamente en localhost (127.0.0.1) para seguridad
+      # Listener externo expuesto exclusivamente en localhost (127.0.0.1)
       - "127.0.0.1:9094:9094"
-      # El puerto interno 9092 NO se expone al host para evitar interferencias
+      # El listener interno (puerto 9092) NO se expone al host para máxima seguridad y aislamiento
     environment:
-      # KRaft mode configuration (sin ZooKeeper)
+      # KRaft mode configuration (ZooKeeper-less)
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
@@ -36,7 +36,8 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      # Creación automática desactivada para control estricto de topics
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
       # Retención y gestión de segmentos
       KAFKA_LOG_RETENTION_HOURS: 24
       KAFKA_LOG_SEGMENT_BYTES: 104857600
@@ -58,13 +59,13 @@ services:
       kafka:
         condition: service_healthy
     entrypoint: [ "/bin/sh", "-c" ]
-    command: |
-      "
-      echo 'Provisioning Kafka topics...'
-      /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic pedidos360.pedidos.v1 --partitions 3 --replication-factor 1 --config retention.ms=86400000
-      /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic pedidos360.pedidos.dlt.v1 --partitions 3 --replication-factor 1 --config retention.ms=604800000
-      echo 'Topics provisioned successfully.'
-      "
+    command:
+      - |
+        set -e
+        echo "Creating Kafka topics..."
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic pedidos360.pedidos.v1 --partitions 3 --replication-factor 1 --config retention.ms=86400000
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic pedidos360.pedidos.dlt.v1 --partitions 3 --replication-factor 1 --config retention.ms=604800000
+        echo "Topics created successfully."
     restart: "no"
 
   kafka-ui:
@@ -85,7 +86,7 @@ services:
     profiles:
       - kafka-ui
 
-  # Overlays para conectar pedidos y analítica a Kafka
+  # Overlays para conectar pedidos y analítica a Kafka cuando se levante este compose
   pedidos:
     environment:
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}

@@ -83,9 +83,13 @@ public class KafkaConsumerConfig {
         DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(
                 dltKafkaTemplate,
                 (record, exception) -> {
+                    // Evitar bucles infinitos: si el mensaje ya está en el DLT, no volver a enrutarlo al mismo DLT
+                    if (record.topic().equals(dltTopic)) {
+                        log.error("[KAFKA-ERROR-HANDLER] Prevented infinite loop: record is already in DLT topic={}", dltTopic);
+                        return null;
+                    }
                     log.error("[KAFKA-ERROR-HANDLER] Routing unrecoverable record key={} from topic={} partition={} offset={} to DLT={}. Reason: {}",
                             record.key(), record.topic(), record.partition(), record.offset(), dltTopic, exception.getMessage());
-                    // Preservar la partición si está disponible o resolver automáticamente
                     return new TopicPartition(dltTopic, record.partition());
                 }
         );
@@ -115,6 +119,30 @@ public class KafkaConsumerConfig {
         factory.setCommonErrorHandler(kafkaErrorHandler);
         factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
         factory.setConcurrency(2);
+        return factory;
+    }
+
+    /**
+     * Factory de listeners exclusivo para el Dead Letter Topic.
+     * Implementa reintentos ante fallos de BD pero SIN DeadLetterPublishingRecoverer,
+     * impidiendo terminantemente bucles infinitos de reenvío al mismo DLT.
+     */
+    @Bean
+    public ConcurrentKafkaListenerContainerFactory<String, String> dltKafkaListenerContainerFactory(
+            ConsumerFactory<String, String> consumerFactory) {
+        ConcurrentKafkaListenerContainerFactory<String, String> factory =
+                new ConcurrentKafkaListenerContainerFactory<>();
+        factory.setConsumerFactory(consumerFactory);
+
+        DefaultErrorHandler dltErrorHandler = new DefaultErrorHandler(new FixedBackOff(retryIntervalMs, maxAttempts));
+        dltErrorHandler.setRetryListeners((record, ex, attempt) -> {
+            log.warn("[DLT-RETRY] Retrying DLT record key={} offset={} (attempt {}/{}): {}",
+                    record.key(), record.offset(), attempt, maxAttempts, ex.getMessage());
+        });
+
+        factory.setCommonErrorHandler(dltErrorHandler);
+        factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
+        factory.setConcurrency(1);
         return factory;
     }
 }

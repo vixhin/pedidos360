@@ -19,7 +19,6 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 @Component
 @EnableScheduling
@@ -66,25 +65,31 @@ public class OutboxPublisher {
             return;
         }
 
-        // 1. Reserva transaccional del lote usando FOR UPDATE SKIP LOCKED
-        // La transacción finaliza y libera los bloqueos inmediatamente tras cambiar estado a PROCESSING
-        List<OutboxEvent> reservedEvents = outboxService.reserveBatchForPublishing(workerId, batchSize, stuckTimeoutSeconds);
+        List<OutboxEvent> reservedEvents;
+        try {
+            // 1. Reserva segura con FOR UPDATE SKIP LOCKED y token de reserva único (lease)
+            reservedEvents = outboxService.reserveBatchForPublishing(workerId, batchSize, stuckTimeoutSeconds);
+        } catch (Exception ex) {
+            log.error("[OUTBOX-PUBLISHER] Error reserving outbox batch in PostgreSQL: {}", ex.getMessage());
+            return;
+        }
+
         if (reservedEvents.isEmpty()) {
             return;
         }
 
-        log.debug("[OUTBOX-PUBLISHER] Worker {} reserved {} event(s) for publishing", workerId, reservedEvents.size());
+        log.debug("[OUTBOX-PUBLISHER] Worker {} secured lease for {} event(s)", workerId, reservedEvents.size());
 
         for (OutboxEvent event : reservedEvents) {
             long startTime = System.currentTimeMillis();
             try {
-                log.info("[OUTBOX-PUBLISHER] Publishing event: id={} eventId={} topic={} key={}",
-                        event.getId(), event.getEventId(), event.getTopic(), event.getKafkaKey());
+                log.info("[OUTBOX-PUBLISHER] Publishing event: id={} resId={} eventId={} topic={} key={}",
+                        event.getId(), event.getReservationId(), event.getEventId(), event.getTopic(), event.getKafkaKey());
 
                 CompletableFuture<SendResult<String, String>> future =
                         kafkaTemplate.send(event.getTopic(), event.getKafkaKey(), event.getPayload());
 
-                // Esperar confirmación real (ACK) del broker antes de marcar como PUBLISHED
+                // Esperar confirmación real (ACK) del broker Kafka
                 SendResult<String, String> result = future.get(timeoutSeconds, TimeUnit.SECONDS);
 
                 long duration = System.currentTimeMillis() - startTime;
@@ -95,24 +100,24 @@ public class OutboxPublisher {
                             .record(duration, TimeUnit.MILLISECONDS);
                 }
 
-                outboxService.markAsPublished(event.getId());
-
-                log.info("[OUTBOX-PUBLISHER] Kafka ACK confirmed: id={} eventId={} topic={} partition={} offset={} durationMs={}",
-                        event.getId(),
-                        event.getEventId(),
-                        result.getRecordMetadata().topic(),
-                        result.getRecordMetadata().partition(),
-                        result.getRecordMetadata().offset(),
-                        duration);
+                // 2. Validación atómica del token de reserva antes de marcar PUBLISHED
+                boolean marked = outboxService.markAsPublished(event.getId(), event.getReservationId());
+                if (!marked) {
+                    log.warn("[OUTBOX-PUBLISHER] Kafka ACK received, but lease was lost for event id={} resId={}. At-least-once downstream idempotency will handle duplicate.",
+                            event.getId(), event.getReservationId());
+                } else {
+                    log.info("[OUTBOX-PUBLISHER] Event successfully marked PUBLISHED: id={} offset={} durationMs={}",
+                            event.getId(), result.getRecordMetadata().offset(), duration);
+                }
 
             } catch (Exception ex) {
                 String error = ex.getMessage() != null ? ex.getMessage() : ex.getClass().getSimpleName();
                 boolean isPermanent = isPermanentError(ex);
 
-                log.warn("[OUTBOX-PUBLISHER] Error publishing event id={} eventId={} (permanent={}): {}",
-                        event.getId(), event.getEventId(), isPermanent, error);
+                log.warn("[OUTBOX-PUBLISHER] Error publishing event id={} resId={} (permanent={}): {}",
+                        event.getId(), event.getReservationId(), isPermanent, error);
 
-                outboxService.markAsFailed(event.getId(), error, isPermanent);
+                outboxService.markAsFailed(event.getId(), event.getReservationId(), error, isPermanent);
             }
         }
     }

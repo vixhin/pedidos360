@@ -13,11 +13,13 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -67,7 +69,7 @@ class OutboxServiceTest {
     }
 
     @Test
-    @DisplayName("reserveBatchForPublishing - reserva lote en estado PROCESSING con lockedBy y timestamp")
+    @DisplayName("reserveBatchForPublishing - reserva lote en estado PROCESSING con token único de reserva (reservationId)")
     void testReserveBatchForPublishing() {
         when(outboxEventRepository.findAndLockBatchForProcessing(any(), any(), anyInt()))
                 .thenReturn(List.of(mockEvent));
@@ -76,51 +78,88 @@ class OutboxServiceTest {
         List<OutboxEvent> reserved = outboxService.reserveBatchForPublishing("worker-1", 10, 300L);
 
         assertThat(reserved).hasSize(1);
-        assertThat(reserved.get(0).getStatus()).isEqualTo(OutboxStatus.PROCESSING);
-        assertThat(reserved.get(0).getLockedBy()).isEqualTo("worker-1");
-        assertThat(reserved.get(0).getProcessingStartedAt()).isNotNull();
+        OutboxEvent event = reserved.get(0);
+        assertThat(event.getStatus()).isEqualTo(OutboxStatus.PROCESSING);
+        assertThat(event.getLockedBy()).isEqualTo("worker-1");
+        assertThat(event.getReservationId()).isNotNull().isNotBlank();
+        assertThat(event.getProcessingStartedAt()).isNotNull();
     }
 
     @Test
-    @DisplayName("markAsPublished - actualiza estado a PUBLISHED y libera lockedBy")
-    void testMarkAsPublished() {
+    @DisplayName("markAsPublished - actualiza condicionalmente si el reservationId es válido")
+    void testMarkAsPublishedWithValidReservation() {
+        when(outboxEventRepository.markPublishedConditional(eq(1L), eq("token-res-1"), any(Instant.class)))
+                .thenReturn(1);
+
+        boolean marked = outboxService.markAsPublished(1L, "token-res-1");
+
+        assertThat(marked).isTrue();
+        verify(outboxEventRepository).markPublishedConditional(eq(1L), eq("token-res-1"), any(Instant.class));
+    }
+
+    @Test
+    @DisplayName("Escenario obligatorio: Publicador A con reserva vencida es rechazado si Publicador B tomó el lease")
+    void testLateAckFromPublisherAIsRejectedWhenPublisherBReclaimedLease() {
+        String reservationA = "lease-token-A";
+        String reservationB = "lease-token-B";
+
+        // Simular que el evento en base de datos ya pertenece al lease-token-B
+        // Si publicador A intenta marcar con lease-token-A, rows affected = 0
+        when(outboxEventRepository.markPublishedConditional(eq(1L), eq(reservationA), any(Instant.class)))
+                .thenReturn(0);
+        // Cuando publicador B intenta marcar con lease-token-B, rows affected = 1
+        when(outboxEventRepository.markPublishedConditional(eq(1L), eq(reservationB), any(Instant.class)))
+                .thenReturn(1);
+
+        // 1. Publicador A intenta marcar PUBLISHED con su reserva vieja
+        boolean markedByA = outboxService.markAsPublished(1L, reservationA);
+        assertThat(markedByA).isFalse(); // Rechazado: A perdió la reserva
+
+        // 2. Publicador B completa su operación con la reserva legítima
+        boolean markedByB = outboxService.markAsPublished(1L, reservationB);
+        assertThat(markedByB).isTrue(); // Aceptado: B es el dueño actual
+    }
+
+    @Test
+    @DisplayName("markAsFailed - rechaza registrar fallo si el reservationId no coincide")
+    void testMarkAsFailedRejectsMismatchedReservation() {
         mockEvent.setStatus(OutboxStatus.PROCESSING);
-        mockEvent.setLockedBy("worker-1");
+        mockEvent.setReservationId("token-active");
         when(outboxEventRepository.findById(1L)).thenReturn(Optional.of(mockEvent));
 
-        outboxService.markAsPublished(1L);
+        boolean marked = outboxService.markAsFailed(1L, "token-expired", "Network timeout", false);
 
-        assertThat(mockEvent.getStatus()).isEqualTo(OutboxStatus.PUBLISHED);
-        assertThat(mockEvent.getPublishedAt()).isNotNull();
-        assertThat(mockEvent.getLockedBy()).isNull();
-        verify(outboxEventRepository).save(mockEvent);
+        assertThat(marked).isFalse();
+        verify(outboxEventRepository, never()).markFailedConditional(any(), any(), any(), anyInt(), any(), any(), any(), any());
     }
 
     @Test
-    @DisplayName("markAsFailed - reintento transitorio calcula backoff exponencial y mantiene PENDING")
+    @DisplayName("markAsFailed - reintento transitorio calcula backoff y programa PENDING")
     void testMarkAsFailedTemporary() {
+        mockEvent.setStatus(OutboxStatus.PROCESSING);
+        mockEvent.setReservationId("token-1");
         mockEvent.setRetryCount(1);
         when(outboxEventRepository.findById(1L)).thenReturn(Optional.of(mockEvent));
+        when(outboxEventRepository.markFailedConditional(eq(1L), eq("token-1"), eq(OutboxStatus.PENDING), eq(2), any(), any(), eq("TEMPORARY"), any()))
+                .thenReturn(1);
 
-        outboxService.markAsFailed(1L, "Kafka timeout", false);
+        boolean failed = outboxService.markAsFailed(1L, "token-1", "Kafka timeout", false);
 
-        assertThat(mockEvent.getStatus()).isEqualTo(OutboxStatus.PENDING);
-        assertThat(mockEvent.getRetryCount()).isEqualTo(2);
-        assertThat(mockEvent.getNextRetryAt()).isNotNull();
-        assertThat(mockEvent.getErrorType()).isEqualTo("TEMPORARY");
-        verify(outboxEventRepository).save(mockEvent);
+        assertThat(failed).isTrue();
     }
 
     @Test
     @DisplayName("markAsFailed - error permanente marca FAILED inmediatamente")
     void testMarkAsFailedPermanent() {
+        mockEvent.setStatus(OutboxStatus.PROCESSING);
+        mockEvent.setReservationId("token-1");
         when(outboxEventRepository.findById(1L)).thenReturn(Optional.of(mockEvent));
+        when(outboxEventRepository.markFailedConditional(eq(1L), eq("token-1"), eq(OutboxStatus.FAILED), eq(1), any(), any(), eq("PERMANENT"), any()))
+                .thenReturn(1);
 
-        outboxService.markAsFailed(1L, "Serialization error", true);
+        boolean failed = outboxService.markAsFailed(1L, "token-1", "Serialization error", true);
 
-        assertThat(mockEvent.getStatus()).isEqualTo(OutboxStatus.FAILED);
-        assertThat(mockEvent.getErrorType()).isEqualTo("PERMANENT");
-        verify(outboxEventRepository).save(mockEvent);
+        assertThat(failed).isTrue();
     }
 
     @Test

@@ -16,6 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 @Service
 public class OutboxService {
@@ -82,22 +84,18 @@ public class OutboxService {
     }
 
     /**
-     * Reserva un lote de eventos listos para ser publicados usando FOR UPDATE SKIP LOCKED.
-     * Cambia el estado a PROCESSING y libera el bloqueo de base de datos inmediatamente al commitear.
+     * Reserva un lote de eventos listos para ser publicados usando estrictamente FOR UPDATE SKIP LOCKED.
+     * Asigna un identificador único de reserva (lease token) por operación.
+     * La transacción se confirma inmediatamente para liberar el bloqueo de filas en PostgreSQL antes de llamar a Kafka.
+     * Si la base de datos falla, la excepción se propaga sin ejecutar fallbacks inseguros.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public List<OutboxEvent> reserveBatchForPublishing(String lockedBy, int batchSize, long stuckTimeoutSeconds) {
         Instant now = Instant.now();
         Instant stuckThreshold = now.minusSeconds(stuckTimeoutSeconds);
 
-        List<OutboxEvent> candidates;
-        try {
-            candidates = outboxEventRepository.findAndLockBatchForProcessing(now, stuckThreshold, batchSize);
-        } catch (Exception ex) {
-            // Fallback para entornos donde la consulta nativa no sea compatible (ej. H2 en memoria para tests unitarios rápidos)
-            log.warn("[OUTBOX] Native SKIP LOCKED query failed, falling back to findTop50: {}", ex.getMessage());
-            candidates = outboxEventRepository.findTop50ByStatusOrderByCreatedAtAsc(OutboxStatus.PENDING);
-        }
+        // Sin fallbacks inseguros: si la consulta SKIP LOCKED falla, se propaga el error
+        List<OutboxEvent> candidates = outboxEventRepository.findAndLockBatchForProcessing(now, stuckThreshold, batchSize);
 
         if (candidates.isEmpty()) {
             return List.of();
@@ -105,35 +103,104 @@ public class OutboxService {
 
         List<OutboxEvent> reserved = new ArrayList<>();
         for (OutboxEvent event : candidates) {
+            String reservationId = UUID.randomUUID().toString();
             event.setStatus(OutboxStatus.PROCESSING);
             event.setLockedBy(lockedBy);
+            event.setReservationId(reservationId);
             event.setProcessingStartedAt(now);
             reserved.add(outboxEventRepository.save(event));
         }
 
-        log.debug("[OUTBOX] Batch reserved for publishing: count={} lockedBy={}", reserved.size(), lockedBy);
+        log.debug("[OUTBOX] Batch reserved securely: count={} lockedBy={}", reserved.size(), lockedBy);
         return reserved;
     }
 
     /**
-     * Marca el evento como publicado exitosamente tras recibir confirmación real (ACK) del broker Kafka.
+     * Marca el evento como publicado validando atómicamente el identificador de reserva (lease token).
+     * Si la reserva venció y fue tomada por otro publicador, la actualización condicional devuelve 0 filas
+     * y se rechaza la sobrescritura.
      */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean markAsPublished(Long id, String reservationId) {
+        int updated = outboxEventRepository.markPublishedConditional(id, reservationId, Instant.now());
+        if (updated > 0) {
+            log.info("[OUTBOX] Event marked as PUBLISHED: id={} reservationId={}", id, reservationId);
+            if (meterRegistry != null) {
+                meterRegistry.counter("pedidos360.outbox.published").increment();
+            }
+            return true;
+        } else {
+            log.warn("[OUTBOX] Rejected markAsPublished: event id={} lease expired or reclaimed (provided reservationId={})",
+                    id, reservationId);
+            return false;
+        }
+    }
+
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void markAsPublished(Long id) {
         outboxEventRepository.findById(id).ifPresent(event -> {
             event.setStatus(OutboxStatus.PUBLISHED);
             event.setPublishedAt(Instant.now());
             event.setLockedBy(null);
+            event.setReservationId(null);
             event.setErrorMessage(null);
             event.setErrorType(null);
             outboxEventRepository.save(event);
-
-            log.info("[OUTBOX] Event marked as PUBLISHED: id={} eventId={}", id, event.getEventId());
-
-            if (meterRegistry != null) {
-                meterRegistry.counter("pedidos360.outbox.published", "topic", event.getTopic()).increment();
-            }
+            log.info("[OUTBOX] Event marked as PUBLISHED (legacy): id={}", id);
         });
+    }
+
+    /**
+     * Registra un fallo de publicación validando condicionalmente el reservationId y estado PROCESSING.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean markAsFailed(Long id, String reservationId, String errorMessage, boolean isPermanent) {
+        Optional<OutboxEvent> opt = outboxEventRepository.findById(id);
+        if (opt.isEmpty()) {
+            log.warn("[OUTBOX] Cannot mark failed: event id={} not found", id);
+            return false;
+        }
+
+        OutboxEvent event = opt.get();
+        if (event.getStatus() != OutboxStatus.PROCESSING ||
+                event.getReservationId() == null ||
+                !event.getReservationId().equals(reservationId)) {
+            log.warn("[OUTBOX] Rejected markAsFailed: event id={} reservationId mismatch or not in PROCESSING (currentRes={}, currentStatus={})",
+                    id, event.getReservationId(), event.getStatus());
+            return false;
+        }
+
+        int newRetry = event.getRetryCount() + 1;
+        boolean maxReached = isPermanent || newRetry >= maxRetries;
+        OutboxStatus newStatus = maxReached ? OutboxStatus.FAILED : OutboxStatus.PENDING;
+        String errorType = isPermanent ? "PERMANENT" : "TEMPORARY";
+
+        Instant nextRetryAt = null;
+        if (!maxReached) {
+            long backoffMs = Math.min(initialBackoffMs * (1L << Math.min(newRetry, 10)), maxBackoffMs);
+            nextRetryAt = Instant.now().plusMillis(backoffMs);
+            log.warn("[OUTBOX] Event attempt {} failed for id={}. Scheduled retry in {}ms: {}",
+                    newRetry, id, backoffMs, errorMessage);
+        } else {
+            log.error("[OUTBOX] Event moved to FAILED (permanent={}, attempts={}/{}): id={} error={}",
+                    isPermanent, newRetry, maxRetries, id, errorMessage);
+            if (meterRegistry != null) {
+                meterRegistry.counter("pedidos360.outbox.failed", "type", errorType).increment();
+            }
+        }
+
+        int updated = outboxEventRepository.markFailedConditional(
+                id,
+                reservationId,
+                newStatus,
+                newRetry,
+                nextRetryAt,
+                errorMessage,
+                errorType,
+                Instant.now()
+        );
+
+        return updated > 0;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -141,37 +208,10 @@ public class OutboxService {
         markAsFailed(id, errorMessage, false);
     }
 
-    /**
-     * Registra un fallo de publicación con backoff exponencial. Si supera maxRetries o es permanente, pasa a FAILED.
-     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void markAsFailed(Long id, String errorMessage, boolean isPermanent) {
         outboxEventRepository.findById(id).ifPresent(event -> {
-            int newRetry = event.getRetryCount() + 1;
-            event.setRetryCount(newRetry);
-            event.setErrorMessage(errorMessage);
-            event.setErrorType(isPermanent ? "PERMANENT" : "TEMPORARY");
-            event.setLastAttemptedAt(Instant.now());
-            event.setLockedBy(null);
-
-            if (isPermanent || newRetry >= maxRetries) {
-                event.setStatus(OutboxStatus.FAILED);
-                event.setNextRetryAt(null);
-                log.error("[OUTBOX] Event moved to FAILED (permanent={}, attempts={}/{}): id={} eventId={} error={}",
-                        isPermanent, newRetry, maxRetries, id, event.getEventId(), errorMessage);
-
-                if (meterRegistry != null) {
-                    meterRegistry.counter("pedidos360.outbox.failed", "topic", event.getTopic(), "type", event.getErrorType()).increment();
-                }
-            } else {
-                long backoffMs = Math.min(initialBackoffMs * (1L << Math.min(newRetry, 10)), maxBackoffMs);
-                event.setStatus(OutboxStatus.PENDING);
-                event.setNextRetryAt(Instant.now().plusMillis(backoffMs));
-                log.warn("[OUTBOX] Event publication attempt {} failed for id={}. Scheduled retry in {}ms: {}",
-                        newRetry, id, backoffMs, errorMessage);
-            }
-
-            outboxEventRepository.save(event);
+            markAsFailed(id, event.getReservationId() != null ? event.getReservationId() : "", errorMessage, isPermanent);
         });
     }
 
@@ -191,6 +231,7 @@ public class OutboxService {
             event.setRetryCount(0);
             event.setNextRetryAt(null);
             event.setLockedBy(null);
+            event.setReservationId(null);
             event.setErrorMessage(null);
             event.setErrorType(null);
             outboxEventRepository.save(event);

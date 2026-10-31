@@ -21,7 +21,8 @@ public class OutboxAdminController {
     private final OutboxService outboxService;
     private final JwtUtil jwtUtil;
 
-    @Value("${bff.internal-key:${BFF_INTERNAL_KEY:pedidos360-internal-secret-key-local-2026}}")
+    // Sin secretos predeterminados hardcodeados: se obtiene estrictamente de variables de entorno o configuración externa
+    @Value("${bff.internal-key:${BFF_INTERNAL_KEY:}}")
     private String bffInternalKey;
 
     public OutboxAdminController(OutboxService outboxService, JwtUtil jwtUtil) {
@@ -31,19 +32,29 @@ public class OutboxAdminController {
 
     /**
      * Endpoint administrativo protegido para reprocesar eventos en estado FAILED.
-     * Requiere rol ADMIN o clave interna S2S (X-Internal-Service-Key).
+     * Requiere rol ADMIN verificado vía JWT o clave interna entre servicios válida (no vacía).
      */
     @PostMapping("/reprocess-failed")
     public ResponseEntity<?> reprocessFailedEvents(@RequestParam(defaultValue = "50") int limit,
                                                    HttpServletRequest request) {
-        if (!isAuthorizedAdmin(request)) {
-            log.warn("[OUTBOX-ADMIN] Unauthorized attempt to reprocess failed outbox events from IP={}",
-                    request.getRemoteAddr());
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("success", false, "message", "Acceso denegado: Se requiere rol ADMIN o clave de servicio interna."));
+        // 1. Validación estricta del rango seguro de limit (1 a 500)
+        if (limit < 1 || limit > 500) {
+            log.warn("[OUTBOX-ADMIN] Invalid limit parameter provided: limit={} from IP={}", limit, request.getRemoteAddr());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("success", false, "message", "El parámetro 'limit' debe ser un valor entero entre 1 y 500."));
         }
 
-        int count = outboxService.reprocessFailedEvents(Math.min(limit, 500));
+        // 2. Control de autenticación y autorización administrativa
+        if (!isAuthorizedAdmin(request)) {
+            log.warn("[OUTBOX-ADMIN] Unauthorized access attempt to reprocess-failed from IP={}", request.getRemoteAddr());
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("success", false, "message", "Acceso denegado: Se requiere rol ADMIN o autenticación interna autorizada."));
+        }
+
+        int count = outboxService.reprocessFailedEvents(limit);
+        log.info("[OUTBOX-ADMIN] Administrative reprocessing triggered: {} failed event(s) reset to PENDING by caller from IP={}",
+                count, request.getRemoteAddr());
+
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "reprocessedCount", count,
@@ -52,11 +63,15 @@ public class OutboxAdminController {
     }
 
     private boolean isAuthorizedAdmin(HttpServletRequest request) {
+        // A. Verificación de clave interna entre servicios S2S (estrictamente no vacía)
         String serviceKey = request.getHeader("X-Internal-Service-Key");
-        if (bffInternalKey != null && bffInternalKey.equals(serviceKey)) {
+        if (serviceKey != null && !serviceKey.trim().isEmpty() &&
+                bffInternalKey != null && !bffInternalKey.trim().isEmpty() &&
+                bffInternalKey.equals(serviceKey)) {
             return true;
         }
 
+        // B. Verificación de autenticación JWT con rol ADMIN
         String authHeader = request.getHeader("Authorization");
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String token = authHeader.substring(7);
