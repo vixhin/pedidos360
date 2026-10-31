@@ -3,13 +3,16 @@ package cl.duoc.pedidos360.pedidos.service;
 import cl.duoc.pedidos360.pedidos.config.RabbitMQConfig;
 import cl.duoc.pedidos360.pedidos.entity.Pedido;
 import cl.duoc.pedidos360.pedidos.event.PedidoCreadoEvent;
+import cl.duoc.pedidos360.pedidos.outbox.service.OutboxService;
 import cl.duoc.pedidos360.pedidos.repository.PedidoRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
@@ -29,6 +32,12 @@ class PedidoServiceTest {
 
     @Mock
     private RabbitTemplate rabbitTemplate;
+
+    @Mock
+    private OutboxService outboxService;
+
+    @Spy
+    private ObjectMapper objectMapper = new ObjectMapper();
 
     @InjectMocks
     private PedidoService pedidoService;
@@ -76,7 +85,7 @@ class PedidoServiceTest {
     }
 
     @Test
-    @DisplayName("guardar - guarda pedido y publica evento pedido.creado")
+    @DisplayName("guardar - guarda pedido y publica evento pedido.creado en RabbitMQ y Outbox")
     void testGuardarPublicaEvento() {
         when(pedidoRepository.save(any(Pedido.class))).thenReturn(mockPedido);
 
@@ -88,6 +97,16 @@ class PedidoServiceTest {
                 eq(RabbitMQConfig.EXCHANGE_EVENTS),
                 eq(RabbitMQConfig.ROUTING_KEY_PEDIDO_CREADO),
                 any(PedidoCreadoEvent.class)
+        );
+        verify(outboxService).saveEvent(
+                anyString(),
+                eq("PEDIDO"),
+                eq("1"),
+                eq("pedido.creado"),
+                any(),
+                eq("1"),
+                anyString(),
+                anyString()
         );
     }
 
@@ -102,7 +121,7 @@ class PedidoServiceTest {
     }
 
     @Test
-    @DisplayName("actualizarEstado - actualiza estado y publica evento pedido.estado.actualizado")
+    @DisplayName("actualizarEstado - actualiza estado y publica evento en RabbitMQ y Outbox")
     void testActualizarEstadoPublicaEvento() {
         when(pedidoRepository.findById(1L)).thenReturn(Optional.of(mockPedido));
         when(pedidoRepository.save(any(Pedido.class))).thenReturn(mockPedido);
@@ -115,10 +134,20 @@ class PedidoServiceTest {
                 eq(RabbitMQConfig.ROUTING_KEY_PEDIDO_ESTADO_ACTUALIZADO),
                 any(cl.duoc.pedidos360.pedidos.event.PedidoEstadoActualizadoEvent.class)
         );
+        verify(outboxService).saveEvent(
+                anyString(),
+                eq("PEDIDO"),
+                eq("1"),
+                eq("pedido.estado.actualizado"),
+                any(),
+                eq("1"),
+                anyString(),
+                anyString()
+        );
     }
 
     @Test
-    @DisplayName("asignarRepartidor - asigna repartidor y publica evento pedido.repartidor.asignado")
+    @DisplayName("asignarRepartidor - asigna repartidor y publica evento en RabbitMQ y Outbox")
     void testAsignarRepartidorPublicaEvento() {
         when(pedidoRepository.findById(1L)).thenReturn(Optional.of(mockPedido));
         when(pedidoRepository.save(any(Pedido.class))).thenReturn(mockPedido);
@@ -131,6 +160,16 @@ class PedidoServiceTest {
                 eq(RabbitMQConfig.EXCHANGE_EVENTS),
                 eq(RabbitMQConfig.ROUTING_KEY_REPARTIDOR_ASIGNADO),
                 any(cl.duoc.pedidos360.pedidos.event.RepartidorAsignadoEvent.class)
+        );
+        verify(outboxService).saveEvent(
+                anyString(),
+                eq("PEDIDO"),
+                eq("1"),
+                eq("pedido.repartidor.asignado"),
+                any(),
+                eq("1"),
+                anyString(),
+                anyString()
         );
     }
 

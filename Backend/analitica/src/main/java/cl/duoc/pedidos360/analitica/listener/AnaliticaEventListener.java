@@ -9,12 +9,14 @@ import cl.duoc.pedidos360.analitica.event.RepartidorAsignadoEvent;
 import cl.duoc.pedidos360.analitica.event.UsuarioLoginExitosoEvent;
 import cl.duoc.pedidos360.analitica.event.UsuarioLoginFallidoEvent;
 import cl.duoc.pedidos360.analitica.service.AnaliticaService;
+import cl.duoc.pedidos360.analitica.service.IdempotencyService;
 import com.rabbitmq.client.Channel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitHandler;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.support.AmqpHeaders;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 
@@ -29,10 +31,36 @@ public class AnaliticaEventListener {
     private static final Logger log = LoggerFactory.getLogger(AnaliticaEventListener.class);
 
     private final AnaliticaService analiticaService;
+    private final IdempotencyService idempotencyService;
     private final Set<String> processedEventIds = ConcurrentHashMap.newKeySet();
 
     public AnaliticaEventListener(AnaliticaService analiticaService) {
+        this(analiticaService, null);
+    }
+
+    @Autowired
+    public AnaliticaEventListener(AnaliticaService analiticaService,
+                                  @Autowired(required = false) IdempotencyService idempotencyService) {
         this.analiticaService = analiticaService;
+        this.idempotencyService = idempotencyService;
+    }
+
+    private boolean isDuplicate(String eventId) {
+        if (eventId == null) return false;
+        if (processedEventIds.contains(eventId)) return true;
+        if (idempotencyService != null && idempotencyService.isAlreadyProcessed(eventId)) {
+            processedEventIds.add(eventId);
+            return true;
+        }
+        return false;
+    }
+
+    private void recordProcessed(String eventId, String eventType, String resourceId) {
+        if (eventId == null) return;
+        processedEventIds.add(eventId);
+        if (idempotencyService != null) {
+            idempotencyService.markAsProcessed(eventId, "RABBITMQ", eventType, resourceId, null, "analitica.queue");
+        }
     }
 
     @RabbitHandler
@@ -44,8 +72,8 @@ public class AnaliticaEventListener {
             return;
         }
 
-        if (processedEventIds.contains(event.getEventId())) {
-            log.info("[ANALITICA-SERVICE] Duplicate event ignored: eventId={}. Sending ACK.", event.getEventId());
+        if (isDuplicate(event.getEventId())) {
+            log.info("[ANALITICA-SERVICE] Duplicate event ignored (already processed via Kafka/RabbitMQ): eventId={}. Sending ACK.", event.getEventId());
             channel.basicAck(deliveryTag, false);
             return;
         }
@@ -60,7 +88,7 @@ public class AnaliticaEventListener {
             AnaliticaEvento analiticaEvento = new AnaliticaEvento(null, "PEDIDO_CREADO", descripcion);
             analiticaService.registrarEvento(analiticaEvento);
 
-            processedEventIds.add(event.getEventId());
+            recordProcessed(event.getEventId(), event.getEventType(), event.getResourceId() != null ? event.getResourceId().toString() : null);
             channel.basicAck(deliveryTag, false);
             log.info("[ANALITICA-SERVICE] ACK sent. Event recorded successfully: eventId={}", event.getEventId());
         } catch (Exception ex) {
@@ -79,7 +107,7 @@ public class AnaliticaEventListener {
             return;
         }
 
-        if (processedEventIds.contains(event.getEventId())) {
+        if (isDuplicate(event.getEventId())) {
             log.info("[ANALITICA-SERVICE] Duplicate event ignored: eventId={}. Sending ACK.", event.getEventId());
             channel.basicAck(deliveryTag, false);
             return;
@@ -95,7 +123,7 @@ public class AnaliticaEventListener {
             AnaliticaEvento analiticaEvento = new AnaliticaEvento(null, "CARRITO_EXPIRADO", descripcion);
             analiticaService.registrarEvento(analiticaEvento);
 
-            processedEventIds.add(event.getEventId());
+            recordProcessed(event.getEventId(), event.getEventType(), event.getUsuarioId() != null ? event.getUsuarioId().toString() : null);
             channel.basicAck(deliveryTag, false);
             log.info("[ANALITICA-SERVICE] ACK sent. Event recorded successfully: eventId={}", event.getEventId());
         } catch (Exception ex) {
@@ -104,7 +132,6 @@ public class AnaliticaEventListener {
             channel.basicNack(deliveryTag, false, false);
         }
     }
-
 
     @RabbitHandler
     public void handlePedidoEstadoActualizado(PedidoEstadoActualizadoEvent event,
@@ -115,8 +142,8 @@ public class AnaliticaEventListener {
             return;
         }
 
-        if (processedEventIds.contains(event.getEventId())) {
-            log.info("[ANALITICA-SERVICE] Duplicate event ignored: eventId={}. Sending ACK.", event.getEventId());
+        if (isDuplicate(event.getEventId())) {
+            log.info("[ANALITICA-SERVICE] Duplicate event ignored (already processed via Kafka/RabbitMQ): eventId={}. Sending ACK.", event.getEventId());
             channel.basicAck(deliveryTag, false);
             return;
         }
@@ -131,7 +158,7 @@ public class AnaliticaEventListener {
             AnaliticaEvento analiticaEvento = new AnaliticaEvento(null, "PEDIDO_ESTADO_ACTUALIZADO", descripcion);
             analiticaService.registrarEvento(analiticaEvento);
 
-            processedEventIds.add(event.getEventId());
+            recordProcessed(event.getEventId(), event.getEventType(), event.getResourceId() != null ? event.getResourceId().toString() : null);
             channel.basicAck(deliveryTag, false);
             log.info("[ANALITICA-SERVICE] ACK sent. Event recorded successfully: eventId={}", event.getEventId());
         } catch (Exception ex) {
@@ -150,8 +177,8 @@ public class AnaliticaEventListener {
             return;
         }
 
-        if (processedEventIds.contains(event.getEventId())) {
-            log.info("[ANALITICA-SERVICE] Duplicate event ignored: eventId={}. Sending ACK.", event.getEventId());
+        if (isDuplicate(event.getEventId())) {
+            log.info("[ANALITICA-SERVICE] Duplicate event ignored (already processed via Kafka/RabbitMQ): eventId={}. Sending ACK.", event.getEventId());
             channel.basicAck(deliveryTag, false);
             return;
         }
@@ -167,7 +194,7 @@ public class AnaliticaEventListener {
             AnaliticaEvento analiticaEvento = new AnaliticaEvento(null, "REPARTIDOR_ASIGNADO", descripcion);
             analiticaService.registrarEvento(analiticaEvento);
 
-            processedEventIds.add(event.getEventId());
+            recordProcessed(event.getEventId(), event.getEventType(), event.getResourceId() != null ? event.getResourceId().toString() : null);
             channel.basicAck(deliveryTag, false);
             log.info("[ANALITICA-SERVICE] ACK sent. Event recorded successfully: eventId={}", event.getEventId());
         } catch (Exception ex) {
@@ -176,7 +203,6 @@ public class AnaliticaEventListener {
             channel.basicNack(deliveryTag, false, false);
         }
     }
-
 
     @RabbitHandler
     public void handleUsuarioLoginExitoso(UsuarioLoginExitosoEvent event,
@@ -187,7 +213,7 @@ public class AnaliticaEventListener {
             return;
         }
 
-        if (processedEventIds.contains(event.getEventId())) {
+        if (isDuplicate(event.getEventId())) {
             log.info("[ANALITICA-SERVICE] Duplicate event ignored: eventId={}. Sending ACK.", event.getEventId());
             channel.basicAck(deliveryTag, false);
             return;
@@ -203,7 +229,7 @@ public class AnaliticaEventListener {
             AnaliticaEvento analiticaEvento = new AnaliticaEvento(null, "USUARIO_LOGIN_EXITOSO", descripcion);
             analiticaService.registrarEvento(analiticaEvento);
 
-            processedEventIds.add(event.getEventId());
+            recordProcessed(event.getEventId(), event.getEventType(), event.getUsuarioId() != null ? event.getUsuarioId().toString() : null);
             channel.basicAck(deliveryTag, false);
             log.info("[ANALITICA-SERVICE] ACK sent. Event recorded successfully: eventId={}", event.getEventId());
         } catch (Exception ex) {
@@ -222,7 +248,7 @@ public class AnaliticaEventListener {
             return;
         }
 
-        if (processedEventIds.contains(event.getEventId())) {
+        if (isDuplicate(event.getEventId())) {
             log.info("[ANALITICA-SERVICE] Duplicate event ignored: eventId={}. Sending ACK.", event.getEventId());
             channel.basicAck(deliveryTag, false);
             return;
@@ -238,7 +264,7 @@ public class AnaliticaEventListener {
             AnaliticaEvento analiticaEvento = new AnaliticaEvento(null, "USUARIO_LOGIN_FALLIDO", descripcion);
             analiticaService.registrarEvento(analiticaEvento);
 
-            processedEventIds.add(event.getEventId());
+            recordProcessed(event.getEventId(), event.getEventType(), null);
             channel.basicAck(deliveryTag, false);
             log.info("[ANALITICA-SERVICE] ACK sent. Event recorded successfully: eventId={}", event.getEventId());
         } catch (Exception ex) {
@@ -249,6 +275,6 @@ public class AnaliticaEventListener {
     }
 
     public boolean isEventProcessed(String eventId) {
-        return processedEventIds.contains(eventId);
+        return isDuplicate(eventId);
     }
 }
