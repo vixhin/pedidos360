@@ -9,6 +9,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -23,7 +26,16 @@ public class UsuarioController {
         this.usuarioService = usuarioService;
     }
 
+    private String getAuthenticatedEmail() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equalsIgnoreCase(auth.getName())) {
+            return null;
+        }
+        return auth.getName();
+    }
+
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<UsuarioResponseDTO>> crearUsuario(@Valid @RequestBody UsuarioCreateDTO dto) {
         UsuarioResponseDTO creado = usuarioService.crearUsuario(dto);
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -31,20 +43,18 @@ public class UsuarioController {
     }
 
     @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<List<UsuarioResponseDTO>>> listarUsuarios() {
         List<UsuarioResponseDTO> usuarios = usuarioService.obtenerTodos();
         return ResponseEntity.ok(ApiResponse.ok("Lista de usuarios obtenida correctamente", usuarios));
     }
 
     @GetMapping("/me")
-    public ResponseEntity<ApiResponse<UsuarioResponseDTO>> obtenerPerfilPropio(HttpServletRequest request) {
-        String email = request.getHeader("X-User-Email");
-        if (email == null || email.isBlank()) {
-            email = request.getHeader("X-User-Sub");
-        }
-        if (email == null || email.isBlank() || "anonymous".equalsIgnoreCase(email)) {
+    public ResponseEntity<ApiResponse<UsuarioResponseDTO>> obtenerPerfilPropio() {
+        String email = getAuthenticatedEmail();
+        if (email == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(ApiResponse.error("Identidad de usuario no proporcionada en la cabecera"));
+                    .body(ApiResponse.error("Identidad de usuario no autenticada"));
         }
         try {
             UsuarioResponseDTO usuario = usuarioService.obtenerPorEmail(email);
@@ -56,19 +66,17 @@ public class UsuarioController {
     }
 
     @PutMapping("/me")
-    public ResponseEntity<ApiResponse<UsuarioResponseDTO>> actualizarPerfilPropio(
-            HttpServletRequest request,
-            @RequestBody UsuarioCreateDTO dto) {
-        String email = request.getHeader("X-User-Email");
-        if (email == null || email.isBlank()) {
-            email = request.getHeader("X-User-Sub");
-        }
-        if (email == null || email.isBlank() || "anonymous".equalsIgnoreCase(email)) {
+    public ResponseEntity<ApiResponse<UsuarioResponseDTO>> actualizarPerfilPropio(@RequestBody UsuarioCreateDTO dto) {
+        String email = getAuthenticatedEmail();
+        if (email == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(ApiResponse.error("Identidad de usuario no proporcionada en la cabecera"));
+                    .body(ApiResponse.error("Identidad de usuario no autenticada"));
         }
         try {
             UsuarioResponseDTO actual = usuarioService.obtenerPorEmail(email);
+            // Prevenir escalamiento de privilegios: perfil propio no puede cambiar rol ni estado
+            dto.setRol(actual.getRol());
+            dto.setEstado(actual.getEstado());
             UsuarioResponseDTO actualizado = usuarioService.actualizarUsuario(actual.getId(), dto);
             return ResponseEntity.ok(ApiResponse.ok("Perfil actualizado correctamente", actualizado));
         } catch (RuntimeException ex) {
@@ -78,16 +86,11 @@ public class UsuarioController {
     }
 
     @PutMapping("/me/password")
-    public ResponseEntity<ApiResponse<Void>> cambiarPasswordPropia(
-            HttpServletRequest request,
-            @Valid @RequestBody PasswordChangeDTO dto) {
-        String email = request.getHeader("X-User-Email");
-        if (email == null || email.isBlank()) {
-            email = request.getHeader("X-User-Sub");
-        }
-        if (email == null || email.isBlank() || "anonymous".equalsIgnoreCase(email)) {
+    public ResponseEntity<ApiResponse<Void>> cambiarPasswordPropia(@Valid @RequestBody PasswordChangeDTO dto) {
+        String email = getAuthenticatedEmail();
+        if (email == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(ApiResponse.error("Identidad de usuario no proporcionada"));
+                    .body(ApiResponse.error("Identidad de usuario no autenticada"));
         }
         try {
             usuarioService.cambiarPasswordPorEmail(email, dto.getCurrentPassword(), dto.getNewPassword());
@@ -102,12 +105,14 @@ public class UsuarioController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<UsuarioResponseDTO>> obtenerPorId(@PathVariable Long id) {
         UsuarioResponseDTO usuario = usuarioService.obtenerPorId(id);
         return ResponseEntity.ok(ApiResponse.ok("Usuario encontrado", usuario));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<UsuarioResponseDTO>> actualizarUsuario(@PathVariable Long id,
                                                                               @Valid @RequestBody UsuarioCreateDTO dto) {
         UsuarioResponseDTO actualizado = usuarioService.actualizarUsuario(id, dto);
@@ -115,6 +120,7 @@ public class UsuarioController {
     }
 
     @PutMapping("/{id}/password")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Void>> cambiarPassword(@PathVariable Long id,
                                                               @Valid @RequestBody PasswordChangeDTO dto) {
         try {
@@ -130,6 +136,7 @@ public class UsuarioController {
     }
 
     @PutMapping("/{id}/status")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<UsuarioResponseDTO>> actualizarEstadoPut(
             @PathVariable Long id,
             @RequestParam String status) {
@@ -138,6 +145,7 @@ public class UsuarioController {
     }
 
     @PatchMapping("/{id}/status")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<UsuarioResponseDTO>> actualizarEstadoPatch(
             @PathVariable Long id,
             @RequestParam String status) {
@@ -146,6 +154,7 @@ public class UsuarioController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Void>> eliminarUsuario(@PathVariable Long id) {
         usuarioService.eliminarUsuario(id);
         return ResponseEntity.ok(ApiResponse.ok("Usuario eliminado correctamente", null));

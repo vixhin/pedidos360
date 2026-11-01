@@ -1,29 +1,39 @@
 <div class="login">
-  <div class="login__art">
-    <a routerLink="/" class="login__brand">
+  <aside class="login__art">
+    <div class="login__brand">
       <span class="brand__mark">360</span>
       <span class="brand__name">Pedidos<strong>360</strong></span>
-    </a>
-    <div class="login__illustration" aria-hidden="true"><app-icon name="package" size="64" /></div>
-    <h1>Pedidos360: tu entrega en 360 grados.</h1>
-    <p>Rápido, seguro, confiable. Tus compras a domicilio, siempre a tiempo.</p>
-  </div>
+    </div>
 
-  <div class="login__panel">
-    <div class="login-card card">
+    <div class="login__illustration">🛒</div>
+    <h1>Todo lo que necesitas, en un solo lugar.</h1>
+    <p>Supermercado, abarrotes, farmacia y más con entregas express directamente en tu puerta.</p>
+  </aside>
+
+  <main class="login__panel">
+    <div class="card login-card">
       <div class="login-card__logo">
         <span class="brand__mark">360</span>
       </div>
 
       @if (mode() === 'login') {
-        <h2>Iniciar sesión</h2>
-        <p class="login-card__sub">Elige cómo quieres acceder a tu cuenta.</p>
+        <h2>Bienvenido</h2>
+        <p class="login-card__sub">Inicia sesión con tu cuenta de Pedidos360 o con Microsoft.</p>
 
-        <button type="button" class="btn btn-primary btn-block" (click)="signInWithMicrosoft()">
-          <app-icon name="lock" size="16" /> Iniciar sesión con Microsoft
+        <!-- Microsoft Entra ID (OIDC / OAuth 2.0 con PKCE) -->
+        <button
+          type="button"
+          class="btn btn-secondary btn-block btn-microsoft"
+          [disabled]="loading()"
+          (click)="signInWithMicrosoft()"
+        >
+          <app-icon name="lock" size="18" />
+          <span>Continuar con Microsoft</span>
         </button>
 
-        <div class="divider"><span>o con tu cuenta Pedidos360</span></div>
+        <div class="divider">
+          <span>o ingresa con tu correo</span>
+        </div>
 
         @if (error()) {
           <div class="form-error">{{ error() }}</div>
@@ -64,15 +74,19 @@
             </div>
           </label>
 
-          <!-- reCAPTCHA Anti-Bot en Inicio de Sesión -->
+          <div class="login-sub-actions">
+            <button type="button" class="link-btn-text" (click)="setMode('forgot')">¿Olvidaste tu contraseña?</button>
+          </div>
+
+          <!-- Cloudflare Turnstile en Inicio de Sesión -->
           <div class="field field--captcha">
-            <app-recaptcha (verified)="onLoginCaptchaVerified($event)" />
+            <app-turnstile #loginTurnstile (resolved)="onLoginTurnstileResolved($event)" (expired)="onLoginTurnstileExpired()" />
           </div>
 
           <button
             type="submit"
             class="btn btn-secondary btn-block"
-            [disabled]="loading() || !loginCaptchaVerified()"
+            [disabled]="loading() || !loginTurnstileToken()"
           >
             {{ loading() ? 'Ingresando...' : 'Iniciar sesión' }}
           </button>
@@ -82,9 +96,10 @@
           ¿No tienes cuenta?
           <button type="button" class="link-btn" (click)="setMode('register')">Regístrate</button>
         </p>
-      } @else {
+
+      } @else if (mode() === 'register') {
         <h2>Crear cuenta</h2>
-        <p class="login-card__sub">Se guarda directamente en la base de datos de Pedidos360.</p>
+        <p class="login-card__sub">Únete a Pedidos360 y recibe tus productos en tiempo récord.</p>
 
         @if (error()) {
           <div class="form-error">{{ error() }}</div>
@@ -102,6 +117,7 @@
               placeholder="Valentina Ruiz"
             />
           </label>
+
           <label class="field">
             <span>Correo electrónico</span>
             <input
@@ -113,17 +129,30 @@
               placeholder="tu@correo.cl"
             />
           </label>
+
+          <label class="field">
+            <span>Teléfono de contacto</span>
+            <input
+              type="tel"
+              [ngModel]="registerTelefono()"
+              (ngModelChange)="registerTelefono.set($event)"
+              name="registerTelefono"
+              placeholder="+56 9 1234 5678"
+            />
+          </label>
+
+          <!-- Primer espacio: Contraseña -->
           <label class="field">
             <span>Contraseña</span>
             <div class="password-input-wrap">
               <input
                 [type]="showRegisterPassword() ? 'text' : 'password'"
                 required
-                minlength="6"
+                minlength="8"
                 [ngModel]="registerPassword()"
                 (ngModelChange)="registerPassword.set($event)"
                 name="registerPassword"
-                placeholder="Mínimo 6 caracteres"
+                placeholder="Crea una contraseña segura"
               />
               <button
                 type="button"
@@ -137,9 +166,45 @@
             </div>
           </label>
 
-          <!-- reCAPTCHA Anti-Bot -->
+          <!-- Indicadores de robustez y caracteres especiales -->
+          <div class="password-hints">
+            <span [class.valid]="hasMinLength()">● Mínimo 8 caracteres</span>
+            <span [class.valid]="hasUpperCase()">● 1 mayúscula</span>
+            <span [class.valid]="hasNumber()">● 1 número</span>
+            <span [class.valid]="hasSpecialChar()">● 1 carácter especial (&#64;, #, $, !, %, *, ?)</span>
+          </div>
+
+          <!-- Segundo espacio: Confirmar Contraseña -->
+          <label class="field">
+            <span>Confirmar Contraseña</span>
+            <div class="password-input-wrap">
+              <input
+                [type]="showRegisterConfirmPassword() ? 'text' : 'password'"
+                required
+                [ngModel]="registerConfirmPassword()"
+                (ngModelChange)="registerConfirmPassword.set($event)"
+                name="registerConfirmPassword"
+                placeholder="Repite tu contraseña"
+              />
+              <button
+                type="button"
+                class="password-toggle-btn"
+                (click)="toggleShowRegisterConfirmPassword()"
+                [title]="showRegisterConfirmPassword() ? 'Ocultar contraseña' : 'Mostrar contraseña'"
+                aria-label="Alternar visibilidad de contraseña"
+              >
+                <app-icon [name]="showRegisterConfirmPassword() ? 'eye-off' : 'eye'" size="18" />
+              </button>
+            </div>
+          </label>
+
+          @if (registerConfirmPassword() && !passwordsMatch()) {
+            <p class="field-error-text">Las contraseñas no coinciden.</p>
+          }
+
+          <!-- Cloudflare Turnstile en Registro -->
           <div class="field field--captcha">
-            <app-recaptcha (verified)="onCaptchaVerified($event)" />
+            <app-turnstile #registerTurnstile (resolved)="onRegisterTurnstileResolved($event)" (expired)="onRegisterTurnstileExpired()" />
           </div>
 
           <!-- Checkbox Términos y Condiciones -->
@@ -169,7 +234,7 @@
           <button
             type="submit"
             class="btn btn-primary btn-block"
-            [disabled]="loading() || !acceptTerms() || !captchaVerified()"
+            [disabled]="loading() || !acceptTerms() || !isPasswordStrong() || !passwordsMatch() || !registerTurnstileToken()"
           >
             {{ loading() ? 'Creando cuenta...' : 'Crear cuenta' }}
           </button>
@@ -179,50 +244,97 @@
           ¿Ya tienes cuenta?
           <button type="button" class="link-btn" (click)="setMode('login')">Inicia sesión</button>
         </p>
+
+      } @else if (mode() === 'forgot') {
+        <!-- Modo Recuperar Contraseña -->
+        <h2>Recuperar contraseña</h2>
+        <p class="login-card__sub">Ingresa tu correo para recibir instrucciones de recuperación.</p>
+
+        @if (error()) {
+          <div class="form-error">{{ error() }}</div>
+        }
+
+        @if (forgotSuccess()) {
+          <div class="form-success">
+            <app-icon name="check" size="24" />
+            <p>{{ forgotMessage() }}</p>
+          </div>
+          <button type="button" class="btn btn-secondary btn-block" style="margin-top: 16px;" (click)="setMode('login')">
+            Volver al inicio de sesión
+          </button>
+        } @else {
+          <form (ngSubmit)="submitForgotPassword()">
+            <label class="field">
+              <span>Correo electrónico registrado</span>
+              <input
+                type="email"
+                required
+                [ngModel]="forgotEmail()"
+                (ngModelChange)="forgotEmail.set($event)"
+                name="forgotEmail"
+                placeholder="tu@correo.cl"
+              />
+            </label>
+
+            <button
+              type="submit"
+              class="btn btn-primary btn-block"
+              [disabled]="loading() || !forgotEmail().trim()"
+            >
+              {{ loading() ? 'Enviando instrucciones...' : 'Enviar instrucciones' }}
+            </button>
+          </form>
+
+          <p class="login-card__switch">
+            ¿Recordaste tu clave?
+            <button type="button" class="link-btn" (click)="setMode('login')">Volver al inicio</button>
+          </p>
+        }
       }
 
       <div class="login-card__note">
         <app-icon name="shield" size="14" />
-        Microsoft usa OAuth 2.0 / OpenID Connect (Authorization Code + PKCE).
+        <span>Tus datos y contraseñas viajan cifrados y protegidos.</span>
       </div>
-
-      <a routerLink="/" class="login-card__back">Volver al inicio</a>
     </div>
-  </div>
+  </main>
 </div>
 
-<!-- MODAL DE TÉRMINOS Y CONDICIONES RÁPIDO -->
+<!-- Modal de Términos y Condiciones y Política de Seguridad -->
 @if (showTermsModal()) {
   <div class="terms-modal-backdrop" (click)="closeTermsModal()">
     <div class="terms-modal-card card" (click)="$event.stopPropagation()">
       <div class="terms-modal-head">
         <div>
-          <h3>Términos, Condiciones & Seguridad Pedidos360</h3>
-          <p>Marco de seguridad y privacidad aplicable a tu cuenta de usuario.</p>
+          <h3>Términos, Condiciones y Política de Seguridad</h3>
+          <p>Pedidos360 Chile · Actualizado a 2026</p>
         </div>
-        <button type="button" class="modal-close" (click)="closeTermsModal()" aria-label="Cerrar modal">✕</button>
+        <button type="button" class="modal-close" (click)="closeTermsModal()" aria-label="Cerrar ventana">
+          ✕
+        </button>
       </div>
 
       <div class="terms-modal-body">
-        <h4>1. Privacidad y Protección de Datos (Ley N° 19.628 de Chile)</h4>
-        <p>Tus datos personales (nombre, correo electrónico, teléfono y dirección de entrega) se utilizan exclusivamente para despachar tus pedidos y coordinar las entregas en tiempo real. Pedidos360 jamás comercializa tus datos a terceros.</p>
+        <h4>1. Aceptación del Servicio</h4>
+        <p>Al registrarte en Pedidos360, aceptas los presentes términos de uso del servicio de pedidos inteligentes, delivery y compras en comercios asociados.</p>
 
-        <h4>2. Ciberseguridad & Encriptación de Credenciales</h4>
-        <p>Tu contraseña se almacena con cifrado irreversible BCrypt con salado criptográfico. Toda la comunicación con nuestros microservicios viaja bajo canal cifrado TLS 1.3 / HTTPS de 256 bits y tokens JWT con expiración controlada.</p>
+        <h4>2. Seguridad de Contraseñas y Cuentas</h4>
+        <p>Tus contraseñas son hasheadas mediante BCrypt con salting antes de persistir en PostgreSQL. Eres responsable de mantener la confidencialidad de tu clave y no compartirla.</p>
 
-        <h4>3. Seguridad Transaccional y Medios de Pago</h4>
-        <p>Pedidos360 no almacena datos de tarjetas ni códigos de seguridad CVV. Todas las compras son procesadas por pasarelas seguras certificadas con estándar PCI-DSS Nivel 1 y validadas con el SII.</p>
+        <h4>3. Verificación Anti-Bot con Cloudflare Turnstile</h4>
+        <p>Para proteger la plataforma contra ataques de fuerza bruta y bots maliciosos, utilizamos Cloudflare Turnstile. Los datos de telemetría analizados se procesan preservando la privacidad del usuario sin cookies de seguimiento intrusivas.</p>
 
-        <h4>4. Garantías de Compra & Respaldo SERNAC</h4>
-        <p>Cuentas con garantía legal de 6 meses para productos del hogar y reposición preferente dentro de las 24 horas para alimentos y productos perecibles.</p>
+        <h4>4. Manejo de Cookies y Sesiones</h4>
+        <p>Utilizamos cookies seguras HttpOnly (SameSite=Lax) para gestionar sesiones autenticadas, además de cookies analíticas y de preferencias que puedes configurar en cualquier momento desde nuestro banner de cookies.</p>
+
+        <h4>5. Protección de Datos Personales (Ley 19.628)</h4>
+        <p>Pedidos360 procesa tus datos únicamente para despachar pedidos, calcular tiempos estimados y emitir comprobantes de compra. No comercializamos tu información personal con terceros.</p>
       </div>
 
       <div class="terms-modal-foot">
-        <a routerLink="/legal" target="_blank" class="btn btn-secondary btn-sm" (click)="closeTermsModal()">
-          Ver documento legal completo
-        </a>
-        <button type="button" class="btn btn-primary btn-sm" (click)="acceptTermsFromModal()">
-          Aceptar Términos y Continuar
+        <a routerLink="/legal" target="_blank" class="link" (click)="closeTermsModal()">Ver documento legal completo</a>
+        <button type="button" class="btn btn-primary" (click)="acceptTermsFromModal()">
+          Entendido y Aceptar
         </button>
       </div>
     </div>

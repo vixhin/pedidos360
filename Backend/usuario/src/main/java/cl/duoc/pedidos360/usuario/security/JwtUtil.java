@@ -18,8 +18,11 @@ public class JwtUtil {
     private final long expirationMs;
 
     public JwtUtil(
-            @Value("${jwt.secret:pedidos360_secret_key_for_jwt_token_generation_2026_super_secure}") String secret,
+            @Value("${jwt.secret}") String secret,
             @Value("${jwt.expiration:86400000}") long expirationMs) {
+        if (secret == null || secret.trim().length() < 32) {
+            throw new IllegalStateException("La propiedad 'jwt.secret' (o variable de entorno JWT_SECRET) es obligatoria y debe tener al menos 32 caracteres para garantizar la seguridad criptográfica (HMAC-SHA256).");
+        }
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.expirationMs = expirationMs;
     }

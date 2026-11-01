@@ -402,3 +402,75 @@
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+
+/* === CUPONES DISPONIBLES EN CARRITO === */
+.available-coupons {
+  margin-top: 12px;
+  margin-bottom: 8px;
+}
+
+.available-coupons__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--color-text-muted, #64748b);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.coupon-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.coupon-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #f8fafc;
+  border: 1.5px dashed #cbd5e1;
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.coupon-chip:hover {
+  background: #f1f5f9;
+  border-color: var(--color-primary, #059669);
+  transform: translateY(-1px);
+}
+
+.coupon-chip--applied {
+  background: #ecfdf5;
+  border-color: #10b981;
+  border-style: solid;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+}
+
+.coupon-chip .chip-code {
+  font-weight: 800;
+  font-size: 0.82rem;
+  color: #0f172a;
+  letter-spacing: 0.05em;
+}
+
+.coupon-chip .chip-badge {
+  background: #e0f2fe;
+  color: #0284c7;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.coupon-chip--applied .chip-badge {
+  background: #10b981;
+  color: #ffffff;
+}

@@ -54,6 +54,60 @@ export interface ClientOrderFromDB {
   courierPhone: string;
 }
 
+export interface CotizacionItemRequest {
+  productoId: number;
+  nombre: string;
+  cantidad: number;
+  precioUnitario: number;
+}
+
+export interface CotizacionRequest {
+  items: CotizacionItemRequest[];
+  codigoCupon?: string;
+  comuna?: string;
+}
+
+export interface CotizacionResponse {
+  subtotal: number;
+  costoEnvio: number;
+  tarifaServicio: number;
+  descuentoCupon: number;
+  codigoCupon?: string;
+  mensajeCupon?: string;
+  total: number;
+  tiempoEstimadoMinutos: number;
+  envioGratisAplicado: boolean;
+  umbralEnvioGratis: number;
+  montoFaltanteParaEnvioGratis: number;
+  comuna?: string;
+}
+
+export interface CoberturaComuna {
+  id: number;
+  nombre: string;
+  region: string;
+  tiempoEstimadoMinutos: number;
+  costoAdicional: number;
+  activa: boolean;
+}
+
+export interface CuponItem {
+  id: number;
+  codigo: string;
+  tipoDescuento: 'PORCENTAJE' | 'MONTO_FIJO';
+  valor: number;
+  montoMinimo: number;
+  activo: boolean;
+  vigenteHasta?: string;
+}
+
+export interface ConfiguracionComercialItem {
+  id: number;
+  clave: string;
+  valor: number;
+  descripcion: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class PedidoService {
   private readonly http = inject(HttpClient);
@@ -67,6 +121,38 @@ export class PedidoService {
   readonly isSubmitting = signal(false);
   readonly lastOrderId = signal<string | null>(null);
   readonly errorMessage = signal<string | null>(null);
+
+  cotizar(request: CotizacionRequest): Observable<CotizacionResponse> {
+    return this.http.post<CotizacionResponse>(`${this.urls.base('pedidos')}/cotizar`, request);
+  }
+
+  obtenerCobertura(): Observable<CoberturaComuna[]> {
+    return this.http.get<CoberturaComuna[]>(`${this.urls.base('pedidos')}/cobertura`);
+  }
+
+  obtenerCuponesActivos(): Observable<CuponItem[]> {
+    return this.http.get<CuponItem[]>(`${this.urls.base('pedidos')}/cupones/activos`);
+  }
+
+  obtenerTodosCupones(): Observable<CuponItem[]> {
+    return this.http.get<CuponItem[]>(`${this.urls.base('pedidos')}/cupones`);
+  }
+
+  crearCupon(cupon: Partial<CuponItem>): Observable<CuponItem> {
+    return this.http.post<CuponItem>(`${this.urls.base('pedidos')}/cupones`, cupon);
+  }
+
+  toggleCupon(id: number): Observable<CuponItem> {
+    return this.http.put<CuponItem>(`${this.urls.base('pedidos')}/cupones/${id}/toggle`, {});
+  }
+
+  obtenerConfiguraciones(): Observable<ConfiguracionComercialItem[]> {
+    return this.http.get<ConfiguracionComercialItem[]>(`${this.urls.base('pedidos')}/configuracion`);
+  }
+
+  actualizarConfiguracion(clave: string, valor: number): Observable<ConfiguracionComercialItem> {
+    return this.http.put<ConfiguracionComercialItem>(`${this.urls.base('pedidos')}/configuracion`, { clave, valor });
+  }
 
   private estadoToStep(estado: string): 1 | 2 | 3 | 4 {
     switch (estado?.toUpperCase()) {
@@ -114,7 +200,12 @@ export class PedidoService {
 
   cargarPedidosDeUsuario(): void {
     const user = this.auth.user();
-    const userId = user?.id || 1;
+    if (!user?.id) {
+      this.pedidos.set([]);
+      return;
+    }
+
+    const userId = user.id;
 
     this.isLoading.set(true);
     this.errorMessage.set(null);
@@ -143,7 +234,11 @@ export class PedidoService {
     direccion?: string
   ): Observable<PedidoBackend | null> {
     const user = this.auth.user();
-    const userId = user?.id || 1;
+    if (!user?.id) {
+      this.errorMessage.set('Debes iniciar sesión para realizar un pedido.');
+      return of(null);
+    }
+    const userId = user.id;
 
     if (cartLines.length === 0) {
       return of(null);

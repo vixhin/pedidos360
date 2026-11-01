@@ -4,30 +4,23 @@ import { AuthService } from '../services/auth.service';
 
 /**
  * authInterceptor — Adjunta la cabecera Authorization: Bearer <token_local>
- * y las cabeceras de contexto de usuario (X-User-Id, X-User-Roles, X-User-Email)
- * a las llamadas HTTP REST.
+ * y activa withCredentials: true para el envío seguro de la cookie de sesión HttpOnly p360_session.
+ * La identidad y roles son derivados estrictamente del token verificado o sesión en backend,
+ * nunca de cabeceras arbitrarias del cliente.
  */
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const authService = inject(AuthService);
   const token = authService.token();
-  const user = authService.user();
 
-  let modifiedHeaders = req.headers;
+  let cloned = req.clone({
+    withCredentials: true
+  });
 
-  if (token && !modifiedHeaders.has('Authorization')) {
-    modifiedHeaders = modifiedHeaders.set('Authorization', `Bearer ${token}`);
-  }
-  if (user?.id && !modifiedHeaders.has('X-User-Id')) {
-    modifiedHeaders = modifiedHeaders.set('X-User-Id', String(user.id));
-  }
-  if (user?.email && !modifiedHeaders.has('X-User-Email')) {
-    modifiedHeaders = modifiedHeaders.set('X-User-Email', user.email);
-  }
-  const role = user?.rol || authService.activeRole() || 'CLIENTE';
-  if (!modifiedHeaders.has('X-User-Roles')) {
-    modifiedHeaders = modifiedHeaders.set('X-User-Roles', String(role));
+  if (token && !cloned.headers.has('Authorization')) {
+    cloned = cloned.clone({
+      headers: cloned.headers.set('Authorization', `Bearer ${token}`)
+    });
   }
 
-  const cloned = req.clone({ headers: modifiedHeaders });
   return next(cloned);
 };

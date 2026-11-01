@@ -184,8 +184,8 @@ export class Seller implements OnInit {
       precio: Number(this.newPrice()),
       stock: Number(this.newStock()),
       descripcion: this.newDescription().trim() || 'Producto agregado por el vendedor',
-      rating: 4.8,
-      deliveryMinutes: 25,
+      rating: 0,
+      deliveryMinutes: 30,
     };
 
     this.isSubmittingProduct.set(true);
@@ -246,8 +246,8 @@ export class Seller implements OnInit {
       stock: Number(this.editStock()),
       descripcion: this.editDescription().trim() || 'Producto actualizado',
       imagenUrl: p.imagenUrl,
-      rating: p.rating ?? 4.8,
-      deliveryMinutes: p.deliveryMinutes ?? 25,
+      rating: p.rating ?? 0,
+      deliveryMinutes: p.deliveryMinutes ?? 30,
     };
 
     this.isUpdatingProduct.set(true);

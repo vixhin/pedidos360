@@ -1,5 +1,6 @@
 package cl.duoc.pedidos360.usuario.service;
 
+import cl.duoc.pedidos360.usuario.dto.AdminBootstrapDTO;
 import cl.duoc.pedidos360.usuario.dto.AuthRequest;
 import cl.duoc.pedidos360.usuario.dto.AuthResponse;
 import cl.duoc.pedidos360.usuario.dto.UsuarioCreateDTO;
@@ -8,6 +9,8 @@ import cl.duoc.pedidos360.usuario.entity.Usuario;
 import cl.duoc.pedidos360.usuario.enums.Rol;
 import cl.duoc.pedidos360.usuario.repository.UsuarioRepository;
 import cl.duoc.pedidos360.usuario.security.JwtUtil;
+import cl.duoc.pedidos360.usuario.security.LoginAttemptService;
+import cl.duoc.pedidos360.usuario.security.TurnstileVerificationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import cl.duoc.pedidos360.usuario.config.RabbitMQConfig;
@@ -15,11 +18,10 @@ import cl.duoc.pedidos360.usuario.event.UsuarioLoginExitosoEvent;
 import cl.duoc.pedidos360.usuario.event.UsuarioLoginFallidoEvent;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -33,98 +35,114 @@ public class UsuarioService {
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
     private final RabbitTemplate rabbitTemplate;
-
     private final org.springframework.core.env.Environment environment;
+    private final TurnstileVerificationService turnstileService;
+    private final LoginAttemptService loginAttemptService;
 
+    @Autowired
     public UsuarioService(UsuarioRepository usuarioRepository,
                           PasswordEncoder passwordEncoder,
                           JwtUtil jwtUtil,
                           @Autowired(required = false) RabbitTemplate rabbitTemplate,
-                          org.springframework.core.env.Environment environment) {
+                          @Autowired(required = false) org.springframework.core.env.Environment environment,
+                          @Autowired(required = false) TurnstileVerificationService turnstileService,
+                          @Autowired(required = false) LoginAttemptService loginAttemptService) {
         this.usuarioRepository = usuarioRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
         this.rabbitTemplate = rabbitTemplate;
         this.environment = environment;
+        this.turnstileService = turnstileService;
+        this.loginAttemptService = loginAttemptService;
     }
 
-    @EventListener(ApplicationReadyEvent.class)
+    public UsuarioService(UsuarioRepository usuarioRepository,
+                          PasswordEncoder passwordEncoder,
+                          JwtUtil jwtUtil,
+                          RabbitTemplate rabbitTemplate,
+                          org.springframework.core.env.Environment environment) {
+        this(usuarioRepository, passwordEncoder, jwtUtil, rabbitTemplate, environment, null, null);
+    }
+
     @Transactional
-    public void initDefaultUsers() {
-        if (environment != null && !environment.matchesProfiles("dev")) {
-            log.info("[USER-SERVICE] Production/Non-Dev environment active — skipping mock user seeding.");
-            return;
+    public UsuarioResponseDTO bootstrapAdmin(AdminBootstrapDTO dto) {
+        log.info("[USER-SERVICE] Solicitud de bootstrap de administrador inicial para: {}", dto.getEmail());
+        long adminCount = usuarioRepository.countByRol(Rol.ADMIN);
+        if (adminCount > 0) {
+            log.warn("[USER-SERVICE] Bootstrap rechazado: ya existe al menos un administrador en el sistema");
+            throw new IllegalStateException("El sistema ya cuenta con un administrador registrado");
         }
 
-        if (usuarioRepository.findByEmail("admin@pedidos360.cl").isEmpty()) {
-            Usuario admin = new Usuario(
-                    null,
-                    "Administrador Vixo",
-                    "admin@pedidos360.cl",
-                    passwordEncoder.encode("Password123!"),
-                    Rol.ADMIN
-            );
-            usuarioRepository.save(admin);
-            log.info("[USER-SERVICE] Seeded mock admin user: admin@pedidos360.cl");
+        String expectedToken = environment != null ? environment.getProperty("ADMIN_BOOTSTRAP_TOKEN") : null;
+        if (expectedToken != null && !expectedToken.isBlank()) {
+            if (dto.getBootstrapToken() == null || !expectedToken.equals(dto.getBootstrapToken().trim())) {
+                throw new SecurityException("Token de bootstrap administrativo inválido o no suministrado");
+            }
         }
 
-        if (usuarioRepository.findByEmail("vendedor@pedidos360.cl").isEmpty()) {
-            Usuario vendedor = new Usuario(
-                    null,
-                    "Vendedor Gonzalo Silva",
-                    "vendedor@pedidos360.cl",
-                    passwordEncoder.encode("Password123!"),
-                    Rol.VENDEDOR
-            );
-            usuarioRepository.save(vendedor);
-            log.info("[USER-SERVICE] Seeded mock seller user: vendedor@pedidos360.cl");
+        if (usuarioRepository.findByEmail(dto.getEmail()).isPresent()) {
+            throw new IllegalArgumentException("El email ya se encuentra registrado");
         }
 
-        if (usuarioRepository.findByEmail("cliente@pedidos360.cl").isEmpty()) {
-            Usuario cliente = new Usuario(
-                    null,
-                    "Cliente Comprador",
-                    "cliente@pedidos360.cl",
-                    passwordEncoder.encode("Password123!"),
-                    Rol.CLIENTE
-            );
-            usuarioRepository.save(cliente);
-            log.info("[USER-SERVICE] Seeded mock customer user: cliente@pedidos360.cl");
+        if (dto.getPassword() == null || dto.getPassword().length() < 12) {
+            throw new IllegalArgumentException("La contraseña debe tener al menos 12 caracteres");
         }
 
-        if (usuarioRepository.findByEmail("rodrigo.morales@pedidos360.cl").isEmpty()) {
-            Usuario repartidor = new Usuario(
-                    null,
-                    "Rodrigo Morales (Repartidor)",
-                    "rodrigo.morales@pedidos360.cl",
-                    passwordEncoder.encode("Password123!"),
-                    Rol.REPARTIDOR
-            );
-            usuarioRepository.save(repartidor);
-            log.info("[USER-SERVICE] Seeded mock courier user: rodrigo.morales@pedidos360.cl");
-        }
+        Usuario admin = new Usuario(
+                null,
+                dto.getNombre(),
+                dto.getEmail(),
+                passwordEncoder.encode(dto.getPassword()),
+                Rol.ADMIN,
+                dto.getTelefono(),
+                "Dirección Central Pedidos360",
+                "FULL_TIME",
+                "ACTIVO"
+        );
 
-        // Eliminar usuario mock de prueba si existe en la base de datos
-        usuarioRepository.findByEmail("camila.reyes@pedidos360.cl").ifPresent(user -> {
-            usuarioRepository.delete(user);
-            log.info("[USER-SERVICE] Removed mock user: camila.reyes@pedidos360.cl");
-        });
+        Usuario guardado = usuarioRepository.save(admin);
+        log.info("[USER-SERVICE] Administrador inicial creado exitosamente ID={} Email={}", guardado.getId(), guardado.getEmail());
+        return UsuarioResponseDTO.fromEntity(guardado);
     }
 
     @Transactional(readOnly = true)
     public AuthResponse autenticar(AuthRequest request) {
         log.info("[USER-SERVICE] Login attempt for: {}", request.getEmail());
+
+        if (loginAttemptService != null && loginAttemptService.isBlocked(request.getEmail())) {
+            log.warn("[USER-SERVICE] Login bloqueado temporalmente por intentos fallidos: {}", request.getEmail());
+            throw new RuntimeException("Cuenta bloqueada temporalmente por múltiples intentos fallidos. Intente más tarde.");
+        }
+
+        if (turnstileService != null && StringUtils.hasText(request.getTurnstileToken())) {
+            boolean validCaptcha = turnstileService.verifyToken(request.getTurnstileToken(), null);
+            if (!validCaptcha) {
+                log.warn("[USER-SERVICE] Falló validación Turnstile para: {}", request.getEmail());
+                throw new RuntimeException("Verificación de seguridad Turnstile inválida o expirada");
+            }
+        }
+
         Usuario usuario = usuarioRepository.findByEmail(request.getEmail()).orElse(null);
 
         if (usuario == null) {
+            if (loginAttemptService != null) {
+                loginAttemptService.loginFailed(request.getEmail());
+            }
             publicarLoginFallido(request.getEmail(), "Usuario no encontrado");
             throw new RuntimeException("Credenciales inválidas: Usuario no encontrado");
         }
 
         if (!passwordEncoder.matches(request.getPassword(), usuario.getPasswordHash())) {
+            if (loginAttemptService != null) {
+                loginAttemptService.loginFailed(request.getEmail());
+            }
             log.warn("[USER-SERVICE] Invalid password attempt for: {}", request.getEmail());
             publicarLoginFallido(request.getEmail(), "Contraseña incorrecta");
             throw new RuntimeException("Credenciales inválidas: Contraseña incorrecta");
+        }
+
+        if (loginAttemptService != null) {
+            loginAttemptService.loginSucceeded(request.getEmail());
         }
 
         String token = jwtUtil.generateToken(usuario.getEmail(), usuario.getRol());
@@ -201,12 +219,22 @@ public class UsuarioService {
     @Transactional
     public UsuarioResponseDTO crearUsuario(UsuarioCreateDTO dto) {
         log.info("[USER-SERVICE] Creating user: {}", dto.getEmail());
+
+        if (turnstileService != null && StringUtils.hasText(dto.getTurnstileToken())) {
+            boolean validCaptcha = turnstileService.verifyToken(dto.getTurnstileToken(), null);
+            if (!validCaptcha) {
+                log.warn("[USER-SERVICE] Falló validación Turnstile en registro para: {}", dto.getEmail());
+                throw new RuntimeException("Verificación de seguridad Turnstile inválida o expirada");
+            }
+        }
+
         if (usuarioRepository.findByEmail(dto.getEmail()).isPresent()) {
             log.warn("[USER-SERVICE] Duplicate email creation attempt: {}", dto.getEmail());
             throw new RuntimeException("El email ya se encuentra registrado");
         }
 
-        Rol rolAsignado = (dto.getRol() != null) ? dto.getRol() : Rol.CLIENTE;
+        // Prevención de elevación de privilegios: no permitir registrarse como ADMIN de forma directa
+        Rol rolAsignado = (dto.getRol() != null && dto.getRol() != Rol.ADMIN) ? dto.getRol() : Rol.CLIENTE;
         String rawPassword = (dto.getPassword() != null && !dto.getPassword().isBlank())
                 ? dto.getPassword()
                 : java.util.UUID.randomUUID().toString();
@@ -232,7 +260,6 @@ public class UsuarioService {
     public List<UsuarioResponseDTO> obtenerTodos() {
         log.info("[USER-SERVICE] Listing all users");
         return usuarioRepository.findAll().stream()
-                .filter(u -> u.getEmail() == null || !u.getEmail().toLowerCase().contains("camila"))
                 .map(UsuarioResponseDTO::fromEntity)
                 .collect(Collectors.toList());
     }

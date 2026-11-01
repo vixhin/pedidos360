@@ -30,7 +30,14 @@ public class JwtUtil {
     private static final Logger log = LoggerFactory.getLogger(JwtUtil.class);
     private final SecretKey hmacKey;
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+    private HttpClient httpClient;
+
+    private synchronized HttpClient getHttpClient() {
+        if (this.httpClient == null) {
+            this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+        }
+        return this.httpClient;
+    }
 
     private final Map<String, PublicKey> msKeyCache = new ConcurrentHashMap<>();
     private long lastJwksFetch = 0;
@@ -42,7 +49,8 @@ public class JwtUtil {
     @Value("${azure.api-client-id:${AZURE_API_CLIENT_ID:5febc8e2-ee14-4452-8914-7d237eb5a6f5}}")
     private String expectedApiClientId;
 
-    public JwtUtil(@Value("${jwt.secret:pedidos360_secret_key_for_jwt_token_generation_2026_super_secure}") String secret) {
+    public JwtUtil(@Value("${jwt.secret}") String secret) {
+        if (secret == null || secret.trim().length() < 32) { throw new IllegalStateException("JWT_SECRET es obligatorio y debe tener al menos 32 caracteres."); }
         this.hmacKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 
@@ -173,7 +181,7 @@ public class JwtUtil {
                     .GET()
                     .timeout(Duration.ofSeconds(5))
                     .build();
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response = getHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() == 200) {
                 JsonNode root = objectMapper.readTree(response.body());

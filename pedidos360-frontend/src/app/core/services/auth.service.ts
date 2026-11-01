@@ -153,16 +153,23 @@ export class AuthService {
   // LOGIN LOCAL (Base de datos)
   // ─────────────────────────────────────────────────
 
-  loginWithCredentials(email: string, password: string): Observable<ApiResponse<AuthResponse>> {
-    const body: AuthRequest = { email, password };
+  loginWithCredentials(email: string, password: string, turnstileToken?: string): Observable<ApiResponse<AuthResponse>> {
+    const body: AuthRequest = { email, password, turnstileToken };
     return this.http
       .post<ApiResponse<AuthResponse>>(`${API_CONFIG.usuario}/auth/login`, body)
       .pipe(tap((res) => this.applyAuthResponse(res.data, 'db')));
   }
 
-  register(nombre: string, email: string, password: string): Observable<ApiResponse<unknown>> {
-    const body: RegisterRequest = { nombre, email, password, rol: 'CLIENTE' };
+  register(nombre: string, email: string, password: string, turnstileToken?: string, telefono?: string): Observable<ApiResponse<unknown>> {
+    const body: RegisterRequest = { nombre, email, password, telefono, rol: 'CLIENTE', turnstileToken };
     return this.http.post<ApiResponse<unknown>>(`${API_CONFIG.usuario}/auth/register`, body);
+  }
+
+  forgotPassword(email: string): Observable<ApiResponse<unknown>> {
+    return this.http.post<ApiResponse<unknown>>(
+      `${API_CONFIG.usuario}/auth/forgot-password?email=${encodeURIComponent(email)}`,
+      {}
+    );
   }
 
   // ─────────────────────────────────────────────────
@@ -184,6 +191,9 @@ export class AuthService {
   }
 
   logout(): void {
+    try {
+      this.http.post(`${API_CONFIG.usuario}/auth/logout`, {}).subscribe({ error: () => {} });
+    } catch {}
     const wasMicrosoft = this._user()?.provider === 'microsoft';
     this._isLoggedIn.set(false);
     this._user.set(null);

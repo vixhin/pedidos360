@@ -103,6 +103,27 @@
   color: #34d399;
 }
 
+.cookie-category__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+
+.cookie-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 0.76rem;
+  color: #cbd5e1;
+}
+
+.cookie-switch input[type="checkbox"] {
+  cursor: pointer;
+  accent-color: #10b981;
+}
+
 .cookie-banner__actions {
   display: flex;
   align-items: center;

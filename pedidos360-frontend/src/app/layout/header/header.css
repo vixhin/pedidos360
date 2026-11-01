@@ -148,7 +148,8 @@
   color: var(--color-text);
   border-radius: var(--radius-full);
   padding: 10px 16px;
-  max-width: 520px;
+  max-width: 680px;
+  margin: 0 auto;
 }
 
 .search input {

@@ -22,6 +22,7 @@ public class UsuarioCreateDTO {
     private String direccion;
     private String turno;
     private String estado;
+    private String turnstileToken;
 
     public UsuarioCreateDTO() {}
 
@@ -106,5 +107,13 @@ public class UsuarioCreateDTO {
 
     public void setEstado(String estado) {
         this.estado = estado;
+    }
+
+    public String getTurnstileToken() {
+        return turnstileToken;
+    }
+
+    public void setTurnstileToken(String turnstileToken) {
+        this.turnstileToken = turnstileToken;
     }
 }

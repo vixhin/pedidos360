@@ -355,3 +355,170 @@
   color: #64748b;
   font-weight: 600;
 }
+
+
+/* === ADMIN TABS DE NAVEGACIÓN === */
+.admin-tabs-nav {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 2rem;
+  border-bottom: 2px solid #e2e8f0;
+  padding-bottom: 8px;
+}
+
+.admin-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  border-radius: 10px;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.admin-tab-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.admin-tab-btn--active {
+  background: #0f172a;
+  color: #ffffff !important;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.15);
+}
+
+.tab-badge {
+  background: rgba(255, 255, 255, 0.2);
+  color: inherit;
+  font-size: 0.75rem;
+  padding: 2px 7px;
+  border-radius: 12px;
+  font-weight: 800;
+}
+
+.admin-tab-btn:not(.admin-tab-btn--active) .tab-badge {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+/* === REGLAS DEL MOTOR COMERCIAL === */
+.comercial-rules-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.25rem;
+  padding: 1.25rem;
+}
+
+.rule-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.rule-box label {
+  font-weight: 700;
+  color: #0f172a;
+  font-size: 0.95rem;
+  margin-bottom: 4px;
+}
+
+.rule-desc {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin-bottom: 1rem;
+  line-height: 1.4;
+  flex-grow: 1;
+}
+
+.rule-input-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+
+.currency-prefix {
+  font-weight: 700;
+  color: #64748b;
+  font-size: 1rem;
+}
+
+.rule-input-group input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #0f172a;
+  outline: none;
+}
+
+.rule-input-group input:focus {
+  border-color: #059669;
+}
+
+/* === FORMULARIO CREAR CUPÓN === */
+.create-coupon-form {
+  padding: 1.25rem;
+}
+
+.create-coupon-form .form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.25rem;
+}
+
+.create-coupon-form .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.create-coupon-form label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.create-coupon-form input,
+.create-coupon-form select {
+  padding: 9px 12px;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  outline: none;
+  font-family: inherit;
+}
+
+.create-coupon-form input:focus,
+.create-coupon-form select:focus {
+  border-color: #059669;
+}
+
+.create-coupon-form small {
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
+/* === BADGE CUPÓN MONOSPACE === */
+.coupon-code-pill {
+  font-family: monospace;
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  background: #f1f5f9;
+  border: 1px dashed #94a3b8;
+  padding: 3px 8px;
+  border-radius: 6px;
+  color: #0f172a;
+}

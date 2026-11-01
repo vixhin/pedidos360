@@ -96,11 +96,11 @@
         </div>
         <div class="summary-row">
           <span>Tarifa de servicio</span>
-          <span>${{ 1500 | number }}</span>
+          <span>${{ serviceFee() | number }}</span>
         </div>
         @if (appliedDiscount() > 0) {
           <div class="summary-row summary-row--discount">
-            <span>BIENVENIDA360</span>
+            <span>{{ cotizacion()?.codigoCupon || 'Descuento cupón' }}</span>
             <span>-${{ appliedDiscount() | number }}</span>
           </div>
         }
@@ -123,6 +123,34 @@
           />
           <button type="button" class="btn btn-secondary btn-sm" (click)="applyCoupon()">Aplicar</button>
         </div>
+        @if (couponMessage()) {
+          <p class="text-success text-sm" style="color: var(--color-success, #10b981); margin-top: 4px; font-size: 0.85rem;">{{ couponMessage() }}</p>
+        }
+        @if (couponError()) {
+          <p class="text-danger text-sm" style="color: var(--color-danger, #ef4444); margin-top: 4px; font-size: 0.85rem;">{{ couponError() }}</p>
+        }
+
+        @if (cuponesDisponibles().length > 0) {
+          <div class="available-coupons">
+            <span class="available-coupons__title"><app-icon name="gift" size="14" /> Cupones activos:</span>
+            <div class="coupon-chips">
+              @for (c of cuponesDisponibles(); track c.id) {
+                <button
+                  type="button"
+                  class="coupon-chip"
+                  [class.coupon-chip--applied]="couponCode() === c.codigo"
+                  (click)="aplicarCuponSugerido(c.codigo)"
+                  [title]="'Aplicar cupón ' + c.codigo"
+                >
+                  <span class="chip-code">{{ c.codigo }}</span>
+                  <span class="chip-badge">
+                    {{ c.tipoDescuento === 'PORCENTAJE' ? c.valor + '% OFF' : '-$' + (c.valor | number) }}
+                  </span>
+                </button>
+              }
+            </div>
+          </div>
+        }
 
         <button
           type="button"

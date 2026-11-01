@@ -40,7 +40,7 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register", "/api/auth/forgot-password").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register", "/api/auth/forgot-password", "/api/auth/logout", "/api/auth/bootstrap-admin").permitAll()
                 .requestMatchers("/api/internal/**", "/health", "/ready", "/api/usuario/health", "/actuator/**", "/h2-console/**").permitAll()
                 .requestMatchers("/api/usuario/admin/**", "/api/admin/rabbit/**").hasRole("ADMIN")
                 .anyRequest().authenticated()
@@ -58,8 +58,6 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // Localhost siempre permitido para desarrollo; en producción se agrega
-        // la URL pública real del frontend vía la variable FRONTEND_ORIGIN.
         configuration.setAllowedOriginPatterns(List.of("http://localhost:*", frontendOrigin));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));

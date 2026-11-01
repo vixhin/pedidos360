@@ -3,13 +3,16 @@ export type Rol = 'ADMIN' | 'VENDEDOR' | 'REPARTIDOR' | 'CLIENTE';
 export interface AuthRequest {
   email: string;
   password: string;
+  turnstileToken?: string;
 }
 
 export interface RegisterRequest {
   nombre: string;
   email: string;
   password: string;
+  telefono?: string;
   rol?: Rol;
+  turnstileToken?: string;
 }
 
 export interface AuthResponse {

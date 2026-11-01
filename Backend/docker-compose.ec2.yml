@@ -17,6 +17,7 @@ services:
       args:
         PUBLIC_URL: ${PUBLIC_URL}
         BFF_PUBLIC_URL: ${BFF_PUBLIC_URL:-}
+        TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-1x00000000000000000000AA}
     container_name: pedidos360-frontend
     restart: unless-stopped
     depends_on:
@@ -73,6 +74,9 @@ services:
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD required}
       JWT_SECRET: ${JWT_SECRET}
       BFF_INTERNAL_KEY: ${BFF_INTERNAL_KEY}
+      TURNSTILE_ENABLED: ${TURNSTILE_ENABLED:-true}
+      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY}
+      ADMIN_BOOTSTRAP_TOKEN: ${ADMIN_BOOTSTRAP_TOKEN:-}
 
   productos:
     ports: !reset []

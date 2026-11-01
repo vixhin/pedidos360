@@ -15,7 +15,10 @@ public class JwtUtil {
 
     private final SecretKey key;
 
-    public JwtUtil(@Value("${jwt.secret:pedidos360_secret_key_for_jwt_token_generation_2026_super_secure}") String secret) {
+    public JwtUtil(@Value("${jwt.secret}") String secret) {
+        if (secret == null || secret.trim().length() < 32) {
+            throw new IllegalStateException("La propiedad 'jwt.secret' (o variable de entorno JWT_SECRET) es obligatoria y debe tener al menos 32 caracteres (256 bits).");
+        }
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 

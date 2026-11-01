@@ -89,47 +89,6 @@
         }
       </div>
 
-      <!-- NAVEGACIÓN AUTÉNTICA SEGÚN EL ROL DE LA CUENTA -->
-      <nav class="nav-shortcuts">
-        @if (auth.isAdmin()) {
-          <a routerLink="/analitica" routerLinkActive="active" class="nav-shortcut-link" title="Dashboard Financiero">
-            Analítica
-          </a>
-          <a routerLink="/vendedor" routerLinkActive="active" class="nav-shortcut-link" title="Gestión de Tienda & Productos">
-            Vendedor
-          </a>
-          <a routerLink="/personal" routerLinkActive="active" class="nav-shortcut-link" title="Gestión & Alta de Personal">
-            Personal
-          </a>
-          <a routerLink="/repartidor" routerLinkActive="active" class="nav-shortcut-link" title="Portal de Entregas Repartidor">
-            Portal Repartidor
-          </a>
-          <a routerLink="/cliente" routerLinkActive="active" class="nav-shortcut-link" title="Portal Cliente & Seguimiento">
-            Portal Cliente
-          </a>
-        } @else if (auth.isVendedor()) {
-          <a routerLink="/vendedor" routerLinkActive="active" class="nav-shortcut-link" title="Gestión de Productos & Pedidos">
-            Productos & Pedidos Entrantes
-          </a>
-          <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" class="nav-shortcut-link">
-            Tienda
-          </a>
-        } @else if (auth.isRepartidor()) {
-          <a routerLink="/repartidor" routerLinkActive="active" class="nav-shortcut-link" title="Portal Repartidor">
-            Panel Entregas Repartidor
-          </a>
-        } @else {
-          <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" class="nav-shortcut-link">
-            Catálogo
-          </a>
-          @if (auth.isLoggedIn()) {
-            <a routerLink="/cliente" routerLinkActive="active" class="nav-shortcut-link" title="Seguimiento de Mi Pedido">
-              Dónde está mi pedido
-            </a>
-          }
-        }
-      </nav>
-
       <div class="actions">
         <!-- Panel de Favoritos -->
         <div class="dropdown-wrap">
@@ -293,6 +252,9 @@
                 @if (auth.isAdmin()) {
                   <a routerLink="/analitica" class="profile-link" (click)="closeMenus()">
                     <app-icon name="edit" size="16" /> Analítica Financiera
+                  </a>
+                  <a routerLink="/analitica" [queryParams]="{tab: 'cupones'}" class="profile-link" (click)="closeMenus()">
+                    <app-icon name="gift" size="16" /> Motor Comercial & Cupones
                   </a>
                   <a routerLink="/personal" class="profile-link" (click)="closeMenus()">
                     <app-icon name="user" size="16" /> Gestión de Personal

@@ -30,6 +30,10 @@ export const environment = {
     postLogoutRedirectUri: PUBLIC_URL,
   },
 
+  turnstile: {
+    siteKey: '__TURNSTILE_SITE_KEY__',
+  },
+
   api: {
     bff: BFF_PUBLIC_URL,
     usuario: `${PUBLIC_URL}/api`,

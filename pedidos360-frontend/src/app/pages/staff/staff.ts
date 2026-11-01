@@ -201,8 +201,10 @@ export class Staff implements OnInit {
   private generateSecurePassword(): string {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*';
     let result = 'P360-';
+    const randomBuffer = new Uint32Array(10);
+    window.crypto.getRandomValues(randomBuffer);
     for (let i = 0; i < 10; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
+      result += chars.charAt(randomBuffer[i] % chars.length);
     }
     return result;
   }

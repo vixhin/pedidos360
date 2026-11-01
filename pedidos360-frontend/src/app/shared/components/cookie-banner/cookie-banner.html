@@ -4,20 +4,47 @@
       <div class="cookie-banner__main">
         <div class="cookie-banner__icon" aria-hidden="true">🍪</div>
         <div class="cookie-banner__text">
-          <h3 id="cookie-title" class="cookie-banner__title">Uso de Cookies en Pedidos360</h3>
+          <h3 id="cookie-title" class="cookie-banner__title">Gestión de Cookies y Privacidad en Pedidos360</h3>
           <p id="cookie-desc" class="cookie-banner__desc">
-            Utilizamos cookies propias y de sesión para permitir el funcionamiento de tu carrito de compras, mantener tu sesión segura y recordar tus preferencias. Puedes aceptar todas o conservar solo las necesarias.
+            Utilizamos cookies técnicas y de sesión seguras (HttpOnly) para el funcionamiento del carrito de compras y la autenticación. Puedes personalizar tus preferencias para cookies opcionales de analítica o experiencia.
           </p>
 
           @if (showDetails()) {
             <div class="cookie-banner__details">
               <div class="cookie-category">
-                <span class="cookie-category__badge cookie-category__badge--required">Necesarias (Obligatorias)</span>
-                <p>Imprescindibles para autenticación, seguridad de pagos y persistencia del carrito de compras.</p>
+                <div class="cookie-category__header">
+                  <span class="cookie-category__badge cookie-category__badge--required">Necesarias (Obligatorias)</span>
+                  <input type="checkbox" checked disabled title="Siempre activas" />
+                </div>
+                <p>Imprescindibles para autenticación segura (p360_session), protección CSRF y persistencia de artículos en el carrito.</p>
               </div>
               <div class="cookie-category">
-                <span class="cookie-category__badge">Preferencias y Experiencia</span>
-                <p>Guardan tu sucursal habitual, vista preferida y productos favoritos para agilizar tu compra.</p>
+                <div class="cookie-category__header">
+                  <span class="cookie-category__badge">Analítica y Rendimiento</span>
+                  <label class="cookie-switch">
+                    <input
+                      type="checkbox"
+                      [ngModel]="allowAnalytics()"
+                      (ngModelChange)="allowAnalytics.set($event)"
+                    />
+                    <span class="cookie-switch__label">Permitir</span>
+                  </label>
+                </div>
+                <p>Métricas anónimas para optimizar los tiempos de carga y velocidad de respuesta del catálogo.</p>
+              </div>
+              <div class="cookie-category">
+                <div class="cookie-category__header">
+                  <span class="cookie-category__badge">Preferencias y Experiencia</span>
+                  <label class="cookie-switch">
+                    <input
+                      type="checkbox"
+                      [ngModel]="allowPreferences()"
+                      (ngModelChange)="allowPreferences.set($event)"
+                    />
+                    <span class="cookie-switch__label">Permitir</span>
+                  </label>
+                </div>
+                <p>Guardan tu comuna habitual y configuración de interfaz para facilitar tus próximas órdenes.</p>
               </div>
             </div>
           }
@@ -30,15 +57,25 @@
           class="btn-cookie btn-cookie--text"
           (click)="toggleDetails()"
         >
-          {{ showDetails() ? 'Ocultar detalles' : 'Ver detalles' }}
+          {{ showDetails() ? 'Ocultar opciones' : 'Personalizar' }}
         </button>
-        <button
-          type="button"
-          class="btn-cookie btn-cookie--outline"
-          (click)="acceptNecessary()"
-        >
-          Solo necesarias
-        </button>
+        @if (showDetails()) {
+          <button
+            type="button"
+            class="btn-cookie btn-cookie--outline"
+            (click)="saveCustomPreferences()"
+          >
+            Guardar selección
+          </button>
+        } @else {
+          <button
+            type="button"
+            class="btn-cookie btn-cookie--outline"
+            (click)="acceptNecessary()"
+          >
+            Solo necesarias
+          </button>
+        }
         <button
           type="button"
           class="btn-cookie btn-cookie--primary"
@@ -50,4 +87,3 @@
     </div>
   </aside>
 }
-

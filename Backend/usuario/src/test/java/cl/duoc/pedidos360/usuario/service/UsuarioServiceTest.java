@@ -1,5 +1,6 @@
 package cl.duoc.pedidos360.usuario.service;
 
+import cl.duoc.pedidos360.usuario.dto.AdminBootstrapDTO;
 import cl.duoc.pedidos360.usuario.dto.AuthRequest;
 import cl.duoc.pedidos360.usuario.dto.AuthResponse;
 import cl.duoc.pedidos360.usuario.dto.UsuarioCreateDTO;
@@ -208,15 +209,31 @@ class UsuarioServiceTest {
     }
 
     @Test
-    @DisplayName("initDefaultUsers - ejecuta seed si repositorio está vacío")
-    void testInitDefaultUsers() {
-        when(usuarioRepository.findByEmail(anyString())).thenReturn(Optional.empty());
-        when(passwordEncoder.encode(anyString())).thenReturn("encoded");
-        when(usuarioRepository.save(any(Usuario.class))).thenReturn(mockUsuario);
+    @DisplayName("bootstrapAdmin - éxito al crear el primer administrador")
+    void testBootstrapAdminExito() {
+        AdminBootstrapDTO dto = new AdminBootstrapDTO("Admin Inicial", "admin@pedidos360.cl", "SuperPass1234!", "+56911112222", null);
+        when(usuarioRepository.countByRol(Rol.ADMIN)).thenReturn(0L);
+        when(usuarioRepository.findByEmail("admin@pedidos360.cl")).thenReturn(Optional.empty());
+        when(passwordEncoder.encode("SuperPass1234!")).thenReturn("encoded_admin_pass");
+        Usuario adminEntity = new Usuario(10L, "Admin Inicial", "admin@pedidos360.cl", "encoded_admin_pass", Rol.ADMIN);
+        when(usuarioRepository.save(any(Usuario.class))).thenReturn(adminEntity);
 
-        usuarioService.initDefaultUsers();
+        UsuarioResponseDTO resp = usuarioService.bootstrapAdmin(dto);
 
-        verify(usuarioRepository, times(4)).save(any(Usuario.class));
+        assertThat(resp).isNotNull();
+        assertThat(resp.getEmail()).isEqualTo("admin@pedidos360.cl");
+        assertThat(resp.getRol()).isEqualTo(Rol.ADMIN);
+        verify(usuarioRepository).save(any(Usuario.class));
+    }
+
+    @Test
+    @DisplayName("bootstrapAdmin - rechaza si ya existe un administrador")
+    void testBootstrapAdminRechazaSiYaExiste() {
+        AdminBootstrapDTO dto = new AdminBootstrapDTO("Admin 2", "admin2@pedidos360.cl", "SuperPass1234!", "+56911112222", null);
+        when(usuarioRepository.countByRol(Rol.ADMIN)).thenReturn(1L);
+
+        assertThrows(IllegalStateException.class, () -> usuarioService.bootstrapAdmin(dto));
+        verify(usuarioRepository, never()).save(any(Usuario.class));
     }
 
     @Test

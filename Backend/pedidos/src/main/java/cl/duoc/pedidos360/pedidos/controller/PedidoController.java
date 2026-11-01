@@ -1,5 +1,7 @@
 package cl.duoc.pedidos360.pedidos.controller;
 
+import cl.duoc.pedidos360.pedidos.entity.ConfiguracionComercial;
+import cl.duoc.pedidos360.pedidos.entity.Cupon;
 import cl.duoc.pedidos360.pedidos.entity.Pedido;
 import cl.duoc.pedidos360.pedidos.security.JwtUtil;
 import cl.duoc.pedidos360.pedidos.service.PedidoService;
@@ -26,6 +28,7 @@ public class PedidoController {
 
     private final PedidoService pedidoService;
     private final JwtUtil jwtUtil;
+    private final cl.duoc.pedidos360.pedidos.service.MotorComercialService motorComercialService;
     private final RestTemplate restTemplate = new RestTemplate();
 
     @Value("${bff.internal-key:${BFF_INTERNAL_KEY:pedidos360-internal-secret-key-local-2026}}")
@@ -34,9 +37,82 @@ public class PedidoController {
     @Value("${services.usuario-url:${USUARIO_SERVICE_URL:http://localhost:8081}}")
     private String usuarioServiceUrl;
 
-    public PedidoController(PedidoService pedidoService, JwtUtil jwtUtil) {
+    @org.springframework.beans.factory.annotation.Autowired
+    public PedidoController(PedidoService pedidoService, JwtUtil jwtUtil, @org.springframework.beans.factory.annotation.Autowired(required = false) cl.duoc.pedidos360.pedidos.service.MotorComercialService motorComercialService) {
         this.pedidoService = pedidoService;
         this.jwtUtil = jwtUtil;
+        this.motorComercialService = motorComercialService;
+    }
+
+    public PedidoController(PedidoService pedidoService, JwtUtil jwtUtil) {
+        this(pedidoService, jwtUtil, null);
+    }
+
+    @PostMapping("/cotizar")
+    public ResponseEntity<?> cotizar(@RequestBody cl.duoc.pedidos360.pedidos.dto.CotizacionRequestDTO request) {
+        if (motorComercialService == null) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Motor comercial no disponible");
+        }
+        return ResponseEntity.ok(motorComercialService.cotizar(request));
+    }
+
+    @GetMapping("/cobertura")
+    public ResponseEntity<?> obtenerCobertura() {
+        if (motorComercialService == null) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Motor comercial no disponible");
+        }
+        return ResponseEntity.ok(motorComercialService.obtenerComunasActivas());
+    }
+
+    @GetMapping("/cupones/activos")
+    public ResponseEntity<?> listarCuponesActivos() {
+        if (motorComercialService == null) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Motor comercial no disponible");
+        }
+        return ResponseEntity.ok(motorComercialService.listarCupones(true));
+    }
+
+    @GetMapping("/cupones")
+    public ResponseEntity<?> listarTodosCupones() {
+        if (motorComercialService == null) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Motor comercial no disponible");
+        }
+        return ResponseEntity.ok(motorComercialService.listarCupones(false));
+    }
+
+    @PostMapping("/cupones")
+    public ResponseEntity<?> crearCupon(@RequestBody Cupon cupon) {
+        if (motorComercialService == null) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Motor comercial no disponible");
+        }
+        return ResponseEntity.ok(motorComercialService.crearCupon(cupon));
+    }
+
+    @PutMapping("/cupones/{id}/toggle")
+    public ResponseEntity<?> toggleCupon(@PathVariable Long id) {
+        if (motorComercialService == null) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Motor comercial no disponible");
+        }
+        return ResponseEntity.ok(motorComercialService.toggleCupon(id));
+    }
+
+    @GetMapping("/configuracion")
+    public ResponseEntity<?> listarConfiguraciones() {
+        if (motorComercialService == null) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Motor comercial no disponible");
+        }
+        return ResponseEntity.ok(motorComercialService.listarConfiguraciones());
+    }
+
+    @PutMapping("/configuracion")
+    public ResponseEntity<?> actualizarConfiguracion(@RequestBody Map<String, Object> body) {
+        if (motorComercialService == null) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Motor comercial no disponible");
+        }
+        String clave = (String) body.get("clave");
+        Object valorObj = body.get("valor");
+        java.math.BigDecimal valor = valorObj != null ? new java.math.BigDecimal(valorObj.toString()) : java.math.BigDecimal.ZERO;
+        return ResponseEntity.ok(motorComercialService.actualizarConfiguracion(clave, valor));
     }
 
     @GetMapping

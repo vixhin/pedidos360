@@ -67,6 +67,12 @@ class JwtUtilTest {
     }
 
     @Test
+    void testConstructor_ShortOrNullSecret_ThrowsException() {
+        assertThrows(IllegalStateException.class, () -> new JwtUtil(null));
+        assertThrows(IllegalStateException.class, () -> new JwtUtil("short-secret"));
+    }
+
+    @Test
     void testValidateToken_UnsignedBase64PayloadOnly_Rejected() {
         // Unsigned header + payload with future exp
         String fakeHeader = java.util.Base64.getUrlEncoder().encodeToString("{\"alg\":\"none\"}".getBytes());

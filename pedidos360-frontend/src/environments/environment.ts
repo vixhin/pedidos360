@@ -45,6 +45,14 @@ export const environment = {
   },
 
   // ──────────────────────────────────────────────
+  //  Cloudflare Turnstile
+  // ──────────────────────────────────────────────
+  turnstile: {
+    /** Test sitekey de Cloudflare (siempre pasa en desarrollo) */
+    siteKey: '0x4AAAAAAFusWYDnkxqWqi64',
+  },
+
+  // ──────────────────────────────────────────────
   //  URLs de los servicios
   // ──────────────────────────────────────────────
   api: {

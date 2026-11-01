@@ -372,3 +372,82 @@
   background: #f1f5f9;
   color: #0f172a;
 }
+
+/* Sub-acciones de login (Recuperar contraseña) */
+.login-sub-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -6px;
+  margin-bottom: 12px;
+}
+
+.link-btn-text {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 0.15s ease;
+}
+
+.link-btn-text:hover {
+  color: #0d9488;
+}
+
+/* Requisitos y robustez de contraseña */
+.password-hints {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 14px;
+  text-align: left;
+}
+
+.password-hints span {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.password-hints span.valid {
+  color: #10b981;
+  font-weight: 700;
+}
+
+.field-error-text {
+  font-size: 0.78rem;
+  color: #ef4444;
+  margin-top: -8px;
+  margin-bottom: 12px;
+  text-align: left;
+  font-weight: 600;
+}
+
+/* Mensaje de éxito (Recuperación) */
+.form-success {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  margin: 14px 0;
+}
+
+.form-success app-icon {
+  color: #10b981;
+}

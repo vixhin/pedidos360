@@ -7,6 +7,7 @@ public class RegisterRequest {
     private String email;
     private String password;
     private Rol rol;
+    private String turnstileToken;
 
     public RegisterRequest() {}
 
@@ -15,6 +16,14 @@ public class RegisterRequest {
         this.email = email;
         this.password = password;
         this.rol = rol;
+    }
+
+    public RegisterRequest(String nombre, String email, String password, Rol rol, String turnstileToken) {
+        this.nombre = nombre;
+        this.email = email;
+        this.password = password;
+        this.rol = rol;
+        this.turnstileToken = turnstileToken;
     }
 
     public String getNombre() {
@@ -47,5 +56,13 @@ public class RegisterRequest {
 
     public void setRol(Rol rol) {
         this.rol = rol;
+    }
+
+    public String getTurnstileToken() {
+        return turnstileToken;
+    }
+
+    public void setTurnstileToken(String turnstileToken) {
+        this.turnstileToken = turnstileToken;
     }
 }

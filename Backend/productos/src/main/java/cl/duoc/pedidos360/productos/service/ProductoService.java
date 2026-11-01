@@ -28,21 +28,39 @@ public class ProductoService {
     private final ProductoRepository productoRepository;
     private final FavoritoRepository favoritoRepository;
     private final PromocionRepository promocionRepository;
+    private final org.springframework.core.env.Environment environment;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public ProductoService(ProductoRepository productoRepository,
+                           FavoritoRepository favoritoRepository,
+                           PromocionRepository promocionRepository,
+                           org.springframework.core.env.Environment environment) {
+        this.productoRepository = productoRepository;
+        this.favoritoRepository = favoritoRepository;
+        this.promocionRepository = promocionRepository;
+        this.environment = environment;
+    }
 
     public ProductoService(ProductoRepository productoRepository,
                            FavoritoRepository favoritoRepository,
                            PromocionRepository promocionRepository) {
-        this.productoRepository = productoRepository;
-        this.favoritoRepository = favoritoRepository;
-        this.promocionRepository = promocionRepository;
+        this(productoRepository, favoritoRepository, promocionRepository, null);
     }
 
-    @EventListener(ApplicationReadyEvent.class)
     @Transactional
-    public void initSupermarketProducts() {
-        if (productoRepository.count() == 0) {
-            log.info("[PRODUCTOS-SERVICE] Seeding 26 supermarket products into PostgreSQL...");
-            List<Producto> mockCatalog = Arrays.asList(
+    public int importarCatalogoDesarrollo() {
+        if (environment != null && !environment.matchesProfiles("dev")) {
+            log.warn("[PRODUCTOS-SERVICE] Intento de importar catálogo semilla fuera de ambiente dev bloqueado.");
+            throw new IllegalStateException("La importación de catálogo semilla sólo está disponible en perfil de desarrollo ('dev').");
+        }
+
+        if (productoRepository.count() > 0) {
+            log.info("[PRODUCTOS-SERVICE] Catálogo ya contiene productos. No se reimportan para evitar duplicados.");
+            return 0;
+        }
+
+        log.info("[PRODUCTOS-SERVICE] Importando explícitamente 26 productos de supermercado para desarrollo...");
+        List<Producto> mockCatalog = Arrays.asList(
                     // LÁCTEOS Y HUEVOS
                     new Producto(null, "SUP-LAC-001", "Leche Entera Colun 1L", "LACTEOS_Y_HUEVOS", "Leche entera pasteurizada en caja 1 Litro", 1190.00, 150, "https://images.unsplash.com/photo-1563636619-e9143da7973b", 4.8, 20),
                     new Producto(null, "SUP-LAC-002", "Queso Gauda Soprole Laminado 250g", "LACTEOS_Y_HUEVOS", "Queso gauda mantecoso laminado 250 gramos", 2890.00, 80, "https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d", 4.7, 20),
@@ -83,9 +101,9 @@ public class ProductoService {
                     new Producto(null, "SUP-LIM-002", "Papel Higiénico Elite Doble Hoja 8 Rollos", "LIMPIEZA", "Pack 8 rollos papel higiénico doble hoja suave", 4590.00, 130, "https://images.unsplash.com/photo-1584556812952-905ffd0c611a", 4.8, 25),
                     new Producto(null, "SUP-LIM-003", "Lavaloza Cif Gel Limón 750ml", "LIMPIEZA", "Detergente concentrado lavaloza gel aroma limón 750ml", 1890.00, 110, "https://images.unsplash.com/photo-1585421514284-efb74c2b69ba", 4.7, 20)
             );
-            productoRepository.saveAll(mockCatalog);
-            log.info("[PRODUCTOS-SERVICE] 26 supermarket products seeded successfully!");
-        }
+        List<Producto> guardados = productoRepository.saveAll(mockCatalog);
+        log.info("[PRODUCTOS-SERVICE] 26 supermarket products seeded successfully via explicit dev import!");
+        return guardados.size();
     }
 
     @Transactional(readOnly = true)

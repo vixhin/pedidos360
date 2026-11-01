@@ -35,7 +35,7 @@
           <path d="M 25 25 Q 50 48 75 75" fill="none" stroke="#cbd5e1" stroke-width="1.2" stroke-dasharray="1 1" /> <!-- Américo Vespucio -->
 
           <!-- Pines de Comunas -->
-          @for (sec of sectors; track sec.id) {
+          @for (sec of sectors(); track sec.id) {
             <g
               class="map-pin-group"
               [class.active]="selectedSector().id === sec.id"
@@ -58,7 +58,7 @@
       <div class="map-sidebar">
         <h3>Sectores con Cobertura Exprés</h3>
         <div class="sector-list">
-          @for (sec of sectors; track sec.id) {
+          @for (sec of sectors(); track sec.id) {
             <button
               type="button"
               class="sector-btn"
@@ -81,7 +81,7 @@
             type="text"
             [value]="customAddress()"
             (input)="customAddress.set($any($event.target).value)"
-            placeholder="ej: Av. Libertador Bernardo O'Higgins 1449"
+            placeholder="Ingresa tu dirección (calle, número)..."
           />
         </div>
 

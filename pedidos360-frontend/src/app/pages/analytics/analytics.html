@@ -5,7 +5,7 @@
       <app-icon name="lock" size="48" />
       <h2 style="font-size: 1.6rem; font-weight: 800; color: #0f172a; margin-bottom: 0.5rem;">Vista Restringida a Administradores</h2>
       <p style="color: #64748b; margin-bottom: 1.5rem; line-height: 1.6;">
-        El módulo de <strong>Analítica Financiera</strong> es de acceso exclusivo para el rol de <strong>Administrador (ADMIN)</strong>.
+        El módulo de <strong>Analítica Financiera & Motor Comercial</strong> es de acceso exclusivo para el rol de <strong>Administrador (ADMIN)</strong>.
       </p>
       <div style="display: flex; justify-content: center; gap: 12px; flex-wrap: wrap;">
         <a routerLink="/login" class="btn btn-primary">Iniciar Sesión como Administrador</a>
@@ -13,269 +13,552 @@
       </div>
     </div>
   } @else {
-    <!-- DASHBOARD FINANCIERO DE ADMINISTRADOR -->
-    <div class="page-head">
-      <div>
-        <span class="badge badge--primary">Dashboard Financiero & Métricas</span>
-        <h1>Analítica de Ingresos, Egresos y Rendimiento</h1>
-        <p>Datos en tiempo real calculados desde los pedidos y productos de PostgreSQL. Snapshot automático cada 7 días.</p>
-      </div>
-      <div class="period-selector">
-        <button type="button" [class.active]="selectedPeriod() === '24h'" (click)="setPeriod('24h')">24 Horas (Día)</button>
-        <button type="button" [class.active]="selectedPeriod() === '7d'" (click)="setPeriod('7d')">7 Días</button>
-        <button type="button" [class.active]="selectedPeriod() === '30d'" (click)="setPeriod('30d')">30 Días</button>
-        <button type="button" [class.active]="selectedPeriod() === '90d'" (click)="setPeriod('90d')">90 Días</button>
-        <button type="button" [class.active]="selectedPeriod() === '1y'" (click)="setPeriod('1y')">1 Año</button>
-      </div>
+    <!-- NAVEGACIÓN DE PESTAÑAS EXCLUSIVA ADMIN -->
+    <div class="admin-tabs-nav">
+      <button
+        type="button"
+        class="admin-tab-btn"
+        [class.admin-tab-btn--active]="activeTab() === 'metricas'"
+        (click)="activeTab.set('metricas')"
+      >
+        <app-icon name="edit" size="18" /> Métricas & Finanzas
+      </button>
+      <button
+        type="button"
+        class="admin-tab-btn"
+        [class.admin-tab-btn--active]="activeTab() === 'cupones'"
+        (click)="activeTab.set('cupones')"
+      >
+        <app-icon name="gift" size="18" /> Motor Comercial & Cupones
+        @if (cupones().length > 0) {
+          <span class="tab-badge">{{ cupones().length }}</span>
+        }
+      </button>
     </div>
 
-    @if (isLoading()) {
-      <div style="text-align: center; padding: 4rem; color: #64748b;">
-        <app-icon name="package" size="40" />
-        <p style="margin-top: 1rem; font-size: 1.1rem;">Cargando datos desde PostgreSQL...</p>
-      </div>
-    } @else {
-
-    <!-- Tarjetas KPI Principales -->
-    <div class="kpi-grid">
-      <!-- Venta del Día (Últimas 24 Horas) -->
-      <div class="kpi-card kpi-card--today">
-        <div class="kpi-card__head">
-          <span>Venta del Día (24 hrs)</span>
-          <div class="kpi-icon kpi-icon--amber"><app-icon name="clock" size="16" /></div>
-        </div>
-        <p class="kpi-amount">
-          @if (revenue24h() > 0) { ${{ revenue24h() | number }} }
-          @else { <span style="color:#94a3b8; font-size:1.1rem;">$0 hoy</span> }
-        </p>
-        <span class="kpi-tag kpi-tag--today">
-          {{ orders24h() }} pedidos hoy · Prom: ${{ ticketPromedio24h() | number }}
-        </span>
-      </div>
-
-      <div class="kpi-card kpi-card--income">
-        <div class="kpi-card__head">
-          <span>Ingresos Totales ({{ getPeriodLabel() }})</span>
-          <div class="kpi-icon kpi-icon--green"><app-icon name="arrow-right" size="16" /></div>
-        </div>
-        <p class="kpi-amount">
-          @if (totalRevenue() > 0) { ${{ totalRevenue() | number }} }
-          @else { <span style="color:#94a3b8; font-size:1rem;">Sin datos aún</span> }
-        </p>
-        <span class="kpi-tag kpi-tag--up">Calculado de pedidos reales</span>
-      </div>
-
-      <div class="kpi-card kpi-card--expense">
-        <div class="kpi-card__head">
-          <span>Egresos & Costos Operativos</span>
-          <div class="kpi-icon kpi-icon--red"><app-icon name="arrow-right" size="16" /></div>
-        </div>
-        <p class="kpi-amount">
-          @if (totalExpenses() > 0) { ${{ totalExpenses() | number }} }
-          @else { <span style="color:#94a3b8; font-size:1rem;">Sin datos aún</span> }
-        </p>
-        <span class="kpi-tag kpi-tag--down">Estimado: 56% del ingreso</span>
-      </div>
-
-      <div class="kpi-card kpi-card--profit">
-        <div class="kpi-card__head">
-          <span>Utilidad Neta</span>
-          <div class="kpi-icon kpi-icon--blue"><app-icon name="check" size="16" /></div>
-        </div>
-        <p class="kpi-amount">
-          @if (netProfit() !== 0) { ${{ netProfit() | number }} }
-          @else { <span style="color:#94a3b8; font-size:1rem;">Sin datos aún</span> }
-        </p>
-        <span class="kpi-tag kpi-tag--up">Margen: {{ profitMargin() | percent:'1.1-1' }}</span>
-      </div>
-
-      <div class="kpi-card kpi-card--orders">
-        <div class="kpi-card__head">
-          <span>Total Pedidos Procesados</span>
-          <div class="kpi-icon kpi-icon--purple"><app-icon name="package" size="16" /></div>
-        </div>
-        <p class="kpi-amount">{{ totalPedidos() }}</p>
-        <span class="kpi-tag kpi-tag--up">
-          Ticket promedio:
-          @if (ticketPromedio() > 0) { ${{ ticketPromedio() | number }} }
-          @else { N/A }
-        </span>
-      </div>
-    </div>
-
-    <!-- Sección Destacados: Producto con más y menos stock -->
-    @if (topProduct() || leastProduct()) {
-      <div class="top-least-grid">
-        @if (topProduct(); as top) {
-          <div class="card highlight-card highlight-card--top">
-            <div class="highlight-card__badge badge--success">Producto con Mayor Stock</div>
-            <div class="highlight-card__body">
-              <span class="highlight-icon">{{ top.icon }}</span>
-              <div>
-                <h3>{{ top.name }}</h3>
-                <p class="sku-tag">SKU: {{ top.sku }} | Categoría: {{ top.category }}</p>
-              </div>
-            </div>
-            <div class="highlight-stats">
-              <div>
-                <small>Stock Actual</small>
-                <strong>{{ top.stock | number }} unidades</strong>
-              </div>
-              <div>
-                <small>Precio Unitario</small>
-                <strong class="text-success">${{ top.price | number }}</strong>
-              </div>
-              <div>
-                <small>Valor estimado en stock</small>
-                <strong>${{ top.totalRevenue | number }}</strong>
-              </div>
-            </div>
-          </div>
-        }
-
-        @if (leastProduct(); as least) {
-          <div class="card highlight-card highlight-card--least">
-            <div class="highlight-card__badge badge--warning">Producto con Menor Stock</div>
-            <div class="highlight-card__body">
-              <span class="highlight-icon">{{ least.icon }}</span>
-              <div>
-                <h3>{{ least.name }}</h3>
-                <p class="sku-tag">SKU: {{ least.sku }} | Categoría: {{ least.category }}</p>
-              </div>
-            </div>
-            <div class="highlight-stats">
-              <div>
-                <small>Stock Actual</small>
-                <strong>{{ least.stock }} unidades</strong>
-              </div>
-              <div>
-                <small>Precio Unitario</small>
-                <strong class="text-danger">${{ least.price | number }}</strong>
-              </div>
-              <div>
-                <small>Alerta de reabastecimiento</small>
-                <span class="badge badge--danger">Stock bajo</span>
-              </div>
-            </div>
-          </div>
-        }
-      </div>
-    } @else {
-      <div class="card" style="text-align:center; padding:2rem; color:#64748b; margin: 1.5rem 0;">
-        <app-icon name="package" size="32" />
-        <p style="margin-top:0.75rem;">No hay productos en el catálogo aún. Agrega productos desde el panel de vendedor.</p>
-      </div>
-    }
-
-    <!-- Desglose de Venta del Día por Franja Horaria (24 Horas) -->
-    <div class="card section-card" style="margin-bottom: 2rem;">
-      <div class="card__head flex-between">
+    @if (activeTab() === 'metricas') {
+      <!-- DASHBOARD FINANCIERO DE ADMINISTRADOR -->
+      <div class="page-head">
         <div>
-          <h2>Ingresos de las Últimas 24 Horas por Franja Horaria (Venta del Día)</h2>
-          <p>Distribución de ventas del día según horario de despacho y compra de clientes en PostgreSQL.</p>
+          <span class="badge badge--primary">Dashboard Financiero & Métricas</span>
+          <h1>Analítica de Ingresos, Egresos y Rendimiento</h1>
+          <p>Datos en tiempo real calculados desde los pedidos y productos de PostgreSQL. Snapshot automático cada 7 días.</p>
         </div>
-        <span class="badge badge--seller">Total 24h: ${{ revenue24h() | number }}</span>
+        <div class="period-selector">
+          <button type="button" [class.active]="selectedPeriod() === '24h'" (click)="setPeriod('24h')">24 Horas (Día)</button>
+          <button type="button" [class.active]="selectedPeriod() === '7d'" (click)="setPeriod('7d')">7 Días</button>
+          <button type="button" [class.active]="selectedPeriod() === '30d'" (click)="setPeriod('30d')">30 Días</button>
+          <button type="button" [class.active]="selectedPeriod() === '90d'" (click)="setPeriod('90d')">90 Días</button>
+          <button type="button" [class.active]="selectedPeriod() === '1y'" (click)="setPeriod('1y')">1 Año</button>
+        </div>
       </div>
 
-      <div class="time-block-grid">
-        @for (block of salesByTimeBlock(); track block.slot) {
-          <div class="time-block-card">
-            <div class="time-block-card__head">
-              <strong>{{ block.slot }}</strong>
-              <small>{{ block.timeRange }}</small>
-            </div>
-            <p class="time-block-amount">${{ block.revenue | number }}</p>
-            <div class="progress-track" style="height: 6px; margin: 8px 0;">
-              <div
-                class="progress-fill"
-                [style.width.%]="block.percentage * 100"
-                [style.background]="block.color"
-              ></div>
-            </div>
-            <div class="time-block-card__foot">
-              <span>{{ block.ordersCount }} pedidos</span>
-              <span>{{ block.percentage | percent:'1.0-1' }}</span>
-            </div>
+      @if (isLoading()) {
+        <div style="text-align: center; padding: 4rem; color: #64748b;">
+          <app-icon name="package" size="40" />
+          <p style="margin-top: 1rem; font-size: 1.1rem;">Cargando datos desde PostgreSQL...</p>
+        </div>
+      } @else {
+
+      <!-- Tarjetas KPI Principales -->
+      <div class="kpi-grid">
+        <!-- Venta del Día (Últimas 24 Horas) -->
+        <div class="kpi-card kpi-card--today">
+          <div class="kpi-card__head">
+            <span>Venta del Día (24 hrs)</span>
+            <div class="kpi-icon kpi-icon--amber"><app-icon name="clock" size="16" /></div>
           </div>
-        }
-      </div>
-    </div>
-
-        <!-- Categorías y Rendimiento Financiero -->
-    <div class="analytics-content-grid">
-      <!-- Distribución por Categorías -->
-      <div class="card section-card">
-        <div class="card__head">
-          <h2>Distribución del Catálogo por Categoría</h2>
-          <p>Basado en productos reales de PostgreSQL (stock × precio).</p>
+          <p class="kpi-amount">
+            @if (revenue24h() > 0) { ${{ revenue24h() | number }} }
+            @else { <span style="color:#94a3b8; font-size:1.1rem;">$0 hoy</span> }
+          </p>
+          <span class="kpi-tag kpi-tag--today">
+            {{ orders24h() }} pedidos hoy · Prom: ${{ ticketPromedio24h() | number }}
+          </span>
         </div>
 
-        <div class="category-bars">
-          @if (categoryMetrics().length > 0) {
-            @for (cat of categoryMetrics(); track cat.category) {
-              <div class="category-bar-item">
-                <div class="category-bar-item__head">
-                  <strong>{{ cat.category }}</strong>
-                  <span>${{ cat.revenue | number }} ({{ cat.salesCount }} un. est.)</span>
-                </div>
-                <div class="progress-track">
-                  <div
-                    class="progress-fill"
-                    [style.width.%]="cat.percentage * 100"
-                    [style.background]="cat.color"
-                  ></div>
-                </div>
+        <div class="kpi-card kpi-card--income">
+          <div class="kpi-card__head">
+            <span>Ingresos Totales ({{ getPeriodLabel() }})</span>
+            <div class="kpi-icon kpi-icon--green"><app-icon name="arrow-right" size="16" /></div>
+          </div>
+          <p class="kpi-amount">
+            @if (totalRevenue() > 0) { ${{ totalRevenue() | number }} }
+            @else { <span style="color:#94a3b8; font-size:1rem;">Sin datos aún</span> }
+          </p>
+          <span class="kpi-tag kpi-tag--up">Calculado de pedidos reales</span>
+        </div>
+
+        <div class="kpi-card kpi-card--expense">
+          <div class="kpi-card__head">
+            <span>Egresos & Costos Operativos</span>
+            <div class="kpi-icon kpi-icon--red"><app-icon name="arrow-right" size="16" /></div>
+          </div>
+          <p class="kpi-amount">
+            @if (totalExpenses() > 0) { ${{ totalExpenses() | number }} }
+            @else { <span style="color:#94a3b8; font-size:1rem;">Sin datos aún</span> }
+          </p>
+          <span class="kpi-tag kpi-tag--down">Estimado: 56% del ingreso</span>
+        </div>
+
+        <div class="kpi-card kpi-card--profit">
+          <div class="kpi-card__head">
+            <span>Utilidad Neta</span>
+            <div class="kpi-icon kpi-icon--blue"><app-icon name="check" size="16" /></div>
+          </div>
+          <p class="kpi-amount">
+            @if (netProfit() > 0) { ${{ netProfit() | number }} }
+            @else { <span style="color:#94a3b8; font-size:1rem;">Sin datos aún</span> }
+          </p>
+          <span class="kpi-tag kpi-tag--up">Margen: {{ profitMargin() | percent:'1.1-1' }}</span>
+        </div>
+      </div>
+
+      <!-- Ventas por Bloque Horario -->
+      <div class="card section-card" style="margin-bottom: 2rem;">
+        <div class="card__head">
+          <h2>Horarios con Mayor Volumen de Venta</h2>
+          <p>Distribución de ventas por turnos de 4 horas basada en pedidos reales.</p>
+        </div>
+
+        <div class="time-block-grid">
+          @for (block of salesByTimeBlock(); track block.slot) {
+            <div class="time-block-card">
+              <div class="time-block-card__head">
+                <strong>{{ block.slot }}</strong>
+                <span>{{ block.timeRange }}</span>
               </div>
-            }
-          } @else {
-            <p style="color:#94a3b8; text-align:center; padding:1.5rem 0;">Sin productos en el catálogo para calcular métricas.</p>
+              <p class="time-block-revenue">${{ block.revenue | number }}</p>
+              <div class="time-block-progress">
+                <div class="time-block-fill" [style.width.%]="block.percentage * 100" [style.background]="block.color"></div>
+              </div>
+              <div class="time-block-footer">
+                <span>{{ block.ordersCount }} órdenes</span>
+                <span style="font-weight:700;">{{ block.percentage | percent:'1.0-0' }}</span>
+              </div>
+            </div>
           }
         </div>
       </div>
 
-      <!-- Historial de Pedidos como Transacciones -->
+      <!-- Productos Extremos (Más y Menos Vendido) -->
+      <div class="analytics-content-grid" style="margin-bottom: 2rem;">
+        <!-- Más vendido -->
+        <div class="card section-card">
+          <div class="card__head">
+            <h2>Producto Más Vendido</h2>
+            <p>Mayor rotación de inventario en el periodo.</p>
+          </div>
+          @if (topProduct(); as prod) {
+            <div class="extreme-product">
+              <div class="extreme-product__icon" style="background:#ecfdf5; color:#059669; font-size:1.8rem; border-radius:14px; padding:12px;">
+                {{ prod.icon }}
+              </div>
+              <div class="extreme-product__info">
+                <h3>{{ prod.name }}</h3>
+                <p>SKU: <code>{{ prod.sku }}</code> · Categoría: <strong>{{ prod.category }}</strong></p>
+                <div class="extreme-product__stats">
+                  <span>Precio: <strong>${{ prod.price | number }}</strong></span>
+                  <span>Stock Actual: <strong>{{ prod.stock }} un.</strong></span>
+                  <span class="text-success font-bold">Ventas Est.: ${{ prod.totalRevenue | number }}</span>
+                </div>
+              </div>
+            </div>
+          } @else {
+            <p style="color:#94a3b8; text-align:center; padding:2rem 0;">Aún no hay suficientes órdenes registradas.</p>
+          }
+        </div>
+
+        <!-- Menos vendido -->
+        <div class="card section-card">
+          <div class="card__head">
+            <h2>Producto de Menor Rotación</h2>
+            <p>Oportunidad de promoción o descuento para dinamizar stock.</p>
+          </div>
+          @if (leastProduct(); as prod) {
+            <div class="extreme-product">
+              <div class="extreme-product__icon" style="background:#fef2f2; color:#ef4444; font-size:1.8rem; border-radius:14px; padding:12px;">
+                {{ prod.icon }}
+              </div>
+              <div class="extreme-product__info">
+                <h3>{{ prod.name }}</h3>
+                <p>SKU: <code>{{ prod.sku }}</code> · Categoría: <strong>{{ prod.category }}</strong></p>
+                <div class="extreme-product__stats">
+                  <span>Precio: <strong>${{ prod.price | number }}</strong></span>
+                  <span>Stock Actual: <strong>{{ prod.stock }} un.</strong></span>
+                  <span class="text-danger font-bold">Ventas Est.: ${{ prod.totalRevenue | number }}</span>
+                </div>
+              </div>
+            </div>
+          } @else {
+            <p style="color:#94a3b8; text-align:center; padding:2rem 0;">Aún no hay suficientes órdenes registradas.</p>
+          }
+        </div>
+      </div>
+
+      <!-- Categorías y Rendimiento Financiero -->
+      <div class="analytics-content-grid">
+        <!-- Distribución por Categorías -->
+        <div class="card section-card">
+          <div class="card__head">
+            <h2>Distribución del Catálogo por Categoría</h2>
+            <p>Basado en productos reales de PostgreSQL (stock × precio).</p>
+          </div>
+
+          <div class="category-bars">
+            @if (categoryMetrics().length > 0) {
+              @for (cat of categoryMetrics(); track cat.category) {
+                <div class="category-bar-item">
+                  <div class="category-bar-item__head">
+                    <strong>{{ cat.category }}</strong>
+                    <span>${{ cat.revenue | number }} ({{ cat.salesCount }} un. est.)</span>
+                  </div>
+                  <div class="progress-track">
+                    <div
+                      class="progress-fill"
+                      [style.width.%]="cat.percentage * 100"
+                      [style.background]="cat.color"
+                    ></div>
+                  </div>
+                </div>
+              }
+            } @else {
+              <p style="color:#94a3b8; text-align:center; padding:1.5rem 0;">Sin productos en el catálogo para calcular métricas.</p>
+            }
+          </div>
+        </div>
+
+        <!-- Historial de Pedidos como Transacciones -->
+        <div class="card section-card">
+          <div class="card__head">
+            <h2>Pedidos e Historial Financiero</h2>
+            <p>Pedidos reales registrados en la base de datos PostgreSQL.</p>
+          </div>
+
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>ID Pedido</th>
+                  <th>Fecha</th>
+                  <th>Descripción</th>
+                  <th>Tipo</th>
+                  <th>Monto</th>
+                </tr>
+              </thead>
+              <tbody>
+                @if (transactions().length > 0) {
+                  @for (trx of transactions(); track trx.id) {
+                    <tr>
+                      <td><code>{{ trx.id }}</code></td>
+                      <td>{{ trx.date }}</td>
+                      <td>{{ trx.description }}</td>
+                      <td>
+                        <span
+                          class="pill-tag"
+                          [class.pill-tag--green]="trx.type === 'INGRESO'"
+                          [class.pill-tag--red]="trx.type === 'EGRESO'"
+                        >
+                          {{ trx.type }}
+                        </span>
+                      </td>
+                      <td class="font-bold" [class.text-success]="trx.type === 'INGRESO'" [class.text-danger]="trx.type === 'EGRESO'">
+                        {{ trx.type === 'INGRESO' ? '+' : '-' }}${{ trx.amount | number }}
+                      </td>
+                    </tr>
+                  }
+                } @else {
+                  <tr>
+                    <td colspan="5" style="text-align:center; padding:2rem; color:#94a3b8;">
+                      No hay pedidos registrados en el periodo seleccionado.
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      } <!-- end @if (!isLoading) -->
+    } @else {
+      <!-- ============================================== -->
+      <!-- CONTENIDO DE MOTOR COMERCIAL & CUPONES (ADMIN) -->
+      <!-- ============================================== -->
+      <div class="page-head">
+        <div>
+          <span class="badge badge--primary">Motor Comercial & PostgreSQL</span>
+          <h1>Reglas Comerciales y Control de Cupones</h1>
+          <p>Define los parámetros de tarifas, despacho gratis y administra los cupones activos para los clientes.</p>
+        </div>
+        <div>
+          <button type="button" class="btn btn-secondary btn-sm" (click)="cargarComercial()" [disabled]="loadingComercial()">
+            <app-icon name="clock" size="14" /> Recargar Datos
+          </button>
+        </div>
+      </div>
+
+      @if (mensajeComercial()) {
+        <div class="alert alert--success" style="margin-bottom: 1.5rem; padding: 12px 16px; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 12px; color: #065f46; display: flex; align-items: center; gap: 8px; font-size: 0.95rem;">
+          <app-icon name="check" size="18" />
+          <span>{{ mensajeComercial() }}</span>
+        </div>
+      }
+
+      @if (errorComercial()) {
+        <div class="alert alert--danger" style="margin-bottom: 1.5rem; padding: 12px 16px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; color: #991b1b; display: flex; align-items: center; gap: 8px; font-size: 0.95rem;">
+          <app-icon name="x" size="18" />
+          <span>{{ errorComercial() }}</span>
+        </div>
+      }
+
+      <!-- Reglas del Motor Comercial -->
+      <div class="card section-card" style="margin-bottom: 2rem;">
+        <div class="card__head">
+          <div>
+            <h2 style="display: flex; align-items: center; gap: 8px;">
+              <app-icon name="settings" size="20" /> Reglas del Motor Comercial
+            </h2>
+            <p>Configuraciones de cobro y despacho persistidas en la tabla <code>configuracion_comercial</code> de PostgreSQL.</p>
+          </div>
+        </div>
+
+        <div class="comercial-rules-grid">
+          <div class="rule-box">
+            <label for="umbral">Umbral de Envío Gratis</label>
+            <p class="rule-desc">Monto mínimo en el carrito para que el despacho sea bonificado ($0).</p>
+            <div class="rule-input-group">
+              <span class="currency-prefix">$</span>
+              <input
+                id="umbral"
+                type="number"
+                min="0"
+                step="500"
+                [ngModel]="umbralEnvioGratis()"
+                (ngModelChange)="umbralEnvioGratis.set($event)"
+              />
+              <button
+                type="button"
+                class="btn btn-primary btn-sm"
+                (click)="guardarConfiguracion('umbral_envio_gratis', umbralEnvioGratis())"
+                [disabled]="guardandoConfig()"
+              >
+                Actualizar
+              </button>
+            </div>
+          </div>
+
+          <div class="rule-box">
+            <label for="costoEnvio">Costo de Envío Base</label>
+            <p class="rule-desc">Tarifa aplicada cuando el carrito no alcanza el umbral de despacho gratuito.</p>
+            <div class="rule-input-group">
+              <span class="currency-prefix">$</span>
+              <input
+                id="costoEnvio"
+                type="number"
+                min="0"
+                step="100"
+                [ngModel]="costoEnvioBase()"
+                (ngModelChange)="costoEnvioBase.set($event)"
+              />
+              <button
+                type="button"
+                class="btn btn-primary btn-sm"
+                (click)="guardarConfiguracion('costo_envio_base', costoEnvioBase())"
+                [disabled]="guardandoConfig()"
+              >
+                Actualizar
+              </button>
+            </div>
+          </div>
+
+          <div class="rule-box">
+            <label for="tarifaServicio">Tarifa de Servicio Base</label>
+            <p class="rule-desc">Costo operativo fijo de plataforma por cada orden generada.</p>
+            <div class="rule-input-group">
+              <span class="currency-prefix">$</span>
+              <input
+                id="tarifaServicio"
+                type="number"
+                min="0"
+                step="50"
+                [ngModel]="tarifaServicioBase()"
+                (ngModelChange)="tarifaServicioBase.set($event)"
+              />
+              <button
+                type="button"
+                class="btn btn-primary btn-sm"
+                (click)="guardarConfiguracion('tarifa_servicio_base', tarifaServicioBase())"
+                [disabled]="guardandoConfig()"
+              >
+                Actualizar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Crear Nuevo Cupón -->
+      <div class="card section-card" style="margin-bottom: 2rem;">
+        <div class="card__head">
+          <h2 style="display: flex; align-items: center; gap: 8px;">
+            <app-icon name="plus" size="20" /> Crear Nuevo Cupón de Descuento
+          </h2>
+          <p>Al crearlo se guardará directamente en PostgreSQL y quedará inmediatamente activo.</p>
+        </div>
+
+        <form class="create-coupon-form" (ngSubmit)="crearCupon()">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="codigoCupon">Código del Cupón</label>
+              <input
+                id="codigoCupon"
+                type="text"
+                placeholder="EJ: VERANO2026"
+                [ngModel]="nuevoCodigo()"
+                (ngModelChange)="nuevoCodigo.set($event)"
+                name="codigo"
+                style="text-transform: uppercase;"
+                required
+              />
+              <small>Se transformará a mayúsculas automáticamente.</small>
+            </div>
+
+            <div class="form-group">
+              <label for="tipoDescuento">Tipo de Descuento</label>
+              <select
+                id="tipoDescuento"
+                [ngModel]="nuevoTipo()"
+                (ngModelChange)="nuevoTipo.set($event)"
+                name="tipo"
+              >
+                <option value="PORCENTAJE">Porcentaje (% de descuento)</option>
+                <option value="MONTO_FIJO">Monto Fijo ($ pesos de descuento)</option>
+              </select>
+              <small>Define si el descuento es porcentual o monto en pesos.</small>
+            </div>
+
+            <div class="form-group">
+              <label for="valorDescuento">Valor</label>
+              <input
+                id="valorDescuento"
+                type="number"
+                min="1"
+                [ngModel]="nuevoValor()"
+                (ngModelChange)="nuevoValor.set($event)"
+                name="valor"
+                required
+              />
+              <small>{{ nuevoTipo() === 'PORCENTAJE' ? '% sobre el subtotal' : '$ CLP a descontar' }}</small>
+            </div>
+
+            <div class="form-group">
+              <label for="montoMinimo">Compra Mínima Requerida</label>
+              <input
+                id="montoMinimo"
+                type="number"
+                min="0"
+                step="1000"
+                [ngModel]="nuevoMontoMinimo()"
+                (ngModelChange)="nuevoMontoMinimo.set($event)"
+                name="montoMinimo"
+              />
+              <small>$0 para aplicar a cualquier compra.</small>
+            </div>
+          </div>
+
+          <div style="margin-top: 1rem; display: flex; justify-content: flex-end;">
+            <button
+              type="submit"
+              class="btn btn-primary"
+              [disabled]="guardandoCupon() || !nuevoCodigo().trim()"
+            >
+              @if (guardandoCupon()) {
+                Guardando cupón...
+              } @else {
+                <app-icon name="plus" size="16" /> Crear Cupón en PostgreSQL
+              }
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Tabla de Cupones Existentes -->
       <div class="card section-card">
         <div class="card__head">
-          <h2>Pedidos e Historial Financiero</h2>
-          <p>Pedidos reales registrados en la base de datos PostgreSQL.</p>
+          <h2 style="display: flex; align-items: center; gap: 8px;">
+            <app-icon name="gift" size="20" /> Catálogo de Cupones y Estado
+          </h2>
+          <p>
+            Los cupones marcados como <strong>Activos</strong> son visibles y aplicables por los clientes en la pantalla del carrito.
+          </p>
         </div>
 
         <div class="table-wrap">
           <table class="data-table">
             <thead>
               <tr>
-                <th>ID Pedido</th>
-                <th>Fecha</th>
-                <th>Descripción</th>
-                <th>Tipo</th>
-                <th>Monto</th>
+                <th>ID</th>
+                <th>Código</th>
+                <th>Tipo de Descuento</th>
+                <th>Valor</th>
+                <th>Monto Mínimo</th>
+                <th>Estado Actual</th>
+                <th style="text-align: right;">Acciones</th>
               </tr>
             </thead>
             <tbody>
-              @if (transactions().length > 0) {
-                @for (trx of transactions(); track trx.id) {
+              @if (cupones().length > 0) {
+                @for (c of cupones(); track c.id) {
                   <tr>
-                    <td><code>{{ trx.id }}</code></td>
-                    <td>{{ trx.date }}</td>
-                    <td>{{ trx.description }}</td>
+                    <td><code>#{{ c.id }}</code></td>
                     <td>
-                      <span
-                        class="pill-tag"
-                        [class.pill-tag--green]="trx.type === 'INGRESO'"
-                        [class.pill-tag--red]="trx.type === 'EGRESO'"
-                      >
-                        {{ trx.type }}
+                      <span class="coupon-code-pill">{{ c.codigo }}</span>
+                    </td>
+                    <td>
+                      <span class="badge" [class.badge--primary]="c.tipoDescuento === 'PORCENTAJE'">
+                        {{ c.tipoDescuento === 'PORCENTAJE' ? 'Porcentual (%)' : 'Monto Fijo ($)' }}
                       </span>
                     </td>
-                    <td class="font-bold" [class.text-success]="trx.type === 'INGRESO'" [class.text-danger]="trx.type === 'EGRESO'">
-                      {{ trx.type === 'INGRESO' ? '+' : '-' }}${{ trx.amount | number }}
+                    <td class="font-bold">
+                      {{ c.tipoDescuento === 'PORCENTAJE' ? c.valor + '%' : '$' + (c.valor | number) }}
+                    </td>
+                    <td>
+                      {{ c.montoMinimo > 0 ? '$' + (c.montoMinimo | number) : 'Sin mínimo' }}
+                    </td>
+                    <td>
+                      @if (c.activo) {
+                        <span class="pill-tag pill-tag--green">
+                          <app-icon name="check" size="12" /> ACTIVO (Visible)
+                        </span>
+                      } @else {
+                        <span class="pill-tag pill-tag--red">
+                          <app-icon name="x" size="12" /> INACTIVO (Oculto)
+                        </span>
+                      }
+                    </td>
+                    <td style="text-align: right;">
+                      <button
+                        type="button"
+                        class="btn btn-sm"
+                        [class.btn-secondary]="c.activo"
+                        [class.btn-primary]="!c.activo"
+                        (click)="toggleCupon(c.id)"
+                        [title]="c.activo ? 'Desactivar cupón para usuarios' : 'Activar cupón para usuarios'"
+                      >
+                        @if (c.activo) {
+                          Desactivar
+                        } @else {
+                          Activar
+                        }
+                      </button>
                     </td>
                   </tr>
                 }
               } @else {
                 <tr>
-                  <td colspan="5" style="text-align:center; padding:2rem; color:#94a3b8;">
-                    No hay pedidos registrados en el periodo seleccionado.
+                  <td colspan="7" style="text-align: center; padding: 2.5rem; color: #94a3b8;">
+                    No hay cupones registrados en la base de datos PostgreSQL.
                   </td>
                 </tr>
               }
@@ -283,8 +566,6 @@
           </table>
         </div>
       </div>
-    </div>
-
-    } <!-- end @if (!isLoading) -->
+    } <!-- end @if activeTab() === 'cupones' -->
   }
 </div>

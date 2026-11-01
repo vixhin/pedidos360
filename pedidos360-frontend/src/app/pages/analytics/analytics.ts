@@ -1,11 +1,13 @@
 import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
 import { DecimalPipe, PercentPipe } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { catchError, forkJoin, of } from 'rxjs';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Icon } from '../../shared/icon/icon';
 import { CatalogService } from '../../core/services/catalog.service';
 import { AuthService } from '../../core/services/auth.service';
+import { PedidoService, CuponItem, ConfiguracionComercialItem } from '../../core/services/pedido.service';
 import { API_CONFIG } from '../../core/config/api.config';
 import { Product } from '../../core/models/catalog.model';
 
@@ -79,7 +81,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 @Component({
   selector: 'app-analytics',
   standalone: true,
-  imports: [RouterLink, Icon, DecimalPipe, PercentPipe],
+  imports: [RouterLink, Icon, DecimalPipe, PercentPipe, FormsModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './analytics.html',
   styleUrl: './analytics.css',
@@ -88,6 +90,31 @@ export class Analytics implements OnInit {
   private readonly http = inject(HttpClient);
   readonly catalog = inject(CatalogService);
   readonly auth = inject(AuthService);
+  readonly pedidoSvc = inject(PedidoService);
+  private readonly route = inject(ActivatedRoute);
+
+  // Selector de Sección Principal (Exclusivo Admin)
+  readonly activeTab = signal<'metricas' | 'cupones'>('metricas');
+
+  // Estado del Motor Comercial y Cupones (PostgreSQL)
+  readonly cupones = signal<CuponItem[]>([]);
+  readonly configuraciones = signal<ConfiguracionComercialItem[]>([]);
+  readonly loadingComercial = signal(false);
+  readonly mensajeComercial = signal<string | null>(null);
+  readonly errorComercial = signal<string | null>(null);
+
+  // Formulario nuevo cupón
+  readonly nuevoCodigo = signal('');
+  readonly nuevoTipo = signal<'PORCENTAJE' | 'MONTO_FIJO'>('PORCENTAJE');
+  readonly nuevoValor = signal<number>(10);
+  readonly nuevoMontoMinimo = signal<number>(0);
+  readonly guardandoCupon = signal(false);
+
+  // Parámetros de Reglas Comerciales editables
+  readonly umbralEnvioGratis = signal<number>(20000);
+  readonly costoEnvioBase = signal<number>(2990);
+  readonly tarifaServicioBase = signal<number>(990);
+  readonly guardandoConfig = signal(false);
 
   readonly selectedPeriod = signal<'24h' | '7d' | '30d' | '90d' | '1y'>('30d');
   readonly isLoading = signal(true);
@@ -128,7 +155,111 @@ export class Analytics implements OnInit {
   readonly transactions = signal<FinancialTransaction[]>([]);
 
   ngOnInit(): void {
+    const tabParam = this.route.snapshot.queryParams['tab'];
+    if (tabParam === 'cupones') {
+      this.activeTab.set('cupones');
+    }
     this.cargarDatos();
+    if (this.auth.isAdmin()) {
+      this.cargarComercial();
+    }
+  }
+
+  cargarComercial(): void {
+    this.loadingComercial.set(true);
+    forkJoin({
+      cupones: this.pedidoSvc.obtenerTodosCupones().pipe(catchError(() => of([]))),
+      configs: this.pedidoSvc.obtenerConfiguraciones().pipe(catchError(() => of([]))),
+    }).subscribe(({ cupones, configs }) => {
+      this.loadingComercial.set(false);
+      this.cupones.set(cupones || []);
+      this.configuraciones.set(configs || []);
+
+      for (const c of configs || []) {
+        if (c.clave === 'umbral_envio_gratis') this.umbralEnvioGratis.set(Number(c.valor));
+        if (c.clave === 'costo_envio_base') this.costoEnvioBase.set(Number(c.valor));
+        if (c.clave === 'tarifa_servicio_base') this.tarifaServicioBase.set(Number(c.valor));
+      }
+    });
+  }
+
+  toggleCupon(id: number): void {
+    this.pedidoSvc.toggleCupon(id).subscribe({
+      next: (actualizado) => {
+        this.cupones.update((list) =>
+          list.map((c) => (c.id === id ? { ...c, activo: !c.activo } : c))
+        );
+        this.mensajeComercial.set(
+          `Cupón #${id} ${actualizado.activo ? 'ACTIVADO' : 'DESACTIVADO'} con éxito en PostgreSQL.`
+        );
+        setTimeout(() => this.mensajeComercial.set(null), 3500);
+      },
+      error: (err) => {
+        console.error('Error al cambiar estado del cupón:', err);
+        this.errorComercial.set('No se pudo modificar el estado del cupón en PostgreSQL.');
+        setTimeout(() => this.errorComercial.set(null), 4000);
+      },
+    });
+  }
+
+  crearCupon(): void {
+    const cod = this.nuevoCodigo().trim().toUpperCase();
+    if (!cod) {
+      this.errorComercial.set('Debes ingresar un código para el cupón (ej: VERANO2026).');
+      return;
+    }
+    if (this.nuevoValor() <= 0) {
+      this.errorComercial.set('El valor del descuento debe ser mayor a 0.');
+      return;
+    }
+
+    this.guardandoCupon.set(true);
+    this.errorComercial.set(null);
+    this.pedidoSvc
+      .crearCupon({
+        codigo: cod,
+        tipoDescuento: this.nuevoTipo(),
+        valor: this.nuevoValor(),
+        montoMinimo: this.nuevoMontoMinimo(),
+        activo: true,
+      })
+      .subscribe({
+        next: (creado) => {
+          this.guardandoCupon.set(false);
+          this.cupones.update((list) => [creado, ...list]);
+          this.nuevoCodigo.set('');
+          this.nuevoValor.set(10);
+          this.nuevoMontoMinimo.set(0);
+          this.mensajeComercial.set(`¡Cupón "${creado.codigo}" creado y activado en PostgreSQL!`);
+          setTimeout(() => this.mensajeComercial.set(null), 4000);
+        },
+        error: (err) => {
+          this.guardandoCupon.set(false);
+          console.error('Error al crear cupón:', err);
+          this.errorComercial.set('No se pudo crear el cupón. Verifica que no exista un cupón con el mismo código.');
+          setTimeout(() => this.errorComercial.set(null), 4000);
+        },
+      });
+  }
+
+  guardarConfiguracion(clave: string, valor: number): void {
+    this.guardandoConfig.set(true);
+    this.errorComercial.set(null);
+    this.pedidoSvc.actualizarConfiguracion(clave, valor).subscribe({
+      next: () => {
+        this.guardandoConfig.set(false);
+        this.mensajeComercial.set(
+          `Regla comercial "${clave}" actualizada a $${valor.toLocaleString('es-CL')} en PostgreSQL.`
+        );
+        setTimeout(() => this.mensajeComercial.set(null), 3500);
+      },
+      error: (err) => {
+        this.guardandoConfig.set(false);
+        console.error('Error al actualizar regla comercial:', err);
+        this.errorComercial.set('Error al guardar la regla comercial en la base de datos.');
+        setTimeout(() => this.errorComercial.set(null), 4000);
+      },
+    });
   }
 
   cargarDatos(): void {
@@ -164,8 +295,8 @@ export class Analytics implements OnInit {
         brand: dto.categoria,
         price: dto.precio,
         icon: dto.categoria?.substring(0, 3) || 'PRD',
-        rating: dto.rating ?? 4.8,
-        deliveryMinutes: dto.deliveryMinutes ?? 25,
+        rating: dto.rating ?? 0,
+        deliveryMinutes: dto.deliveryMinutes ?? 35,
         categoria: dto.categoria,
         descripcion: dto.descripcion,
         stock: dto.stock,

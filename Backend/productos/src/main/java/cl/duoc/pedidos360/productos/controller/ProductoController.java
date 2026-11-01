@@ -97,6 +97,12 @@ public class ProductoController {
         return ResponseEntity.ok(ApiResponse.ok("Stock descontado correctamente", actualizado));
     }
 
+    @PostMapping("/dev/importar-catalogo-semilla")
+    public ResponseEntity<ApiResponse<Integer>> importarCatalogoSemilla() {
+        int count = productoService.importarCatalogoDesarrollo();
+        return ResponseEntity.ok(ApiResponse.ok("Catálogo semilla importado correctamente: " + count + " productos", count));
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> eliminar(@PathVariable Long id) {
         productoService.eliminar(id);

@@ -6,6 +6,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class JwtUtilTest {
 
@@ -31,5 +32,12 @@ class JwtUtilTest {
     @DisplayName("validateToken - retorna false para token malformado")
     void testValidateTokenInvalido() {
         assertThat(jwtUtil.validateToken("invalid.token.string")).isFalse();
+    }
+
+    @Test
+    @DisplayName("constructor - lanza excepción si secret es nulo o menor a 32 caracteres")
+    void testSecretInseguroLanzaExcepcion() {
+        assertThrows(IllegalStateException.class, () -> new JwtUtil(null, 86400000L));
+        assertThrows(IllegalStateException.class, () -> new JwtUtil("short-secret", 86400000L));
     }
 }
