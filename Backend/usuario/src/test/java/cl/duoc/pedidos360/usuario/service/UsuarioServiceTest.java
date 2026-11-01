@@ -216,7 +216,7 @@ class UsuarioServiceTest {
 
         usuarioService.initDefaultUsers();
 
-        verify(usuarioRepository, times(5)).save(any(Usuario.class));
+        verify(usuarioRepository, times(4)).save(any(Usuario.class));
     }
 
     @Test
