@@ -64,7 +64,16 @@
             </div>
           </label>
 
-          <button type="submit" class="btn btn-secondary btn-block" [disabled]="loading()">
+          <!-- reCAPTCHA Anti-Bot en Inicio de Sesión -->
+          <div class="field field--captcha">
+            <app-recaptcha (verified)="onLoginCaptchaVerified($event)" />
+          </div>
+
+          <button
+            type="submit"
+            class="btn btn-secondary btn-block"
+            [disabled]="loading() || !loginCaptchaVerified()"
+          >
             {{ loading() ? 'Ingresando...' : 'Iniciar sesión' }}
           </button>
         </form>
@@ -128,7 +137,40 @@
             </div>
           </label>
 
-          <button type="submit" class="btn btn-primary btn-block" [disabled]="loading()">
+          <!-- reCAPTCHA Anti-Bot -->
+          <div class="field field--captcha">
+            <app-recaptcha (verified)="onCaptchaVerified($event)" />
+          </div>
+
+          <!-- Checkbox Términos y Condiciones -->
+          <div class="terms-field">
+            <label class="terms-checkbox-label">
+              <input
+                type="checkbox"
+                [ngModel]="acceptTerms()"
+                (ngModelChange)="acceptTerms.set($event)"
+                name="acceptTerms"
+                required
+              />
+              <span class="terms-text">
+                He leído y acepto los
+                <a routerLink="/legal" class="terms-link" (click)="openTermsModal($event)">
+                  Términos y Condiciones
+                </a>
+                y la
+                <a routerLink="/legal" class="terms-link" (click)="openTermsModal($event)">
+                  Política de Seguridad
+                </a>
+                de Pedidos360.
+              </span>
+            </label>
+          </div>
+
+          <button
+            type="submit"
+            class="btn btn-primary btn-block"
+            [disabled]="loading() || !acceptTerms() || !captchaVerified()"
+          >
             {{ loading() ? 'Creando cuenta...' : 'Crear cuenta' }}
           </button>
         </form>
@@ -148,3 +190,41 @@
     </div>
   </div>
 </div>
+
+<!-- MODAL DE TÉRMINOS Y CONDICIONES RÁPIDO -->
+@if (showTermsModal()) {
+  <div class="terms-modal-backdrop" (click)="closeTermsModal()">
+    <div class="terms-modal-card card" (click)="$event.stopPropagation()">
+      <div class="terms-modal-head">
+        <div>
+          <h3>Términos, Condiciones & Seguridad Pedidos360</h3>
+          <p>Marco de seguridad y privacidad aplicable a tu cuenta de usuario.</p>
+        </div>
+        <button type="button" class="modal-close" (click)="closeTermsModal()" aria-label="Cerrar modal">✕</button>
+      </div>
+
+      <div class="terms-modal-body">
+        <h4>1. Privacidad y Protección de Datos (Ley N° 19.628 de Chile)</h4>
+        <p>Tus datos personales (nombre, correo electrónico, teléfono y dirección de entrega) se utilizan exclusivamente para despachar tus pedidos y coordinar las entregas en tiempo real. Pedidos360 jamás comercializa tus datos a terceros.</p>
+
+        <h4>2. Ciberseguridad & Encriptación de Credenciales</h4>
+        <p>Tu contraseña se almacena con cifrado irreversible BCrypt con salado criptográfico. Toda la comunicación con nuestros microservicios viaja bajo canal cifrado TLS 1.3 / HTTPS de 256 bits y tokens JWT con expiración controlada.</p>
+
+        <h4>3. Seguridad Transaccional y Medios de Pago</h4>
+        <p>Pedidos360 no almacena datos de tarjetas ni códigos de seguridad CVV. Todas las compras son procesadas por pasarelas seguras certificadas con estándar PCI-DSS Nivel 1 y validadas con el SII.</p>
+
+        <h4>4. Garantías de Compra & Respaldo SERNAC</h4>
+        <p>Cuentas con garantía legal de 6 meses para productos del hogar y reposición preferente dentro de las 24 horas para alimentos y productos perecibles.</p>
+      </div>
+
+      <div class="terms-modal-foot">
+        <a routerLink="/legal" target="_blank" class="btn btn-secondary btn-sm" (click)="closeTermsModal()">
+          Ver documento legal completo
+        </a>
+        <button type="button" class="btn btn-primary btn-sm" (click)="acceptTermsFromModal()">
+          Aceptar Términos y Continuar
+        </button>
+      </div>
+    </div>
+  </div>
+}

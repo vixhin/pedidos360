@@ -1,0 +1,248 @@
+<!-- CHECKBOX PRINCIPAL DE RECAPTCHA -->
+<div
+  class="recaptcha-box"
+  [class.recaptcha-box--dark]="theme === 'dark'"
+  [class.recaptcha-box--verified]="isVerified()"
+  (click)="handleCheckboxClick()"
+  role="checkbox"
+  [attr.aria-checked]="isVerified()"
+  tabindex="0"
+  (keydown.space)="$event.preventDefault(); handleCheckboxClick()"
+  (keydown.enter)="$event.preventDefault(); handleCheckboxClick()"
+>
+  <div class="recaptcha-main">
+    <div class="recaptcha-checkbox-wrap">
+      @if (isChecking()) {
+        <div class="recaptcha-spinner" aria-label="Abriendo desafío de seguridad..."></div>
+      } @else if (isVerified()) {
+        <div class="recaptcha-checkmark" aria-label="Verificado con éxito">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#0f9d58" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        </div>
+      } @else {
+        <div class="recaptcha-checkbox"></div>
+      }
+    </div>
+    <span class="recaptcha-label">No soy un robot</span>
+  </div>
+
+  <div class="recaptcha-badge">
+    <div class="recaptcha-logo" aria-hidden="true">
+      <svg viewBox="0 0 32 32" width="26" height="26">
+        <path fill="#4285F4" d="M16 2.5a13.5 13.5 0 0 0-9.5 3.9l3.3 3.3A8.8 8.8 0 0 1 16 7.2c3.4 0 6.3 1.9 7.7 4.7l4.3-2.5A13.5 13.5 0 0 0 16 2.5z"/>
+        <path fill="#4285F4" d="M28.5 16c0 1.9-.4 3.7-1.1 5.3l-4.2-2.4c.5-1 .8-2 .8-2.9 0-4-2.7-7.4-6.4-8.4V2.9c7.2 1.2 12.7 7.4 12.7 14.6z" opacity="0.9"/>
+        <path fill="#5A5A5A" d="M16 29.5a13.5 13.5 0 0 0 9.5-3.9l-3.3-3.3A8.8 8.8 0 0 1 16 24.8c-3.4 0-6.3-1.9-7.7-4.7l-4.3 2.5A13.5 13.5 0 0 0 16 29.5z"/>
+      </svg>
+    </div>
+    <span class="recaptcha-brand">reCAPTCHA</span>
+    <span class="recaptcha-terms">Privacidad · Términos</span>
+  </div>
+</div>
+
+<!-- POPUP DESAFÍO DE RECONOCIMIENTO DE IMÁGENES -->
+@if (showChallengeModal()) {
+  <div class="captcha-backdrop" (click)="closeChallenge()">
+    <div class="captcha-dialog" (click)="$event.stopPropagation()">
+      <!-- Encabezado Azul Clásico -->
+      <header class="captcha-dialog__head">
+        <div class="captcha-head-content">
+          <span class="captcha-prompt-sub">{{ currentChallenge.title }}</span>
+          <strong class="captcha-prompt-target">{{ currentChallenge.targetSubject }}</strong>
+          <small class="captcha-prompt-hint">{{ currentChallenge.hint }}</small>
+        </div>
+        <button type="button" class="captcha-dialog__close" (click)="closeChallenge()" title="Cerrar desafío">✕</button>
+      </header>
+
+      <!-- Mensaje de error si la selección no es correcta -->
+      @if (challengeError()) {
+        <div class="captcha-alert">
+          {{ challengeError() }}
+        </div>
+      }
+
+      <!-- Cuadrícula 3x3 de Imágenes Interactiva -->
+      <div class="captcha-grid">
+        @for (tile of currentChallenge.tiles; track tile.id) {
+          <div
+            class="captcha-tile"
+            [class.captcha-tile--selected]="isTileSelected(tile.id)"
+            (click)="toggleTile(tile.id)"
+          >
+            <!-- Badge de selección -->
+            @if (isTileSelected(tile.id)) {
+              <div class="captcha-tile__check">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+              </div>
+            }
+
+            <div class="captcha-tile__visual">
+              @switch (tile.type) {
+                @case ('van') {
+                  <div class="tile-icon tile-icon--blue">
+                    <svg viewBox="0 0 24 24" width="46" height="46" fill="none" stroke="#1d4ed8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="1" y="3" width="15" height="13"></rect>
+                      <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+                      <circle cx="5.5" cy="18.5" r="2.5"></circle>
+                      <circle cx="18.5" cy="18.5" r="2.5"></circle>
+                    </svg>
+                  </div>
+                }
+                @case ('motorcycle') {
+                  <div class="tile-icon tile-icon--amber">
+                    <svg viewBox="0 0 24 24" width="46" height="46" fill="none" stroke="#d97706" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="18.5" cy="17.5" r="3.5"></circle>
+                      <circle cx="5.5" cy="17.5" r="3.5"></circle>
+                      <circle cx="15" cy="5" r="1"></circle>
+                      <path d="M12 17.5V14l-3-3 4-3 2 3h2"></path>
+                    </svg>
+                  </div>
+                }
+                @case ('truck') {
+                  <div class="tile-icon tile-icon--blue">
+                    <svg viewBox="0 0 24 24" width="46" height="46" fill="none" stroke="#0284c7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="1" y="3" width="15" height="13"></rect>
+                      <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+                      <circle cx="5.5" cy="18.5" r="2.5"></circle>
+                      <circle cx="18.5" cy="18.5" r="2.5"></circle>
+                    </svg>
+                  </div>
+                }
+                @case ('bicycle') {
+                  <div class="tile-icon tile-icon--green">
+                    <svg viewBox="0 0 24 24" width="46" height="46" fill="none" stroke="#16a34a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="18.5" cy="17.5" r="3.5"></circle>
+                      <circle cx="5.5" cy="17.5" r="3.5"></circle>
+                      <circle cx="15" cy="5" r="1"></circle>
+                      <path d="M12 17.5V14l-3-3 4-3 2 3h2"></path>
+                    </svg>
+                  </div>
+                }
+                @case ('traffic-light') {
+                  <div class="tile-icon tile-icon--traffic">
+                    <div class="traffic-light-graphic">
+                      <span class="light light--red"></span>
+                      <span class="light light--yellow"></span>
+                      <span class="light light--green"></span>
+                    </div>
+                  </div>
+                }
+                @case ('apple') {
+                  <div class="tile-icon tile-icon--food">
+                    <span class="emoji-tile">🍎</span>
+                  </div>
+                }
+                @case ('banana') {
+                  <div class="tile-icon tile-icon--food">
+                    <span class="emoji-tile">🍌</span>
+                  </div>
+                }
+                @case ('orange') {
+                  <div class="tile-icon tile-icon--food">
+                    <span class="emoji-tile">🍊</span>
+                  </div>
+                }
+                @case ('vegetables') {
+                  <div class="tile-icon tile-icon--food">
+                    <span class="emoji-tile">🥦</span>
+                  </div>
+                }
+                @case ('pedestrian') {
+                  <div class="tile-icon tile-icon--gray">
+                    <svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M4 15l4-8 4 8"></path>
+                      <line x1="6" y1="11" x2="10" y2="11"></line>
+                      <line x1="2" y1="21" x2="22" y2="21"></line>
+                    </svg>
+                  </div>
+                }
+                @case ('hydrant') {
+                  <div class="tile-icon tile-icon--gray">
+                    <svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="#b91c1c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="7" y="6" width="10" height="14" rx="2"></rect>
+                      <line x1="4" y1="12" x2="20" y2="12"></line>
+                      <circle cx="12" cy="4" r="2"></circle>
+                    </svg>
+                  </div>
+                }
+                @case ('bus') {
+                  <div class="tile-icon tile-icon--gray">
+                    <svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="#0369a1" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="3" y="4" width="18" height="15" rx="2"></rect>
+                      <line x1="3" y1="10" x2="21" y2="10"></line>
+                      <circle cx="7" cy="15" r="1.5"></circle>
+                      <circle cx="17" cy="15" r="1.5"></circle>
+                    </svg>
+                  </div>
+                }
+                @case ('car') {
+                  <div class="tile-icon tile-icon--gray">
+                    <svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="#64748b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="2" y="8" width="20" height="8" rx="2"></rect>
+                      <circle cx="7" cy="16" r="2"></circle>
+                      <circle cx="17" cy="16" r="2"></circle>
+                    </svg>
+                  </div>
+                }
+                @case ('bag') {
+                  <div class="tile-icon tile-icon--gray">
+                    <svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="#d97706" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+                      <line x1="3" y1="6" x2="21" y2="6"></line>
+                      <path d="M16 10a4 4 0 0 1-8 0"></path>
+                    </svg>
+                  </div>
+                }
+                @case ('bottle') {
+                  <div class="tile-icon tile-icon--gray">
+                    <span class="emoji-tile">🥤</span>
+                  </div>
+                }
+                @case ('soap') {
+                  <div class="tile-icon tile-icon--gray">
+                    <span class="emoji-tile">🧴</span>
+                  </div>
+                }
+                @default {
+                  <div class="tile-icon tile-icon--gray">
+                    <span class="emoji-tile">📦</span>
+                  </div>
+                }
+              }
+            </div>
+            <span class="captcha-tile__label">{{ tile.label }}</span>
+          </div>
+        }
+      </div>
+
+      <!-- Barra de Acciones y Verificación -->
+      <footer class="captcha-dialog__foot">
+        <div class="captcha-tools">
+          <button type="button" class="tool-btn" (click)="refreshChallenge()" title="Cargar nuevo desafío">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+            </svg>
+          </button>
+          <button type="button" class="tool-btn" title="Información de seguridad reCAPTCHA">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+          </button>
+        </div>
+
+        <button
+          type="button"
+          class="btn-verify"
+          [disabled]="isEvaluating()"
+          (click)="verifyChallenge()"
+        >
+          {{ isEvaluating() ? 'Verificando...' : 'VERIFICAR' }}
+        </button>
+      </footer>
+    </div>
+  </div>
+}

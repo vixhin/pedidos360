@@ -1,9 +1,10 @@
 import { Injectable, signal, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { catchError, of, tap } from 'rxjs';
+import { Observable, catchError, of, tap } from 'rxjs';
 import { BackendUrlService } from './backend-url.service';
 import { AuthService } from './auth.service';
 import { NotificationsService } from './notifications.service';
+import { CatalogService } from './catalog.service';
 
 export interface PedidoItemBackend {
   id?: number;
@@ -33,6 +34,11 @@ export interface PedidoBackend {
 export interface CrearPedidoRequest {
   usuarioId: number;
   estado: string;
+  subtotal?: number;
+  total?: number;
+  costoEnvio?: number;
+  tarifaServicio?: number;
+  direccionEntrega?: string;
   items: PedidoItemBackend[];
 }
 
@@ -54,6 +60,7 @@ export class PedidoService {
   private readonly auth = inject(AuthService);
   private readonly notifSvc = inject(NotificationsService);
   private readonly urls = inject(BackendUrlService);
+  private readonly catalogSvc = inject(CatalogService);
 
   readonly pedidos = signal<ClientOrderFromDB[]>([]);
   readonly isLoading = signal(false);
@@ -107,12 +114,12 @@ export class PedidoService {
 
   cargarPedidosDeUsuario(): void {
     const user = this.auth.user();
-    if (!user?.id) return;
+    const userId = user?.id || 1;
 
     this.isLoading.set(true);
     this.errorMessage.set(null);
     this.http
-      .get<PedidoBackend[]>(`${this.urls.base('pedidos')}/usuario/${user.id}`)
+      .get<PedidoBackend[]>(`${this.urls.base('pedidos')}/usuario/${userId}`)
       .pipe(
         catchError((err) => {
           console.error('[PedidoService] No se pudieron cargar pedidos del backend:', err);
@@ -128,32 +135,57 @@ export class PedidoService {
   }
 
   crearPedidoDesdeCarrito(
-    cartLines: { name: string; icon: string; quantity: number; price: number; productId?: string }[]
-  ): void {
+    cartLines: { name: string; icon: string; quantity: number; price: number; productId?: string }[],
+    totalAmount?: number,
+    subtotalAmount?: number,
+    shippingCostAmount?: number,
+    serviceFeeAmount?: number,
+    direccion?: string
+  ): Observable<PedidoBackend | null> {
     const user = this.auth.user();
+    const userId = user?.id || 1;
 
-    if (!user?.id || cartLines.length === 0) return;
+    if (cartLines.length === 0) {
+      return of(null);
+    }
 
-    const itemsPayload: PedidoItemBackend[] = cartLines.map((l) => ({
-      productoId: Number(l.productId || 1),
-      nombre: l.name,
-      icono: l.icon,
-      cantidad: l.quantity,
-      precioUnitario: l.price,
-    }));
+    const calculatedSubtotal = subtotalAmount ?? cartLines.reduce((acc, l) => acc + (l.price * l.quantity), 0);
+    const calculatedShipping = shippingCostAmount ?? (calculatedSubtotal >= 20000 || calculatedSubtotal === 0 ? 0 : 2990);
+    const calculatedFee = serviceFeeAmount ?? 1500;
+    const calculatedTotal = totalAmount ?? (calculatedSubtotal + calculatedShipping + calculatedFee);
+
+    const itemsPayload: PedidoItemBackend[] = cartLines.map((l) => {
+      const cleanId = String(l.productId || '1').replace(/\D/g, '');
+      return {
+        productoId: cleanId ? Number(cleanId) : 1,
+        nombre: l.name,
+        icono: l.icon,
+        cantidad: l.quantity,
+        precioUnitario: l.price,
+      };
+    });
 
     const payload: CrearPedidoRequest = {
-      usuarioId: user.id,
+      usuarioId: userId,
       estado: 'PENDIENTE',
+      subtotal: calculatedSubtotal,
+      costoEnvio: calculatedShipping,
+      tarifaServicio: calculatedFee,
+      total: calculatedTotal,
+      direccionEntrega: direccion || 'Santiago Centro, Chile',
       items: itemsPayload,
     };
 
     this.isSubmitting.set(true);
     this.errorMessage.set(null);
-    this.http
+
+    return this.http
       .post<PedidoBackend>(`${this.urls.base('pedidos')}`, payload)
       .pipe(
         tap((created) => {
+          this.isSubmitting.set(false);
+          if (!created) return;
+
           const mapped: ClientOrderFromDB = {
             ...this.mapPedido(created),
             items: cartLines.map(c => ({ name: c.name, icon: c.icon, quantity: c.quantity, price: c.price })),
@@ -162,23 +194,42 @@ export class PedidoService {
           this.lastOrderId.set(mapped.id);
           this.pedidos.update((list) => [mapped, ...list]);
 
-          // Registrar notificación en PostgreSQL
-          if (user?.id) {
-            this.notifSvc.enviarNotificacion(
-              user.id,
-              `Tu pedido #${created.id} fue recibido y está siendo preparado. Total definitivo validado: $${(created.total || 0).toLocaleString('es-CL')}`,
-              'PEDIDOS'
-            );
+          // Descontar stock real en PostgreSQL para cada producto del pedido y refrescar catálogo
+          for (const item of cartLines) {
+            if (item.productId) {
+              const rawProdId = String(item.productId).replace(/\D/g, '');
+              if (rawProdId) {
+                this.http
+                  .put<{ success: boolean; data: any }>(
+                    `${this.urls.base('productos')}/${rawProdId}/stock/descontar?cantidad=${item.quantity}`,
+                    {}
+                  )
+                  .pipe(
+                    catchError((err) => {
+                      console.warn(`[PedidoService] Falló descuento REST producto #${rawProdId}:`, err);
+                      return of(null);
+                    })
+                  )
+                  .subscribe(() => {
+                    this.catalogSvc.cargarProductosDeBackend();
+                  });
+              }
+            }
           }
+
+          // Notificación
+          this.notifSvc.enviarNotificacion(
+            userId,
+            `Tu pedido #${created.id} fue recibido y está siendo preparado. Total confirmado: $${(created.total || calculatedTotal).toLocaleString('es-CL')}`,
+            'PEDIDOS'
+          );
         }),
         catchError((err) => {
+          this.isSubmitting.set(false);
           console.error('[PedidoService] Error al crear pedido:', err);
           this.errorMessage.set('No se pudo procesar la creación del pedido en el servidor. Intente nuevamente.');
           return of(null);
         })
-      )
-      .subscribe(() => {
-        this.isSubmitting.set(false);
-      });
+      );
   }
 }

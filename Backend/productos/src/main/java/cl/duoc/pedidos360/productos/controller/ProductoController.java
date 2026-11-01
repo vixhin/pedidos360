@@ -88,6 +88,15 @@ public class ProductoController {
         return ResponseEntity.ok(ApiResponse.ok("Producto actualizado correctamente", actualizado));
     }
 
+
+    @PutMapping("/{id}/stock/descontar")
+    public ResponseEntity<ApiResponse<ProductoResponseDTO>> descontarStock(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "1") Integer cantidad) {
+        ProductoResponseDTO actualizado = productoService.descontarStock(id, cantidad);
+        return ResponseEntity.ok(ApiResponse.ok("Stock descontado correctamente", actualizado));
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> eliminar(@PathVariable Long id) {
         productoService.eliminar(id);

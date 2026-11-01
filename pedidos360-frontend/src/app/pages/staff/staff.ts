@@ -11,9 +11,9 @@ export interface StaffMember {
   name: string;
   email: string;
   phone: string;
-  role: 'VENDEDOR' | 'REPARTIDOR' | 'ADMIN' | 'SOPORTE';
+  role: 'VENDEDOR' | 'REPARTIDOR' | 'ADMIN' | 'CLIENTE';
   shift: 'MAÑANA' | 'TARDE' | 'NOCHE' | 'FULL_TIME';
-  status: 'ACTIVO' | 'INACTIVO';
+  status: 'ACTIVO' | 'INACTIVO' | 'FIN_TURNO' | 'TERMINO_TURNO';
   joinedDate: string;
   avatarInitial: string;
 }
@@ -69,7 +69,8 @@ export class Staff implements OnInit {
     this.http.get<{ success: boolean; data: any[] }>(`${this.urls.base('usuario')}`).subscribe({
       next: (res) => {
         if (res && res.data) {
-          const mapped: StaffMember[] = res.data.map((u) => {
+          const validUsers = res.data.filter((u: any) => u.email !== 'camila.reyes@pedidos360.cl');
+          const mapped: StaffMember[] = validUsers.map((u: any) => {
             const role: StaffMember['role'] = (u.rol as StaffMember['role']) || 'VENDEDOR';
             const rawDate = u.createdAt ? new Date(u.createdAt).toLocaleDateString('es-CL') : 'Fecha n/d';
             return {
@@ -101,12 +102,10 @@ export class Staff implements OnInit {
     this.selectedRoleFilter.set(role);
   }
 
-  toggleStaffStatus(id: string): void {
+  setStaffStatus(id: string, nextStatus: string): void {
     const rawId = id.replace('EMP-', '');
     const currentMember = this.staffList().find((s) => s.id === id);
     if (!currentMember) return;
-
-    const nextStatus = currentMember.status === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO';
 
     this.http
       .put<{ success: boolean; data: any }>(
@@ -116,7 +115,7 @@ export class Staff implements OnInit {
       .subscribe({
         next: () => {
           this.staffList.update((list) =>
-            list.map((s) => (s.id === id ? { ...s, status: nextStatus } : s))
+            list.map((s) => (s.id === id ? { ...s, status: nextStatus as any } : s))
           );
           this.showToast(`Estado de ${currentMember.name} actualizado a ${nextStatus} en base de datos.`);
         },
@@ -124,6 +123,17 @@ export class Staff implements OnInit {
           alert('No se pudo actualizar el estado en el backend: ' + (err.error?.message || 'Error de conexión'));
         },
       });
+  }
+
+  toggleStaffStatus(id: string): void {
+    const currentMember = this.staffList().find((s) => s.id === id);
+    if (!currentMember) return;
+    const nextStatus = currentMember.status === 'ACTIVO'
+      ? 'INACTIVO'
+      : currentMember.status === 'INACTIVO'
+        ? 'FIN_TURNO'
+        : 'ACTIVO';
+    this.setStaffStatus(id, nextStatus);
   }
 
   addStaffMember(): void {

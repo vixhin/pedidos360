@@ -17,6 +17,15 @@ export interface CategoryMetric {
   color: string;
 }
 
+export interface TimeBlockSales {
+  slot: string;
+  timeRange: string;
+  revenue: number;
+  ordersCount: number;
+  percentage: number;
+  color: string;
+}
+
 export interface FinancialTransaction {
   id: string;
   date: string;
@@ -80,9 +89,15 @@ export class Analytics implements OnInit {
   readonly catalog = inject(CatalogService);
   readonly auth = inject(AuthService);
 
-  readonly selectedPeriod = signal<'7d' | '30d' | '90d' | '1y'>('30d');
+  readonly selectedPeriod = signal<'24h' | '7d' | '30d' | '90d' | '1y'>('30d');
   readonly isLoading = signal(true);
   readonly errorMessage = signal<string | null>(null);
+
+  // Venta del Día (Últimas 24 Horas)
+  readonly revenue24h = signal(0);
+  readonly orders24h = signal(0);
+  readonly ticketPromedio24h = signal(0);
+  readonly salesByTimeBlock = signal<TimeBlockSales[]>([]);
 
   // KPIs - calculados exclusivamente de datos reales de PostgreSQL
   readonly totalRevenue = signal(0);
@@ -162,6 +177,52 @@ export class Analytics implements OnInit {
   }
 
   private calcularMetricasReales(pedidos: PedidoRaw[], productos: Product[]): void {
+    // Cálculo específico de Venta del Día (Últimas 24 Horas)
+    const now = new Date();
+    const cutoff24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const pedidos24h = pedidos.filter((p) => {
+      if (!p.fechaCreacion) return true;
+      const d = new Date(p.fechaCreacion);
+      return !isNaN(d.getTime()) && d >= cutoff24h;
+    });
+
+    const sum24h = pedidos24h.reduce((acc, p) => acc + (p.total || 0), 0);
+    this.revenue24h.set(Math.round(sum24h));
+    this.orders24h.set(pedidos24h.length);
+    this.ticketPromedio24h.set(
+      pedidos24h.length > 0 ? Math.round(sum24h / pedidos24h.length) : 0
+    );
+
+    // Distribución por franjas horarias de las 24 horas
+    const blocks: Record<string, { label: string; range: string; rev: number; count: number; color: string }> = {
+      morning: { label: 'Mañana', range: '08:00 - 13:00', rev: 0, count: 0, color: '#3b82f6' },
+      afternoon: { label: 'Tarde', range: '13:00 - 18:00', rev: 0, count: 0, color: '#10b981' },
+      evening: { label: 'Noche', range: '18:00 - 23:00', rev: 0, count: 0, color: '#f59e0b' },
+      night: { label: 'Madrugada', range: '23:00 - 08:00', rev: 0, count: 0, color: '#8b5cf6' },
+    };
+
+    for (const p of pedidos24h) {
+      const d = p.fechaCreacion ? new Date(p.fechaCreacion) : new Date();
+      const hour = d.getHours();
+      let key = 'night';
+      if (hour >= 8 && hour < 13) key = 'morning';
+      else if (hour >= 13 && hour < 18) key = 'afternoon';
+      else if (hour >= 18 && hour < 23) key = 'evening';
+
+      blocks[key].rev += p.total || 0;
+      blocks[key].count += 1;
+    }
+
+    const timeBlockList: TimeBlockSales[] = Object.values(blocks).map((b) => ({
+      slot: b.label,
+      timeRange: b.range,
+      revenue: Math.round(b.rev),
+      ordersCount: b.count,
+      percentage: sum24h > 0 ? b.rev / sum24h : 0,
+      color: b.color,
+    }));
+    this.salesByTimeBlock.set(timeBlockList);
+
     const filtered = this.filtrarPorPeriodo(pedidos);
 
     // Ingresos reales: suma de pedidos registrados en el período
@@ -305,6 +366,9 @@ export class Analytics implements OnInit {
     let cutoff: Date;
 
     switch (period) {
+      case '24h':
+        cutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        break;
       case '7d':
         cutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
         break;
@@ -328,7 +392,18 @@ export class Analytics implements OnInit {
     });
   }
 
-  setPeriod(period: '7d' | '30d' | '90d' | '1y'): void {
+  getPeriodLabel(): string {
+    switch (this.selectedPeriod()) {
+      case '24h': return '24 Horas (Día)';
+      case '7d': return '7 Días';
+      case '30d': return '30 Días';
+      case '90d': return '90 Días';
+      case '1y': return '1 Año';
+      default: return '30 Días';
+    }
+  }
+
+  setPeriod(period: '24h' | '7d' | '30d' | '90d' | '1y'): void {
     this.selectedPeriod.set(period);
     this.cargarDatos();
   }

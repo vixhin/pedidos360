@@ -1,3 +1,4 @@
+import { Product } from '../../core/models/catalog.model';
 import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -61,6 +62,16 @@ export class Seller implements OnInit {
   readonly newStock = signal(100);
   readonly newDescription = signal('');
   readonly isSubmittingProduct = signal(false);
+
+  // Estado para edición de producto
+  readonly editingProduct = signal<Product | null>(null);
+  readonly editSku = signal('');
+  readonly editName = signal('');
+  readonly editCategory = signal('LACTEOS_Y_HUEVOS');
+  readonly editPrice = signal(0);
+  readonly editStock = signal(0);
+  readonly editDescription = signal('');
+  readonly isUpdatingProduct = signal(false);
 
   // Mensaje de notificación
   readonly statusMessage = signal<string | null>(null);
@@ -195,6 +206,67 @@ export class Seller implements OnInit {
             err.error?.message ||
             (err.status === 409 ? `El SKU '${payload.sku}' ya existe en el sistema` : 'Error al registrar el producto en el backend');
           alert('Error al publicar el producto: ' + errorMsg);
+        },
+      });
+  }
+
+  openEditModal(p: Product): void {
+    this.editingProduct.set(p);
+    this.editSku.set(p.sku || '');
+    this.editName.set(p.name || '');
+    this.editCategory.set(p.categoria || 'LACTEOS_Y_HUEVOS');
+    this.editPrice.set(p.price || 0);
+    this.editStock.set(p.stock ?? 0);
+    this.editDescription.set(p.descripcion || '');
+  }
+
+  closeEditModal(): void {
+    this.editingProduct.set(null);
+  }
+
+  saveEditedProduct(): void {
+    const p = this.editingProduct();
+    if (!p) return;
+
+    if (!this.editSku().trim() || !this.editName().trim()) {
+      alert('Por favor completa los campos obligatorios: SKU y Nombre.');
+      return;
+    }
+
+    if (this.editPrice() < 0 || this.editStock() < 0) {
+      alert('El precio y el stock no pueden ser negativos.');
+      return;
+    }
+
+    const payload = {
+      sku: this.editSku().trim().toUpperCase(),
+      nombre: this.editName().trim(),
+      categoria: this.editCategory(),
+      precio: Number(this.editPrice()),
+      stock: Number(this.editStock()),
+      descripcion: this.editDescription().trim() || 'Producto actualizado',
+      imagenUrl: p.imagenUrl,
+      rating: p.rating ?? 4.8,
+      deliveryMinutes: p.deliveryMinutes ?? 25,
+    };
+
+    this.isUpdatingProduct.set(true);
+
+    this.http
+      .put<{ success: boolean; message: string; data: any }>(
+        `${this.urls.base('productos')}/${p.id}`,
+        payload
+      )
+      .subscribe({
+        next: () => {
+          this.isUpdatingProduct.set(false);
+          this.catalog.cargarProductosDeBackend();
+          this.showToast(`¡Producto "${payload.nombre}" actualizado correctamente en PostgreSQL!`);
+          this.closeEditModal();
+        },
+        error: (err) => {
+          this.isUpdatingProduct.set(false);
+          alert('Error al actualizar el producto: ' + (err.error?.message || 'Error de conexión'));
         },
       });
   }

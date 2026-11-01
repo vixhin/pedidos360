@@ -1,0 +1,184 @@
+<div class="legal-page container">
+  <!-- ENCABEZADO -->
+  <header class="legal-hero">
+    <div class="legal-badge">
+      <app-icon name="shield" size="18" /> Marco Normativo & Seguridad de la Información
+    </div>
+    <h1>Términos, Condiciones y Política de Privacidad</h1>
+    <p class="legal-subtitle">
+      En Pedidos360 SpA velamos por la máxima protección de tus datos, la seguridad en cada transacción y la transparencia en todos nuestros servicios de despacho exprés.
+    </p>
+    <div class="legal-meta">
+      <span><strong>Última actualización:</strong> Octubre 2026</span>
+      <span>•</span>
+      <span><strong>Jurisdicción:</strong> República de Chile</span>
+      <span>•</span>
+      <span><strong>Cumplimiento:</strong> Ley N° 19.628 & Ley N° 19.496 (SERNAC)</span>
+    </div>
+  </header>
+
+  <!-- NAVEGACIÓN DE SECCIONES -->
+  <nav class="legal-tabs" aria-label="Secciones legales">
+    <button
+      type="button"
+      class="legal-tab"
+      [class.active]="activeSection() === 'terminos'"
+      (click)="setSection('terminos')"
+    >
+      <app-icon name="package" size="16" /> Términos de Servicio
+    </button>
+    <button
+      type="button"
+      class="legal-tab"
+      [class.active]="activeSection() === 'seguridad'"
+      (click)="setSection('seguridad')"
+    >
+      <app-icon name="shield" size="16" /> Seguridad & Ciberdefensa
+    </button>
+    <button
+      type="button"
+      class="legal-tab"
+      [class.active]="activeSection() === 'privacidad'"
+      (click)="setSection('privacidad')"
+    >
+      <app-icon name="lock" size="16" /> Privacidad & Datos (Ley 19.628)
+    </button>
+    <button
+      type="button"
+      class="legal-tab"
+      [class.active]="activeSection() === 'garantias'"
+      (click)="setSection('garantias')"
+    >
+      <app-icon name="check" size="16" /> Garantías & SERNAC
+    </button>
+  </nav>
+
+  <!-- CONTENIDO DE SECCIONES -->
+  <main class="legal-content card">
+    @if (activeSection() === 'terminos') {
+      <article class="legal-article">
+        <h2>1. Identificación de la Empresa y Objeto del Servicio</h2>
+        <p>
+          El presente acuerdo regula el acceso y uso de la plataforma digital <strong>Pedidos360</strong>, propiedad de <strong>Pedidos360 SpA</strong>, domiciliada en Santiago de Chile. Nuestra plataforma proporciona una solución integral de compras inteligentes, catálogo digital en tiempo real y despacho exprés de productos perecibles, abarrotes, bebidas y conveniencia para el hogar.
+        </p>
+
+        <h2>2. Condiciones de Registro y Cuentas de Usuario</h2>
+        <p>
+          Para realizar pedidos, gestionar favoritos o hacer seguimiento satelital de despachos, el usuario debe registrarse proporcionando información fidedigna. Al registrarse, el usuario declara ser mayor de 18 años y se compromete a salvaguardar la confidencialidad de su contraseña y dispositivos vinculados.
+        </p>
+
+        <h2>3. Funcionamiento de Catálogo, Precios y Disponibilidad</h2>
+        <p>
+          Los precios indicados en el catálogo están expresados en pesos chilenos ($ CLP) e incluyen el Impuesto al Valor Agregado (IVA). El stock exhibido se sincroniza en vivo con nuestros microservicios backend y bodegas PostgreSQL. En caso de quiebre imprevisto de existencias durante el empaque, el cliente será alertado de inmediato para optar por sustitución o la restitución automática de fondos.
+        </p>
+
+        <h2>4. Despacho, Zonas de Cobertura y Entrega Segura</h2>
+        <p>
+          Las entregas se ejecutan a través de repartidores acreditados en un rango estimado de 25 a 40 minutos dentro de las zonas delimitadas en el mapa de cobertura interactivo. Al momento de la entrega, se requerirá la verificación de identidad o confirmación de recepción en el portal del repartidor para garantizar que el pedido llegue a su destinatario legítimo.
+        </p>
+      </article>
+    }
+
+    @if (activeSection() === 'seguridad') {
+      <article class="legal-article">
+        <h2>1. Arquitectura de Ciberseguridad y Encriptación</h2>
+        <div class="security-card-grid">
+          <div class="security-feature">
+            <div class="security-icon"><app-icon name="lock" size="24" /></div>
+            <h3>Cifrado de Credenciales BCrypt</h3>
+            <p>Las contraseñas nunca se almacenan en texto plano. Se procesan mediante un algoritmo de derivación de claves BCrypt con salado aleatorio criptográfico unidireccional.</p>
+          </div>
+
+          <div class="security-feature">
+            <div class="security-icon"><app-icon name="shield" size="24" /></div>
+            <h3>Sesiones con JWT & OAuth 2.0</h3>
+            <p>Autenticación basada en JSON Web Tokens (JWT) firmados digitalmente (HMAC-SHA256) con expiración controlada e integración OIDC con Microsoft Entra ID bajo flujo PKCE.</p>
+          </div>
+
+          <div class="security-feature">
+            <div class="security-icon"><app-icon name="settings" size="24" /></div>
+            <h3>Protección Anti-Bot reCAPTCHA</h3>
+            <p>La creación de cuentas y formularios sensibles están protegidos contra ataques automatizados, scripts de fuerza bruta y granjas de bots mediante validaciones heurísticas de reCAPTCHA.</p>
+          </div>
+
+          <div class="security-feature">
+            <div class="security-icon"><app-icon name="clock" size="24" /></div>
+            <h3>Canal Seguro TLS 1.3</h3>
+            <p>Todo el tráfico entre el navegador del cliente y los microservicios backend viaja encriptado de extremo a extremo mediante protocolos TLS 1.3 / HTTPS de 256 bits.</p>
+          </div>
+        </div>
+
+        <h2>2. Seguridad Transaccional y Medios de Pago</h2>
+        <p>
+          Pedidos360 <strong>no almacena, no retiene ni tiene acceso directo a números de tarjetas de crédito o débito ni códigos de verificación CVV/CVC</strong>. Todas las transacciones financieras son procesadas a través de pasarelas de pago certificadas con el estándar internacional <strong>PCI-DSS Nivel 1</strong> y validadas con el protocolo de autenticación reforzada 3D Secure (Webpay / Redcompra / Transbank).
+        </p>
+      </article>
+    }
+
+    @if (activeSection() === 'privacidad') {
+      <article class="legal-article">
+        <h2>1. Cumplimiento de la Ley N° 19.628 de Protección de la Vida Privada</h2>
+        <p>
+          Pedidos360 SpA trata los datos de sus clientes bajo estricto apego al marco legal chileno vigente (Ley 19.628 sobre Protección de Datos de Carácter Personal y sus modificaciones). La recopilación de información se efectúa únicamente bajo el consentimiento informado y voluntario del titular.
+        </p>
+
+        <h2>2. Datos Recopilados y su Finalidad Específica</h2>
+        <ul class="legal-list">
+          <li><strong>Datos de Identificación:</strong> Nombre completo, correo electrónico y número telefónico para contacto directo sobre el estado de la compra.</li>
+          <li><strong>Datos de Entrega y Geolocalización:</strong> Dirección física de entrega y coordenadas geoespaciales utilizadas exclusivamente para enrutar el despacho exprés.</li>
+          <li><strong>Historial Transaccional:</strong> Registro de pedidos efectuados para soporte post-venta, garantías y emisión de boletas electrónicas ante el SII.</li>
+        </ul>
+
+        <h2>3. Prohibición de Comercialización a Terceros</h2>
+        <p>
+          Pedidos360 <strong>jamás venderá, cederá ni arrendará las bases de datos de sus clientes a empresas externas de publicidad o intermediarios de datos</strong>. Los datos solo se comunican internamente entre nuestros microservicios aislados (usuarios, pedidos, carritos y notificaciones RabbitMQ) para materializar la entrega.
+        </p>
+
+        <h2>4. Derechos ARCO del Usuario</h2>
+        <p>
+          El titular de los datos podrá ejercer en cualquier instante sus derechos de <strong>Acceso, Rectificación, Cancelación y Oposición (ARCO)</strong>, así como solicitar la eliminación definitiva de su cuenta y registros, enviando una solicitud a <code>privacidad@pedidos360.cl</code> o gestionándolo desde su panel de perfil.
+        </p>
+      </article>
+    }
+
+    @if (activeSection() === 'garantias') {
+      <article class="legal-article">
+        <h2>1. Derechos del Consumidor y Respaldo SERNAC</h2>
+        <p>
+          Todos los clientes de Pedidos360 cuentan con el respaldo pleno de la <strong>Ley N° 19.496 sobre Protección de los Derechos de los Consumidores</strong> y las directrices del Servicio Nacional del Consumidor (SERNAC).
+        </p>
+
+        <h2>2. Garantía Legal de Productos</h2>
+        <ul class="legal-list">
+          <li><strong>Productos no perecibles (abarrotes, aseo, hogar):</strong> Cuentan con la garantía legal de <strong>6 meses</strong> frente a desperfectos de fabricación, sellado defectuoso o fecha de vencimiento alterada, permitiendo al cliente exigir la devolución de su dinero, el cambio de producto o su reparación gratuita.</li>
+          <li><strong>Alimentos perecibles y refrigerados (carnes, lácteos, panadería, frutas):</strong> Ante cualquier descongelamiento, daño en el transporte o frescura insatisfactoria, el cliente dispone de <strong>24 horas</strong> desde la recepción para reportarlo en el chat o soporte, garantizándose la reposición prioritaria sin costo o el reembolso íntegro.</li>
+        </ul>
+
+        <h2>3. Procedimiento de Reembolso Inmediato</h2>
+        <p>
+          Las devoluciones aprobadas son procesadas de inmediato a través del mismo método de pago original o abonadas como saldo en la cuenta Pedidos360 del cliente según su preferencia.
+        </p>
+
+        <h2>4. Canales Oficiales de Atención al Cliente</h2>
+        <p>
+          Para cualquier consulta, reclamo o gestión legal, nuestro equipo opera de manera ininterrumpida a través de:
+        </p>
+        <div class="legal-contact-box">
+          <p><strong>Correo electrónico de Atención:</strong> soporte&#64;pedidos360.cl</p>
+          <p><strong>Departamento Legal y Cumplimiento:</strong> legal&#64;pedidos360.cl</p>
+          <p><strong>Mesa Central de Despachos:</strong> +56 9 1111 2222</p>
+        </div>
+      </article>
+    }
+  </main>
+
+  <footer class="legal-foot-nav">
+    <a routerLink="/" class="btn btn-secondary">
+      <app-icon name="arrow-right" size="16" style="transform: rotate(180deg);" /> Volver al Inicio
+    </a>
+    <a routerLink="/login" class="btn btn-primary">
+      Ir al Registro / Acceso
+    </a>
+  </footer>
+</div>
+

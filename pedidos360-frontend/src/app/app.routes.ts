@@ -22,6 +22,15 @@ export const routes: Routes = [
     path: 'login',
     loadComponent: () => import('./pages/login/login').then((m) => m.Login),
   },
+  {
+    path: 'legal',
+    loadComponent: () => import('./pages/legal/legal').then((m) => m.Legal),
+  },
+  {
+    path: 'terminos',
+    redirectTo: 'legal',
+    pathMatch: 'full',
+  },
 
   // ─── USUARIO AUTENTICADO (cualquier rol) ──────────
   {

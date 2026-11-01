@@ -163,10 +163,84 @@
   font-weight: 700;
 }
 
-.pill-role--admin { background: #f3e8ff; color: #7e22ce; }
-.pill-role--seller { background: #fef3c7; color: #b45309; }
-.pill-role--courier { background: #dcfce7; color: #15803d; }
-.pill-role--support { background: #e0e7ff; color: #3730a3; }
+/* Badges de Estado solicitados: Activo en verde, Inactivo en amarillo, Término de turno en rojo */
+.status-badge {
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-weight: 700;
+  font-size: 0.78rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  line-height: 1;
+}
+
+.status-badge--activo {
+  background: #dcfce7 !important;
+  color: #15803d !important;
+  border: 1px solid #86efac !important;
+}
+
+.status-badge--inactivo {
+  background: #fef3c7 !important;
+  color: #b45309 !important;
+  border: 1px solid #fde68a !important;
+}
+
+.status-badge--fin-turno {
+  background: #fee2e2 !important;
+  color: #b91c1c !important;
+  border: 1px solid #fca5a5 !important;
+}
+
+/* Selector rápido de estado en tabla */
+.status-select {
+  padding: 5px 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #334155;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.status-select:hover, .status-select:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+/* Colores de roles asignados:
+   - Morado para ADMIN
+   - Azul cielo para VENDEDOR
+   - Turquesa suave para REPARTIDOR
+   - Soporte eliminado; CLIENTE toma el color que tenía soporte (Índigo suave)
+*/
+.pill-role--admin {
+  background: #f3e8ff;
+  color: #7e22ce;
+  border: 1px solid #d8b4fe;
+}
+
+.pill-role--seller {
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+}
+
+.pill-role--courier {
+  background: #ccfbf1;
+  color: #0f766e;
+  border: 1px solid #5eead4;
+}
+
+.pill-role--client {
+  background: #e0e7ff;
+  color: #3730a3;
+  border: 1px solid #c7d2fe;
+}
 
 .shift-tag {
   background: #f1f5f9;
@@ -227,4 +301,29 @@
   justify-content: flex-end;
   gap: 10px;
   margin-top: 1rem;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.data-table th, .data-table td {
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.data-table th {
+  background: #f8fafc;
+  color: #64748b;
+  font-weight: 700;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.data-table tbody tr:hover {
+  background: #f8fafc;
 }

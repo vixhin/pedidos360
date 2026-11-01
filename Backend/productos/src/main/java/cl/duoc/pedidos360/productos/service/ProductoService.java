@@ -207,6 +207,20 @@ public class ProductoService {
         return ProductoResponseDTO.fromEntity(actualizado);
     }
 
+
+    @Transactional
+    public ProductoResponseDTO descontarStock(Long id, Integer cantidad) {
+        log.info("[PRODUCTOS-SERVICE] Deducting stock for product ID={}, quantity={}", id, cantidad);
+        Producto p = productoRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Producto no encontrado con ID: " + id));
+        int cant = (cantidad != null && cantidad > 0) ? cantidad : 1;
+        int nuevoStock = Math.max(0, (p.getStock() != null ? p.getStock() : 0) - cant);
+        p.setStock(nuevoStock);
+        Producto actualizado = productoRepository.save(p);
+        log.info("[PRODUCTOS-SERVICE] Stock successfully deducted for ID={} (qty={}) remainingStock={}", id, cant, nuevoStock);
+        return ProductoResponseDTO.fromEntity(actualizado);
+    }
+
     @Transactional
     public void eliminar(Long id) {
         log.info("[PRODUCTOS-SERVICE] Deleting product ID={}", id);

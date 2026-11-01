@@ -287,3 +287,71 @@
 .font-bold { font-weight: 700; }
 .text-success { color: #16a34a; }
 .text-danger { color: #dc2626; }
+
+/* VENTA DEL DÍA 24H & FRANJA HORARIA */
+.kpi-card--today {
+  border-top: 4px solid #f59e0b;
+}
+
+.kpi-icon--amber {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.kpi-tag--today {
+  color: #b45309;
+  font-weight: 600;
+}
+
+.time-block-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.time-block-card {
+  background: #f8fafc;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  padding: 1.1rem;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.time-block-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.time-block-card__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.time-block-card__head strong {
+  font-size: 0.95rem;
+  color: #0f172a;
+}
+
+.time-block-card__head small {
+  font-size: 0.76rem;
+  color: #64748b;
+}
+
+.time-block-amount {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+}
+
+.time-block-card__foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.78rem;
+  color: #64748b;
+  font-weight: 600;
+}

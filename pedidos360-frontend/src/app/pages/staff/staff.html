@@ -5,7 +5,7 @@
       <app-icon name="user" size="48" />
       <h2 style="font-size: 1.6rem; font-weight: 800; color: #0f172a; margin-bottom: 0.5rem;">Gestión de Personal Exclusiva de Administrador</h2>
       <p style="color: #64748b; margin-bottom: 1.5rem; line-height: 1.6;">
-        El módulo para <strong>Agregar y Gestionar Personal</strong> (Vendedores, Repartidores y Equipo de Soporte) es de acceso exclusivo para la cuenta de <strong>Administrador (ADMIN)</strong>.
+        El módulo para <strong>Agregar y Gestionar Personal</strong> (Vendedores, Repartidores y Clientes) es de acceso exclusivo para la cuenta de <strong>Administrador (ADMIN)</strong>.
       </p>
       <div style="display: flex; justify-content: center; gap: 12px; flex-wrap: wrap;">
         <a routerLink="/login" class="btn btn-primary">
@@ -97,7 +97,7 @@
           <button type="button" class="filter-chip" [class.active]="selectedRoleFilter() === 'VENDEDOR'" (click)="setRoleFilter('VENDEDOR')">Vendedores</button>
           <button type="button" class="filter-chip" [class.active]="selectedRoleFilter() === 'REPARTIDOR'" (click)="setRoleFilter('REPARTIDOR')">Repartidores</button>
           <button type="button" class="filter-chip" [class.active]="selectedRoleFilter() === 'ADMIN'" (click)="setRoleFilter('ADMIN')">Administradores</button>
-          <button type="button" class="filter-chip" [class.active]="selectedRoleFilter() === 'SOPORTE'" (click)="setRoleFilter('SOPORTE')">Soporte</button>
+          <button type="button" class="filter-chip" [class.active]="selectedRoleFilter() === 'CLIENTE'" (click)="setRoleFilter('CLIENTE')">Clientes</button>
         </div>
 
         <div class="card section-card">
@@ -136,7 +136,7 @@
                         [class.pill-role--admin]="emp.role === 'ADMIN'"
                         [class.pill-role--seller]="emp.role === 'VENDEDOR'"
                         [class.pill-role--courier]="emp.role === 'REPARTIDOR'"
-                        [class.pill-role--support]="emp.role === 'SOPORTE'"
+                        [class.pill-role--client]="emp.role === 'CLIENTE'"
                       >
                         {{ emp.role }}
                       </span>
@@ -144,19 +144,24 @@
                     <td><span class="shift-tag">{{ emp.shift }}</span></td>
                     <td>
                       @if (emp.status === 'ACTIVO') {
-                        <span class="badge badge--success">● Activo</span>
+                        <span class="status-badge status-badge--activo">● Activo</span>
+                      } @else if (emp.status === 'INACTIVO') {
+                        <span class="status-badge status-badge--inactivo">○ Inactivo</span>
                       } @else {
-                        <span class="badge badge--danger">○ Inactivo</span>
+                        <span class="status-badge status-badge--fin-turno">■ Fin de Turno</span>
                       }
                     </td>
                     <td>
-                      <button
-                        type="button"
-                        class="btn btn-secondary btn-sm"
-                        (click)="toggleStaffStatus(emp.id)"
+                      <select
+                        class="status-select"
+                        [value]="emp.status"
+                        (change)="setStaffStatus(emp.id, $any($event.target).value)"
+                        title="Cambiar estado del empleado"
                       >
-                        {{ emp.status === 'ACTIVO' ? 'Desactivar' : 'Activar' }}
-                      </button>
+                        <option value="ACTIVO">Activo</option>
+                        <option value="INACTIVO">Inactivo</option>
+                        <option value="FIN_TURNO">Fin de Turno</option>
+                      </select>
                     </td>
                   </tr>
                 }
@@ -167,16 +172,16 @@
       </div>
     }
 
-    <!-- PESTAÑA 2: FORMULARIO AGREGAR PERSONAL -->
+    <!-- PESTAÑA 2: AGREGAR NUEVO PERSONAL -->
     @if (activeTab() === 'add-staff') {
       <div class="tab-content">
-        <div class="card section-card form-card">
-          <div class="card__head">
-            <h2>Registrar Nuevo Miembro de Personal</h2>
-            <p>Completa la información para autorizar el acceso y asignar un rol al empleado.</p>
+        <div class="card form-card">
+          <div class="form-head">
+            <h3>Dar de Alta Nuevo Empleado</h3>
+            <p>El nuevo personal será registrado directamente en PostgreSQL con permisos asignados.</p>
           </div>
 
-          <form (ngSubmit)="addStaffMember()" class="staff-form">
+          <form class="staff-form" (submit)="addStaffMember(); $event.preventDefault()">
             <div class="form-row">
               <div class="form-group">
                 <label for="staff-name">Nombre Completo *</label>
@@ -185,13 +190,13 @@
                   type="text"
                   [value]="newName()"
                   (input)="newName.set($any($event.target).value)"
-                  placeholder="ej: Andrés Valenzuela Parra"
+                  placeholder="ej: Andrés Valenzuela"
                   required
                 />
               </div>
 
               <div class="form-group">
-                <label for="staff-email">Correo Corporativo *</label>
+                <label for="staff-email">Correo Electrónico Corporativo *</label>
                 <input
                   id="staff-email"
                   type="email"
@@ -225,7 +230,6 @@
                   <option value="VENDEDOR">VENDEDOR (Gestión de Productos e Inventario)</option>
                   <option value="REPARTIDOR">REPARTIDOR (Despacho y Logística Exprés)</option>
                   <option value="ADMIN">ADMIN (Administrador General del Sistema)</option>
-                  <option value="SOPORTE">SOPORTE (Atención al Cliente y Reclamos)</option>
                 </select>
               </div>
 

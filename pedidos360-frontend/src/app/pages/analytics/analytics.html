@@ -21,6 +21,7 @@
         <p>Datos en tiempo real calculados desde los pedidos y productos de PostgreSQL. Snapshot automático cada 7 días.</p>
       </div>
       <div class="period-selector">
+        <button type="button" [class.active]="selectedPeriod() === '24h'" (click)="setPeriod('24h')">24 Horas (Día)</button>
         <button type="button" [class.active]="selectedPeriod() === '7d'" (click)="setPeriod('7d')">7 Días</button>
         <button type="button" [class.active]="selectedPeriod() === '30d'" (click)="setPeriod('30d')">30 Días</button>
         <button type="button" [class.active]="selectedPeriod() === '90d'" (click)="setPeriod('90d')">90 Días</button>
@@ -37,9 +38,24 @@
 
     <!-- Tarjetas KPI Principales -->
     <div class="kpi-grid">
+      <!-- Venta del Día (Últimas 24 Horas) -->
+      <div class="kpi-card kpi-card--today">
+        <div class="kpi-card__head">
+          <span>Venta del Día (24 hrs)</span>
+          <div class="kpi-icon kpi-icon--amber"><app-icon name="clock" size="16" /></div>
+        </div>
+        <p class="kpi-amount">
+          @if (revenue24h() > 0) { ${{ revenue24h() | number }} }
+          @else { <span style="color:#94a3b8; font-size:1.1rem;">$0 hoy</span> }
+        </p>
+        <span class="kpi-tag kpi-tag--today">
+          {{ orders24h() }} pedidos hoy · Prom: ${{ ticketPromedio24h() | number }}
+        </span>
+      </div>
+
       <div class="kpi-card kpi-card--income">
         <div class="kpi-card__head">
-          <span>Ingresos Totales</span>
+          <span>Ingresos Totales ({{ getPeriodLabel() }})</span>
           <div class="kpi-icon kpi-icon--green"><app-icon name="arrow-right" size="16" /></div>
         </div>
         <p class="kpi-amount">
@@ -151,7 +167,41 @@
       </div>
     }
 
-    <!-- Categorías y Rendimiento Financiero -->
+    <!-- Desglose de Venta del Día por Franja Horaria (24 Horas) -->
+    <div class="card section-card" style="margin-bottom: 2rem;">
+      <div class="card__head flex-between">
+        <div>
+          <h2>Ingresos de las Últimas 24 Horas por Franja Horaria (Venta del Día)</h2>
+          <p>Distribución de ventas del día según horario de despacho y compra de clientes en PostgreSQL.</p>
+        </div>
+        <span class="badge badge--seller">Total 24h: ${{ revenue24h() | number }}</span>
+      </div>
+
+      <div class="time-block-grid">
+        @for (block of salesByTimeBlock(); track block.slot) {
+          <div class="time-block-card">
+            <div class="time-block-card__head">
+              <strong>{{ block.slot }}</strong>
+              <small>{{ block.timeRange }}</small>
+            </div>
+            <p class="time-block-amount">${{ block.revenue | number }}</p>
+            <div class="progress-track" style="height: 6px; margin: 8px 0;">
+              <div
+                class="progress-fill"
+                [style.width.%]="block.percentage * 100"
+                [style.background]="block.color"
+              ></div>
+            </div>
+            <div class="time-block-card__foot">
+              <span>{{ block.ordersCount }} pedidos</span>
+              <span>{{ block.percentage | percent:'1.0-1' }}</span>
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+
+        <!-- Categorías y Rendimiento Financiero -->
     <div class="analytics-content-grid">
       <!-- Distribución por Categorías -->
       <div class="card section-card">

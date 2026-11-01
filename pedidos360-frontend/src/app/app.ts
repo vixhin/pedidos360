@@ -4,6 +4,7 @@ import { filter } from 'rxjs';
 import { MsalService } from '@azure/msal-angular';
 import { Header } from './layout/header/header';
 import { Footer } from './layout/footer/footer';
+import { CookieBanner } from './shared/components/cookie-banner/cookie-banner';
 import { AuthService } from './core/services/auth.service';
 import { CartService } from './core/services/cart.service';
 import { CatalogService } from './core/services/catalog.service';
@@ -12,7 +13,7 @@ import { isAzureAdConfigured } from './core/config/auth.config';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, Header, Footer],
+  imports: [RouterOutlet, Header, Footer, CookieBanner],
   templateUrl: './app.html',
   styleUrl: './app.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

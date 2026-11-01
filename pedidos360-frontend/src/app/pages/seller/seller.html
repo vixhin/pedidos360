@@ -100,20 +100,33 @@
                     <td>{{ p.categoria }}</td>
                     <td class="font-bold">${{ p.price | number }}</td>
                     <td>
-                      <span [class.text-danger]="(p.stock || 0) < 50" [class.font-bold]="(p.stock || 0) < 50">
+                      <span
+                        class="stock-number"
+                        [class.stock-number--ok]="(p.stock || 0) >= 30"
+                        [class.stock-number--low]="(p.stock || 0) > 0 && (p.stock || 0) < 30"
+                        [class.stock-number--out]="(p.stock || 0) <= 0"
+                      >
                         {{ p.stock || 0 }} un.
                       </span>
                     </td>
                     <td>
-                      @if ((p.stock || 0) > 50) {
-                        <span class="badge badge--success">En Stock</span>
+                      @if ((p.stock || 0) <= 0) {
+                        <span class="badge-stock badge-stock--out">✕ Sin Stock</span>
+                      } @else if ((p.stock || 0) < 30) {
+                        <span class="badge-stock badge-stock--low">▲ Stock Bajo</span>
                       } @else {
-                        <span class="badge badge--danger">Stock Bajo</span>
+                        <span class="badge-stock badge-stock--normal">● En Stock</span>
                       }
                     </td>
                     <td>
-                      <button type="button" class="icon-btn icon-btn--light" title="Editar precio/stock" aria-label="Editar precio o stock">
-                        <app-icon name="settings" size="16" />
+                      <button
+                        type="button"
+                        class="btn-edit"
+                        (click)="openEditModal(p)"
+                        title="Editar Producto"
+                      >
+                        <app-icon name="edit" size="14" />
+                        <span>Editar</span>
                       </button>
                     </td>
                   </tr>
@@ -255,3 +268,101 @@
     }
   }
 </div>
+
+<!-- MODAL DE EDICIÓN DE PRODUCTO -->
+@if (editingProduct()) {
+  <div class="modal-backdrop" (click)="closeEditModal()">
+    <div class="modal-card" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <div>
+          <h3>Editar Producto: {{ editingProduct()?.name }}</h3>
+          <p>Modifica el precio, stock o datos del producto en PostgreSQL.</p>
+        </div>
+        <button type="button" class="modal-close" (click)="closeEditModal()" aria-label="Cerrar modal">✕</button>
+      </div>
+
+      <form class="product-form" (ngSubmit)="saveEditedProduct()">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="edit-sku">Código SKU *</label>
+            <input
+              id="edit-sku"
+              type="text"
+              [value]="editSku()"
+              (input)="editSku.set($any($event.target).value)"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="edit-name">Nombre del Producto *</label>
+            <input
+              id="edit-name"
+              type="text"
+              [value]="editName()"
+              (input)="editName.set($any($event.target).value)"
+              required
+            />
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="edit-cat">Categoría</label>
+            <select
+              id="edit-cat"
+              [value]="editCategory()"
+              (change)="editCategory.set($any($event.target).value)"
+            >
+              <option value="LACTEOS_Y_HUEVOS">Lácteos y Huevos</option>
+              <option value="ABARROTES">Abarrotes</option>
+              <option value="BEBIDAS">Bebidas y Licores</option>
+              <option value="FRUTAS_Y_VERDURAS">Frutas y Verduras</option>
+              <option value="CARNES_Y_PESCADOS">Carnes y Pescados</option>
+              <option value="PANADERIA">Panadería</option>
+              <option value="LIMPIEZA">Limpieza y Hogar</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="edit-price">Precio ($ CLP) *</label>
+            <input
+              id="edit-price"
+              type="number"
+              min="0"
+              [value]="editPrice()"
+              (input)="editPrice.set(+$any($event.target).value)"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="edit-stock">Stock Disponible *</label>
+            <input
+              id="edit-stock"
+              type="number"
+              min="0"
+              [value]="editStock()"
+              (input)="editStock.set(+$any($event.target).value)"
+              required
+            />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="edit-desc">Descripción</label>
+          <textarea
+            id="edit-desc"
+            rows="3"
+            [value]="editDescription()"
+            (input)="editDescription.set($any($event.target).value)"
+          ></textarea>
+        </div>
+
+        <div class="modal-foot">
+          <button type="button" class="btn btn-secondary" (click)="closeEditModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary" [disabled]="isUpdatingProduct()">
+            {{ isUpdatingProduct() ? 'Guardando...' : 'Guardar Cambios' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}

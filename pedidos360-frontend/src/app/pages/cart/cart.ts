@@ -79,12 +79,29 @@ export class Cart {
       price: l.product.price,
     }));
 
-    this.pedidoSvc.crearPedidoDesdeCarrito(cartLines);
-
-    setTimeout(() => {
-      this.confirmedOrderId.set(this.pedidoSvc.lastOrderId());
-      this.cart.clear();
-      this.orderSuccess.set(true);
-    }, 600);
+    this.pedidoSvc
+      .crearPedidoDesdeCarrito(
+        cartLines,
+        this.total(),
+        this.cart.subtotal(),
+        this.shippingCost(),
+        SERVICE_FEE
+      )
+      .subscribe({
+        next: (created) => {
+          if (created) {
+            this.confirmedOrderId.set(`PED-${created.id}`);
+            this.cart.clear();
+            this.orderSuccess.set(true);
+            this.catalog.cargarProductosDeBackend();
+          } else {
+            alert('No se pudo confirmar el pedido en el servidor. Por favor verifica que los servicios estén activos.');
+          }
+        },
+        error: (err) => {
+          console.error('[Cart] Error al confirmar pedido:', err);
+          alert('Ocurrió un error al procesar el pedido. Intente nuevamente.');
+        },
+      });
   }
 }

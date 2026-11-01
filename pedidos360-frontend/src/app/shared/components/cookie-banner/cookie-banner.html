@@ -1,0 +1,53 @@
+@if (isVisible()) {
+  <aside class="cookie-banner" role="dialog" aria-labelledby="cookie-title" aria-describedby="cookie-desc">
+    <div class="cookie-banner__inner">
+      <div class="cookie-banner__main">
+        <div class="cookie-banner__icon" aria-hidden="true">🍪</div>
+        <div class="cookie-banner__text">
+          <h3 id="cookie-title" class="cookie-banner__title">Uso de Cookies en Pedidos360</h3>
+          <p id="cookie-desc" class="cookie-banner__desc">
+            Utilizamos cookies propias y de sesión para permitir el funcionamiento de tu carrito de compras, mantener tu sesión segura y recordar tus preferencias. Puedes aceptar todas o conservar solo las necesarias.
+          </p>
+
+          @if (showDetails()) {
+            <div class="cookie-banner__details">
+              <div class="cookie-category">
+                <span class="cookie-category__badge cookie-category__badge--required">Necesarias (Obligatorias)</span>
+                <p>Imprescindibles para autenticación, seguridad de pagos y persistencia del carrito de compras.</p>
+              </div>
+              <div class="cookie-category">
+                <span class="cookie-category__badge">Preferencias y Experiencia</span>
+                <p>Guardan tu sucursal habitual, vista preferida y productos favoritos para agilizar tu compra.</p>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+
+      <div class="cookie-banner__actions">
+        <button
+          type="button"
+          class="btn-cookie btn-cookie--text"
+          (click)="toggleDetails()"
+        >
+          {{ showDetails() ? 'Ocultar detalles' : 'Ver detalles' }}
+        </button>
+        <button
+          type="button"
+          class="btn-cookie btn-cookie--outline"
+          (click)="acceptNecessary()"
+        >
+          Solo necesarias
+        </button>
+        <button
+          type="button"
+          class="btn-cookie btn-cookie--primary"
+          (click)="acceptAll()"
+        >
+          Aceptar todas
+        </button>
+      </div>
+    </div>
+  </aside>
+}
+

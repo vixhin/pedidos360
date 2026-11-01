@@ -6,13 +6,14 @@ import { Icon } from '../../shared/icon/icon';
 import { AuthService } from '../../core/services/auth.service';
 import { ApiResponse } from '../../core/models/auth.model';
 import { isAzureAdConfigured } from '../../core/config/auth.config';
+import { Recaptcha } from '../../shared/components/recaptcha/recaptcha';
 
 type Mode = 'login' | 'register';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [RouterLink, Icon, FormsModule],
+  imports: [RouterLink, Icon, FormsModule, Recaptcha],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './login.html',
   styleUrl: './login.css',
@@ -30,6 +31,10 @@ export class Login {
   readonly registerEmail = signal('');
   readonly registerPassword = signal('');
   readonly showRegisterPassword = signal(false);
+  readonly acceptTerms = signal(false);
+  readonly captchaVerified = signal(false);
+  readonly loginCaptchaVerified = signal(false);
+  readonly showTermsModal = signal(false);
 
   constructor(private auth: AuthService, private router: Router) {}
 
@@ -61,10 +66,50 @@ export class Login {
   setMode(mode: Mode): void {
     this.mode.set(mode);
     this.error.set(null);
+    this.acceptTerms.set(false);
+    this.captchaVerified.set(false);
+    this.loginCaptchaVerified.set(false);
   }
+  
+  onLoginCaptchaVerified(verified: boolean): void {
+    this.loginCaptchaVerified.set(verified);
+    if (verified && this.error()?.includes('reCAPTCHA')) {
+      this.error.set(null);
+    }
+  }
+  onCaptchaVerified(verified: boolean): void {
+    this.captchaVerified.set(verified);
+    if (verified && this.error()?.includes('reCAPTCHA')) {
+      this.error.set(null);
+    }
+  }
+
+  openTermsModal(event?: Event): void {
+    if (event) event.preventDefault();
+    this.showTermsModal.set(true);
+  }
+
+  closeTermsModal(): void {
+    this.showTermsModal.set(false);
+  }
+
+  acceptTermsFromModal(): void {
+    this.acceptTerms.set(true);
+    this.showTermsModal.set(false);
+    if (this.error()?.includes('Términos')) {
+      this.error.set(null);
+    }
+  }
+
 
   submitLogin(): void {
     this.error.set(null);
+
+    if (!this.loginCaptchaVerified()) {
+      this.error.set('Por favor completa la verificación de seguridad reCAPTCHA (No soy un robot).');
+      return;
+    }
+
     this.loading.set(true);
     this.auth.loginWithCredentials(this.loginEmail(), this.loginPassword()).subscribe({
       next: () => {
@@ -80,6 +125,17 @@ export class Login {
 
   submitRegister(): void {
     this.error.set(null);
+
+    if (!this.acceptTerms()) {
+      this.error.set('Debes leer y aceptar los Términos y Condiciones para registrarte.');
+      return;
+    }
+
+    if (!this.captchaVerified()) {
+      this.error.set('Por favor completa la verificación de seguridad reCAPTCHA (No soy un robot).');
+      return;
+    }
+
     this.loading.set(true);
     this.auth.register(this.registerNombre(), this.registerEmail(), this.registerPassword()).subscribe({
       next: () => {

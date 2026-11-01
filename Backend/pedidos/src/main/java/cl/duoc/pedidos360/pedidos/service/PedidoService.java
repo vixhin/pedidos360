@@ -2,6 +2,8 @@ package cl.duoc.pedidos360.pedidos.service;
 
 import cl.duoc.pedidos360.pedidos.config.RabbitMQConfig;
 import cl.duoc.pedidos360.pedidos.entity.Pedido;
+import cl.duoc.pedidos360.pedidos.entity.PedidoItem;
+import java.time.LocalDateTime;
 import cl.duoc.pedidos360.pedidos.event.PedidoCreadoEvent;
 import cl.duoc.pedidos360.pedidos.event.PedidoEstadoActualizadoEvent;
 import cl.duoc.pedidos360.pedidos.event.RepartidorAsignadoEvent;
@@ -68,8 +70,39 @@ public class PedidoService {
 
     @Transactional
     public Pedido guardar(Pedido pedido) {
+        if (pedido.getFechaCreacion() == null) {
+            pedido.setFechaCreacion(LocalDateTime.now());
+        }
+        if (pedido.getEstado() == null || pedido.getEstado().isBlank()) {
+            pedido.setEstado("PENDIENTE");
+        }
+        if (pedido.getItems() != null) {
+            for (PedidoItem item : pedido.getItems()) {
+                item.setPedido(pedido);
+            }
+        }
+        if (pedido.getTotal() == null || pedido.getTotal() <= 0) {
+            double subtotal = 0.0;
+            if (pedido.getItems() != null) {
+                for (PedidoItem item : pedido.getItems()) {
+                    if (item.getPrecioUnitario() != null && item.getCantidad() != null) {
+                        subtotal += item.getPrecioUnitario() * item.getCantidad();
+                    }
+                }
+            }
+            pedido.setSubtotal(subtotal);
+            double envio = pedido.getCostoEnvio() != null ? pedido.getCostoEnvio() : 0.0;
+            double tarifa = pedido.getTarifaServicio() != null ? pedido.getTarifaServicio() : 1500.0;
+            pedido.setTotal(subtotal + envio + tarifa);
+        }
+
         Pedido guardado = pedidoRepository.save(pedido);
         log.info("[PEDIDOS-SERVICE] Order saved successfully with ID={}", guardado.getId());
+
+        // Descontar stock directamente en el microservicio de productos
+        if (guardado.getItems() != null && !guardado.getItems().isEmpty()) {
+            descontarStockDeProductos(guardado.getItems());
+        }
 
         String eventId = UUID.randomUUID().toString();
         String correlationId = UUID.randomUUID().toString();
@@ -330,6 +363,27 @@ public class PedidoService {
             } catch (Exception ex) {
                 log.error("[PEDIDOS-SERVICE] Failed to publish domain event to RabbitMQ for order ID={}: {}",
                         resourceId, ex.getMessage());
+            }
+        }
+    }
+
+    
+    private void descontarStockDeProductos(List<PedidoItem> items) {
+        String productosUrl = System.getenv("PRODUCTOS_SERVICE_URL");
+        if (productosUrl == null || productosUrl.isBlank()) {
+            productosUrl = "http://localhost:8085";
+        }
+        org.springframework.web.client.RestTemplate rt = new org.springframework.web.client.RestTemplate();
+        for (PedidoItem item : items) {
+            if (item.getProductoId() != null) {
+                try {
+                    int qty = (item.getCantidad() != null && item.getCantidad() > 0) ? item.getCantidad() : 1;
+                    String url = productosUrl + "/api/productos/" + item.getProductoId() + "/stock/descontar?cantidad=" + qty;
+                    rt.put(url, null);
+                    log.info("[PEDIDOS-SERVICE] Successfully discounted stock for product ID={} qty={}", item.getProductoId(), qty);
+                } catch (Exception e) {
+                    log.warn("[PEDIDOS-SERVICE] Could not deduct stock via REST for product ID={}: {}", item.getProductoId(), e.getMessage());
+                }
             }
         }
     }

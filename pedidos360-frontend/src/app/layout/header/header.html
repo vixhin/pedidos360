@@ -261,12 +261,14 @@
           }
         </div>
 
-        <a routerLink="/carrito" class="cart-btn" aria-label="Ver carrito de compras" (click)="closeMenus()">
-          <app-icon name="cart" size="20" />
-          @if (cart.itemCount() > 0) {
-            <span class="badge badge--float">{{ cart.itemCount() }}</span>
-          }
-        </a>
+        <div class="cart-btn-wrap">
+          <a routerLink="/carrito" class="cart-btn" aria-label="Ver carrito de compras" (click)="closeMenus()">
+            <app-icon name="cart" size="20" />
+            @if (cart.itemCount() > 0) {
+              <span class="badge badge--cart-float">{{ cart.itemCount() }}</span>
+            }
+          </a>
+        </div>
 
         @if (auth.isLoggedIn()) {
           <div class="dropdown-wrap">

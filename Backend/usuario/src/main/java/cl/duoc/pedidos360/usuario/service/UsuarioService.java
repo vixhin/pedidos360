@@ -83,7 +83,7 @@ public class UsuarioService {
         if (usuarioRepository.findByEmail("cliente@pedidos360.cl").isEmpty()) {
             Usuario cliente = new Usuario(
                     null,
-                    "Cliente Camila Silva",
+                    "Cliente Comprador",
                     "cliente@pedidos360.cl",
                     passwordEncoder.encode("Password123!"),
                     Rol.CLIENTE
@@ -104,17 +104,11 @@ public class UsuarioService {
             log.info("[USER-SERVICE] Seeded mock courier user: rodrigo.morales@pedidos360.cl");
         }
 
-        if (usuarioRepository.findByEmail("camila.reyes@pedidos360.cl").isEmpty()) {
-            Usuario soporte = new Usuario(
-                    null,
-                    "Camila Reyes (Soporte Cliente)",
-                    "camila.reyes@pedidos360.cl",
-                    passwordEncoder.encode("Password123!"),
-                    Rol.VENDEDOR
-            );
-            usuarioRepository.save(soporte);
-            log.info("[USER-SERVICE] Seeded mock support user: camila.reyes@pedidos360.cl");
-        }
+        // Eliminar usuario mock de prueba si existe en la base de datos
+        usuarioRepository.findByEmail("camila.reyes@pedidos360.cl").ifPresent(user -> {
+            usuarioRepository.delete(user);
+            log.info("[USER-SERVICE] Removed mock user: camila.reyes@pedidos360.cl");
+        });
     }
 
     @Transactional(readOnly = true)
@@ -238,6 +232,7 @@ public class UsuarioService {
     public List<UsuarioResponseDTO> obtenerTodos() {
         log.info("[USER-SERVICE] Listing all users");
         return usuarioRepository.findAll().stream()
+                .filter(u -> u.getEmail() == null || !u.getEmail().toLowerCase().contains("camila"))
                 .map(UsuarioResponseDTO::fromEntity)
                 .collect(Collectors.toList());
     }
