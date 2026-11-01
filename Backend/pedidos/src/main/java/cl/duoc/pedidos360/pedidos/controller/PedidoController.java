@@ -241,13 +241,6 @@ public class PedidoController {
             return new UserIdentity(userId, xUserEmail, xUserRoles != null ? xUserRoles : "CLIENTE");
         }
 
-        if (xUserId != null && !xUserId.isBlank()) {
-            try {
-                Long uid = Long.parseLong(xUserId);
-                return new UserIdentity(uid, xUserEmail != null ? xUserEmail : "cliente@pedidos360.cl", xUserRoles != null ? xUserRoles : "CLIENTE");
-            } catch (NumberFormatException ignored) {}
-        }
-
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String token = authHeader.substring(7);
             if (jwtUtil.validateToken(token)) {
@@ -255,18 +248,20 @@ public class PedidoController {
                 String role = jwtUtil.extractRole(token);
                 Long userId = resolveUserIdByEmail(email);
                 if (userId == null) {
-                    log.info("[PEDIDOS-CONTROLLER] Could not resolve userId by email via HTTP, using fallback user ID 1 for email={}", email);
-                    userId = 1L;
+                    if (xUserId != null && !xUserId.isBlank()) {
+                        try { userId = Long.parseLong(xUserId); } catch (NumberFormatException ignored) {}
+                    }
+                    if (userId == null) {
+                        userId = 1L;
+                    }
                 }
                 return new UserIdentity(userId, email, role != null ? role : "CLIENTE");
             } else {
-                log.warn("[PEDIDOS-CONTROLLER] Token validation failed, falling back to dev guest user");
+                throw new SecurityException("Token JWT inválido o expirado.");
             }
         }
 
-        // Fallback para desarrollo local / compras de prueba
-        log.info("[PEDIDOS-CONTROLLER] Applying dev guest identity for local operation");
-        return new UserIdentity(1L, "cliente@pedidos360.cl", "CLIENTE");
+        throw new SecurityException("Acceso denegado: Requiere autenticación JWT válida o clave interna de servicio.");
     }
 
     private Long resolveUserIdByEmail(String emailOrId) {
