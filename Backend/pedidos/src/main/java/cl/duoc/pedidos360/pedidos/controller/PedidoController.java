@@ -228,7 +228,7 @@ public class PedidoController {
             UserIdentity identity = resolveIdentity(request);
             validarPuedeEliminar(identity);
             pedidoService.eliminar(id);
-            return ResponseEntity.ok().build();
+            return ResponseEntity.noContent().build();
         } catch (SecurityException se) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("success", false, "message", se.getMessage()));
@@ -312,10 +312,29 @@ public class PedidoController {
         String serviceKey = request.getHeader("X-Internal-Service-Key");
         if (StringUtils.hasText(bffInternalKey) && StringUtils.hasText(serviceKey) && bffInternalKey.equals(serviceKey)) {
             String xUserId = request.getHeader("X-User-Id");
+            String xUserEmail = request.getHeader("X-User-Email");
+            String xRole = request.getHeader("X-User-Role");
+            if (!StringUtils.hasText(xRole)) {
+                xRole = request.getHeader("X-User-Roles");
+            }
+            if (!StringUtils.hasText(xRole)) {
+                xRole = "CLIENTE";
+            }
+
+            Long parsedUserId = null;
             if (StringUtils.hasText(xUserId)) {
                 try {
-                    return new UserIdentity(Long.parseLong(xUserId), request.getHeader("X-User-Email"), request.getHeader("X-User-Role"));
+                    parsedUserId = Long.parseLong(xUserId.trim());
                 } catch (NumberFormatException ignored) {}
+            }
+            if (parsedUserId == null && StringUtils.hasText(xUserEmail)) {
+                try {
+                    parsedUserId = Long.parseLong(xUserEmail.trim());
+                } catch (NumberFormatException ignored) {}
+            }
+
+            if (parsedUserId != null) {
+                return new UserIdentity(parsedUserId, xUserEmail, xRole);
             }
         }
 
