@@ -14,6 +14,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
 
@@ -119,13 +120,17 @@ public class PedidoController {
     public ResponseEntity<?> listar(HttpServletRequest request) {
         try {
             UserIdentity identity = resolveIdentity(request);
-            String role = identity != null ? identity.getRoleUpper() : "CLIENTE";
+            String role = identity.getRoleUpper();
             if (role.contains("REPARTIDOR")) {
                 return ResponseEntity.ok(pedidoService.obtenerDisponiblesOAsignados(identity.userId));
             }
-            return ResponseEntity.ok(pedidoService.obtenerTodos());
+            if (role.contains("ADMIN") || role.contains("VENDEDOR")) {
+                return ResponseEntity.ok(pedidoService.obtenerTodos());
+            }
+            return ResponseEntity.ok(pedidoService.obtenerPorUsuario(identity.userId));
         } catch (Exception e) {
-            return ResponseEntity.ok(pedidoService.obtenerTodos());
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("success", false, "message", e.getMessage()));
         }
     }
 
@@ -164,6 +169,10 @@ public class PedidoController {
         try {
             UserIdentity identity = resolveIdentity(request);
             validarPuedeCrearPedido(identity, pedido);
+            String idempotencyKey = request.getHeader("Idempotency-Key");
+            if (StringUtils.hasText(idempotencyKey)) {
+                pedido.setIdempotencyKey(idempotencyKey.trim());
+            }
             return ResponseEntity.ok(pedidoService.guardar(pedido));
         } catch (SecurityException se) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
@@ -224,7 +233,7 @@ public class PedidoController {
             UserIdentity identity = resolveIdentity(request);
             validarPuedeEliminar(identity);
             pedidoService.eliminar(id);
-            return ResponseEntity.noContent().build();
+            return ResponseEntity.ok().build();
         } catch (SecurityException se) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("success", false, "message", se.getMessage()));
@@ -297,71 +306,25 @@ public class PedidoController {
     }
 
     private UserIdentity resolveIdentity(HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute("p360.userId");
+        String email = (String) request.getAttribute("p360.email");
+        String role = (String) request.getAttribute("p360.role");
+
+        if (userId != null) {
+            return new UserIdentity(userId, email, role != null ? role : "CLIENTE");
+        }
+
         String serviceKey = request.getHeader("X-Internal-Service-Key");
-        String xUserId = request.getHeader("X-User-Id");
-        String xUserEmail = request.getHeader("X-User-Email");
-        String xUserRoles = request.getHeader("X-User-Roles");
-        String authHeader = request.getHeader("Authorization");
-
-        if (bffInternalKey != null && bffInternalKey.equals(serviceKey)) {
-            Long userId = null;
-            if (xUserEmail != null && !xUserEmail.isBlank()) {
-                userId = resolveUserIdByEmail(xUserEmail);
-            }
-            if (userId == null && xUserId != null && !xUserId.isBlank()) {
-                try { userId = Long.parseLong(xUserId); } catch (NumberFormatException ignored) {}
-            }
-            if (userId == null) {
-                throw new SecurityException("Acceso denegado: No se pudo resolver la identidad del usuario desde la clave de servicio interno.");
-            }
-            return new UserIdentity(userId, xUserEmail, xUserRoles != null ? xUserRoles : "CLIENTE");
-        }
-
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            String token = authHeader.substring(7);
-            if (jwtUtil.validateToken(token)) {
-                String email = jwtUtil.extractEmail(token);
-                String role = jwtUtil.extractRole(token);
-                Long userId = resolveUserIdByEmail(email);
-                if (userId == null) {
-                    if (xUserId != null && !xUserId.isBlank()) {
-                        try { userId = Long.parseLong(xUserId); } catch (NumberFormatException ignored) {}
-                    }
-                    if (userId == null) {
-                        userId = 1L;
-                    }
-                }
-                return new UserIdentity(userId, email, role != null ? role : "CLIENTE");
-            } else {
-                throw new SecurityException("Token JWT inválido o expirado.");
+        if (StringUtils.hasText(bffInternalKey) && StringUtils.hasText(serviceKey) && bffInternalKey.equals(serviceKey)) {
+            String xUserId = request.getHeader("X-User-Id");
+            if (StringUtils.hasText(xUserId)) {
+                try {
+                    return new UserIdentity(Long.parseLong(xUserId), request.getHeader("X-User-Email"), request.getHeader("X-User-Role"));
+                } catch (NumberFormatException ignored) {}
             }
         }
 
-        throw new SecurityException("Acceso denegado: Requiere autenticación JWT válida o clave interna de servicio.");
-    }
-
-    private Long resolveUserIdByEmail(String emailOrId) {
-        if (emailOrId == null || emailOrId.isBlank()) return null;
-        try {
-            return Long.parseLong(emailOrId);
-        } catch (NumberFormatException ignored) {}
-
-        try {
-            String url = usuarioServiceUrl + "/api/internal/usuario/by-email?email=" + emailOrId;
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("X-Internal-Service-Key", bffInternalKey);
-            HttpEntity<Void> entity = new HttpEntity<>(headers);
-            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, entity, Map.class);
-            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                Map data = (Map) response.getBody().get("data");
-                if (data != null && data.get("id") != null) {
-                    return ((Number) data.get("id")).longValue();
-                }
-            }
-        } catch (Exception e) {
-            log.warn("[PEDIDOS-CONTROLLER] Could not resolve userId by email={}: {}", emailOrId, e.getMessage());
-        }
-        return null;
+        throw new SecurityException("Acceso denegado: Requiere autenticación JWT válida o sesión activa.");
     }
 
     private static class UserIdentity {

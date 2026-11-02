@@ -148,7 +148,7 @@ public class SecurityConfig {
 
 
                 // Todo lo demás: permitido (health checks, actuator, etc.)
-                .anyRequest().permitAll()
+                .anyRequest().denyAll()
             )
 
             // ── OAuth2 Resource Server (JWT) ──────────────────────────────
@@ -194,3 +194,4 @@ public class SecurityConfig {
         return decoder;
     }
 }
+

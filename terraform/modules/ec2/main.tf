@@ -14,11 +14,12 @@ data "aws_ami" "ubuntu" {
 }
 
 resource "aws_instance" "this" {
-  ami                    = var.ami_id != "" ? var.ami_id : data.aws_ami.ubuntu.id
-  instance_type          = var.instance_type
-  key_name               = var.key_name != "" ? var.key_name : null
-  subnet_id              = var.subnet_id
+  ami                  = var.ami_id != "" ? var.ami_id : data.aws_ami.ubuntu.id
+  instance_type        = var.instance_type
+  key_name             = var.key_name != "" ? var.key_name : null
+  subnet_id            = var.subnet_id
   vpc_security_group_ids = [var.security_group_id]
+  iam_instance_profile = var.iam_instance_profile != "" ? var.iam_instance_profile : null
 
   metadata_options {
     http_tokens                 = "required"

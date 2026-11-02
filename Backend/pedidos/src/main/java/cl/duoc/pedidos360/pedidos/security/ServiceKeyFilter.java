@@ -2,6 +2,7 @@ package cl.duoc.pedidos360.pedidos.security;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
@@ -10,9 +11,12 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 10)
@@ -20,8 +24,11 @@ public class ServiceKeyFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(ServiceKeyFilter.class);
 
-    @Value("${bff.internal-key:${BFF_INTERNAL_KEY:pedidos360-internal-secret-key-local-2026}}")
+    @Value("${bff.internal-key:${BFF_INTERNAL_KEY:}}")
     private String bffInternalKey;
+
+    @Value("${dev.auto-dev-admin:false}")
+    private boolean autoDevAdmin;
 
     private final JwtUtil jwtUtil;
 
@@ -34,60 +41,161 @@ public class ServiceKeyFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
 
         String path = request.getRequestURI();
+        String method = request.getMethod();
 
-        // 1. Siempre permitir OPTIONS (preflight de CORS), health, actuator y endpoints de clientes / cupones
-        if ("OPTIONS".equalsIgnoreCase(request.getMethod())
+        // 1. Endpoints públicos o de monitoreo
+        if ("OPTIONS".equalsIgnoreCase(method)
                 || path.startsWith("/health")
-                || path.startsWith("/actuator")
-                || path.contains("/cupones")
-                || path.contains("/configuracion")
-                || path.contains("/cobertura")
-                || path.contains("/cotizar")) {
+                || path.startsWith("/ready")
+                || path.startsWith("/actuator/health")
+                || path.equals("/api/pedidos/cupones/activos")
+                || path.startsWith("/api/pedidos/cobertura")
+                || (path.equals("/api/pedidos/cotizar") && "POST".equalsIgnoreCase(method))) {
             filterChain.doFilter(request, response);
             return;
         }
 
         String serviceKey = request.getHeader("X-Internal-Service-Key");
-        String authHeader = request.getHeader("Authorization");
+        boolean isInternal = false;
 
-        // 2. Si viene desde BFF con la clave interna correcta
-        if (serviceKey != null && !serviceKey.isBlank()) {
-            if (bffInternalKey != null && bffInternalKey.equals(serviceKey)) {
-                filterChain.doFilter(request, response);
-                return;
-            } else {
-                log.warn("[PEDIDOS-SECURITY] Clave interna inválida para path={}", path);
-                response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-                response.setContentType("application/json");
-                response.getWriter().write("{\"success\":false,\"message\":\"Acceso denegado: Clave interna de servicio inválida.\"}");
-                return;
+        // 2. Comunicación S2S autorizada desde BFF
+        if (StringUtils.hasText(serviceKey) && StringUtils.hasText(bffInternalKey)
+                && MessageDigest.isEqual(serviceKey.getBytes(StandardCharsets.UTF_8), bffInternalKey.getBytes(StandardCharsets.UTF_8))) {
+            isInternal = true;
+            String uid = request.getHeader("X-User-Id");
+            if (StringUtils.hasText(uid)) {
+                try {
+                    request.setAttribute("p360.userId", Long.parseLong(uid.trim()));
+                } catch (NumberFormatException ignored) {}
             }
+            request.setAttribute("p360.email", request.getHeader("X-User-Email"));
+            String roleHeader = request.getHeader("X-User-Role");
+            if (!StringUtils.hasText(roleHeader)) {
+                roleHeader = request.getHeader("X-User-Roles");
+            }
+            request.setAttribute("p360.role", roleHeader != null ? roleHeader : "CLIENTE");
         }
 
-        // 3. Si viene con token JWT local
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            String token = authHeader.substring(7);
+        // 3. Autenticación mediante token JWT (Bearer o Cookie)
+        String token = parseJwt(request);
+        boolean fromCookie = false;
+        if (token == null) {
+            token = getCookieValue(request, "p360_session");
+            if (token != null) fromCookie = true;
+        }
+
+        if (token != null) {
             if (jwtUtil.validateToken(token)) {
-                filterChain.doFilter(request, response);
-                return;
+                // Validación CSRF si proviene de cookie y método es mutante
+                if (fromCookie && isMutating(method)) {
+                    if (!isValidCsrfToken(request)) {
+                        log.warn("[PEDIDOS-SECURITY][CSRF] Token CSRF ausente o inválido para path={}", path);
+                        sendError(request, response, HttpServletResponse.SC_FORBIDDEN, "Acceso denegado: Token CSRF inválido o faltante.");
+                        return;
+                    }
+                }
+
+                Long uid = jwtUtil.extractUserId(token);
+                String email = jwtUtil.extractEmail(token);
+                String role = jwtUtil.extractRole(token);
+
+                request.setAttribute("p360.userId", uid);
+                request.setAttribute("p360.email", email);
+                request.setAttribute("p360.role", role);
             } else {
                 log.warn("[PEDIDOS-SECURITY] Token JWT inválido para path={}", path);
-                response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-                response.setContentType("application/json");
-                response.getWriter().write("{\"success\":false,\"message\":\"Acceso denegado: Token JWT inválido o expirado.\"}");
+                sendError(request, response, HttpServletResponse.SC_UNAUTHORIZED, "Token JWT inválido o expirado");
+                return;
+            }
+        } else if (!isInternal && autoDevAdmin) {
+            // Entorno local de desarrollo: permite pruebas fluidas en frontend local si está explícitamente habilitado
+            request.setAttribute("p360.userId", 1L);
+            request.setAttribute("p360.email", "dev-admin@pedidos360.cl");
+            request.setAttribute("p360.role", "ADMIN");
+        }
+
+        // 4. Verificación de permisos para endpoints administrativos
+        String effectiveRole = (String) request.getAttribute("p360.role");
+        boolean isAdmin = isInternal || (effectiveRole != null && (effectiveRole.contains("ADMIN") || "ADMIN".equalsIgnoreCase(effectiveRole)));
+
+        if (path.startsWith("/api/pedidos/cupones") && !path.equals("/api/pedidos/cupones/activos")) {
+            if (!isAdmin) {
+                sendError(request, response, HttpServletResponse.SC_FORBIDDEN, "Acceso restringido a administradores.");
                 return;
             }
         }
 
-        // 4. En desarrollo (localhost / frontend directo sin BFF levantado)
-        String origin = request.getHeader("Origin");
-        if (origin != null && origin.contains("localhost")) {
-            filterChain.doFilter(request, response);
+        if (path.startsWith("/api/pedidos/configuracion") || path.startsWith("/api/admin/outbox")) {
+            if (!isAdmin) {
+                sendError(request, response, HttpServletResponse.SC_FORBIDDEN, "Acceso restringido a administradores.");
+                return;
+            }
+        }
+
+        if (path.startsWith("/api/pedidos/internal")) {
+            if (!isInternal) {
+                sendError(request, response, HttpServletResponse.SC_FORBIDDEN, "Acceso restringido a servicios internos.");
+                return;
+            }
+        }
+
+        // Si la ruta requiere usuario autenticado y no hay ni token ni clave interna
+        if (request.getAttribute("p360.role") == null && !isInternal) {
+            sendError(request, response, HttpServletResponse.SC_UNAUTHORIZED, "Se requiere autenticación para acceder a este recurso.");
             return;
         }
 
-        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-        response.setContentType("application/json");
-        response.getWriter().write("{\"success\":false,\"message\":\"Acceso denegado: Requiere autenticación JWT o clave interna de servicio.\"}");
+        filterChain.doFilter(request, response);
+    }
+
+    private String parseJwt(HttpServletRequest req) {
+        String auth = req.getHeader("Authorization");
+        if (StringUtils.hasText(auth) && auth.startsWith("Bearer ")) {
+            return auth.substring(7).trim();
+        }
+        return null;
+    }
+
+    private String getCookieValue(HttpServletRequest req, String name) {
+        Cookie[] cookies = req.getCookies();
+        if (cookies != null) {
+            for (Cookie c : cookies) {
+                if (name.equals(c.getName())) {
+                    return c.getValue();
+                }
+            }
+        }
+        return null;
+    }
+
+    private boolean isMutating(String method) {
+        return "POST".equalsIgnoreCase(method) || "PUT".equalsIgnoreCase(method)
+                || "PATCH".equalsIgnoreCase(method) || "DELETE".equalsIgnoreCase(method);
+    }
+
+    private boolean isValidCsrfToken(HttpServletRequest request) {
+        String headerCsrf = request.getHeader("X-XSRF-TOKEN");
+        String cookieCsrf = getCookieValue(request, "XSRF-TOKEN");
+        if (headerCsrf == null || cookieCsrf == null || headerCsrf.isBlank() || cookieCsrf.isBlank()) {
+            return false;
+        }
+        return MessageDigest.isEqual(
+                headerCsrf.trim().getBytes(StandardCharsets.UTF_8),
+                cookieCsrf.trim().getBytes(StandardCharsets.UTF_8)
+        );
+    }
+
+    private void sendError(HttpServletRequest req, HttpServletResponse res, int status, String msg) throws IOException {
+        String origin = req.getHeader("Origin");
+        if (origin != null && !origin.isBlank()) {
+            res.setHeader("Access-Control-Allow-Origin", origin);
+            res.setHeader("Access-Control-Allow-Credentials", "true");
+            res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+            res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Requested-With, Accept, Origin, Access-Control-Request-Method, Access-Control-Request-Headers, X-XSRF-TOKEN, X-Internal-Service-Key, Idempotency-Key");
+        }
+        res.setStatus(status);
+        res.setContentType("application/json");
+        res.setCharacterEncoding("UTF-8");
+        res.getWriter().write(String.format("{\"success\":false,\"message\":\"%s\",\"data\":null}", msg));
     }
 }

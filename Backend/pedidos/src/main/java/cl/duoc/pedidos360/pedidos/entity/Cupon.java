@@ -30,6 +30,15 @@ public class Cupon {
     @Column(name = "vigente_hasta")
     private LocalDateTime vigenteHasta;
 
+    @Column(name = "usos_maximos")
+    private Integer usosMaximos = 1000;
+
+    @Column(name = "usos_actuales")
+    private Integer usosActuales = 0;
+
+    @Column(name = "descuento_maximo", precision = 10, scale = 2)
+    private BigDecimal descuentoMaximo;
+
     public Cupon() {}
 
     public Cupon(Long id, String codigo, String tipoDescuento, BigDecimal valor, BigDecimal montoMinimo, boolean activo) {
@@ -39,7 +48,23 @@ public class Cupon {
         this.valor = valor;
         this.montoMinimo = montoMinimo;
         this.activo = activo;
+        this.usosMaximos = 1000;
+        this.usosActuales = 0;
     }
+
+    public boolean isVigente() {
+        if (!activo) return false;
+        if (vigenteHasta != null && LocalDateTime.now().isAfter(vigenteHasta)) return false;
+        if (usosMaximos != null && usosActuales != null && usosActuales >= usosMaximos) return false;
+        return true;
+    }
+
+    public Integer getUsosMaximos() { return usosMaximos; }
+    public void setUsosMaximos(Integer usosMaximos) { this.usosMaximos = usosMaximos; }
+    public Integer getUsosActuales() { return usosActuales; }
+    public void setUsosActuales(Integer usosActuales) { this.usosActuales = usosActuales; }
+    public BigDecimal getDescuentoMaximo() { return descuentoMaximo; }
+    public void setDescuentoMaximo(BigDecimal descuentoMaximo) { this.descuentoMaximo = descuentoMaximo; }
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }

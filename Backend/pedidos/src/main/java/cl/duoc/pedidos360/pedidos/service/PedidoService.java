@@ -3,7 +3,6 @@ package cl.duoc.pedidos360.pedidos.service;
 import cl.duoc.pedidos360.pedidos.config.RabbitMQConfig;
 import cl.duoc.pedidos360.pedidos.entity.Pedido;
 import cl.duoc.pedidos360.pedidos.entity.PedidoItem;
-import java.time.LocalDateTime;
 import cl.duoc.pedidos360.pedidos.event.PedidoCreadoEvent;
 import cl.duoc.pedidos360.pedidos.event.PedidoEstadoActualizadoEvent;
 import cl.duoc.pedidos360.pedidos.event.RepartidorAsignadoEvent;
@@ -19,12 +18,17 @@ import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.web.client.RestTemplate;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -41,6 +45,9 @@ public class PedidoService {
 
     @Value("${kafka.topics.pedidos:pedidos360.pedidos.v1}")
     private String pedidosTopic;
+
+    @Value("${bff.internal-key:${BFF_INTERNAL_KEY:}}")
+    private String bffInternalKey;
 
     public PedidoService(PedidoRepository pedidoRepository,
                          RabbitTemplate rabbitTemplate,
@@ -70,6 +77,16 @@ public class PedidoService {
 
     @Transactional
     public Pedido guardar(Pedido pedido) {
+        // Idempotencia: si ya existe una orden con esta clave, se devuelve directamente sin duplicar
+        if (pedido.getIdempotencyKey() != null && !pedido.getIdempotencyKey().isBlank()) {
+            Optional<Pedido> existente = pedidoRepository.findByIdempotencyKey(pedido.getIdempotencyKey().trim());
+            if (existente.isPresent()) {
+                log.info("[PEDIDOS-SERVICE] Pedido idempotente ya existente retornado: ID={}, IdempotencyKey='{}'",
+                        existente.get().getId(), pedido.getIdempotencyKey());
+                return existente.get();
+            }
+        }
+
         if (pedido.getFechaCreacion() == null) {
             pedido.setFechaCreacion(LocalDateTime.now());
         }
@@ -309,7 +326,7 @@ public class PedidoService {
             } catch (Exception ex) {
                 log.error("[PEDIDOS-SERVICE] Error saving outbox event for driver assignment ID={}: {}",
                         id, ex.getMessage(), ex);
-                throw new RuntimeException("Error en persistencia outbox de asignacion de repartidor", ex);
+                throw new RuntimeException("Error en persistencia outbox de repartidor asignado", ex);
             }
         }
 
@@ -340,7 +357,7 @@ public class PedidoService {
      * Si la transacción de base de datos hace rollback, el evento no se emite, evitando eventos fantasma.
      */
     private void publishRabbitEventAfterCommit(String exchange, String routingKey, Object event,
-                                               String eventType, String eventId, Long resourceId) {
+                                                String eventType, String eventId, Long resourceId) {
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
@@ -367,19 +384,23 @@ public class PedidoService {
         }
     }
 
-    
     private void descontarStockDeProductos(List<PedidoItem> items) {
         String productosUrl = System.getenv("PRODUCTOS_SERVICE_URL");
         if (productosUrl == null || productosUrl.isBlank()) {
             productosUrl = "http://localhost:8085";
         }
-        org.springframework.web.client.RestTemplate rt = new org.springframework.web.client.RestTemplate();
+        RestTemplate rt = new RestTemplate();
         for (PedidoItem item : items) {
             if (item.getProductoId() != null) {
                 try {
                     int qty = (item.getCantidad() != null && item.getCantidad() > 0) ? item.getCantidad() : 1;
                     String url = productosUrl + "/api/productos/" + item.getProductoId() + "/stock/descontar?cantidad=" + qty;
-                    rt.put(url, null);
+                    HttpHeaders headers = new HttpHeaders();
+                    if (bffInternalKey != null && !bffInternalKey.isBlank()) {
+                        headers.set("X-Internal-Service-Key", bffInternalKey);
+                    }
+                    HttpEntity<Void> requestEntity = new HttpEntity<>(headers);
+                    rt.exchange(url, HttpMethod.PUT, requestEntity, Void.class);
                     log.info("[PEDIDOS-SERVICE] Successfully discounted stock for product ID={} qty={}", item.getProductoId(), qty);
                 } catch (Exception e) {
                     log.warn("[PEDIDOS-SERVICE] Could not deduct stock via REST for product ID={}: {}", item.getProductoId(), e.getMessage());

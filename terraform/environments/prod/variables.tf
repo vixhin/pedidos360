@@ -32,3 +32,9 @@ variable "environment" {
   description = "Environment name"
   default     = "prod"
 }
+
+variable "iam_instance_profile" {
+  type        = string
+  description = "Optional IAM instance profile name (e.g. LabInstanceProfile in AWS Academy Learner Lab)"
+  default     = "LabInstanceProfile"
+}

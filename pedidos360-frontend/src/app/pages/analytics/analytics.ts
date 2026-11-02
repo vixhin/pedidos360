@@ -176,9 +176,10 @@ export class Analytics implements OnInit {
       this.configuraciones.set(configs || []);
 
       for (const c of configs || []) {
-        if (c.clave === 'umbral_envio_gratis') this.umbralEnvioGratis.set(Number(c.valor));
-        if (c.clave === 'costo_envio_base') this.costoEnvioBase.set(Number(c.valor));
-        if (c.clave === 'tarifa_servicio_base') this.tarifaServicioBase.set(Number(c.valor));
+        const k = (c.clave || '').toLowerCase();
+        if (k === 'umbral_envio_gratis') this.umbralEnvioGratis.set(Number(c.valor));
+        if (k === 'costo_envio_base') this.costoEnvioBase.set(Number(c.valor));
+        if (k === 'tarifa_servicio' || k === 'tarifa_servicio_base') this.tarifaServicioBase.set(Number(c.valor));
       }
     });
   }

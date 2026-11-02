@@ -43,3 +43,9 @@ variable "root_volume_type" {
   description = "Type of the root EBS volume"
   default     = "gp3"
 }
+
+variable "iam_instance_profile" {
+  type        = string
+  description = "Optional IAM instance profile name (e.g. LabInstanceProfile in AWS Academy Learner Lab)"
+  default     = ""
+}

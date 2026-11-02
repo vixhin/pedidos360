@@ -1,23 +1,28 @@
 package cl.duoc.pedidos360.usuario.dto;
 
 /**
- * Datos que envía el frontend tras un login con Microsoft Entra ID para
+ * Datos que envía el BFF tras un login con Microsoft Entra ID para
  * sincronizar (crear o actualizar) la fila del usuario en usuario_db y
- * obtener su id numérico, que es la identidad que usan los demás
- * microservicios (carrito, pedidos, notificación).
+ * obtener su id numérico local.
  */
 public class EntraSyncRequest {
 
     private String email;
     private String nombre;
-    private String rol; // "ADMIN" | "VENDEDOR" | "CLIENTE" (opcional; default CLIENTE)
+    private String rol; // "ADMIN" | "VENDEDOR" | "CLIENTE"
+    private boolean rolFromAppRole; // true si proviene explícitamente del claim roles de Entra ID
 
     public EntraSyncRequest() {}
 
     public EntraSyncRequest(String email, String nombre, String rol) {
+        this(email, nombre, rol, false);
+    }
+
+    public EntraSyncRequest(String email, String nombre, String rol, boolean rolFromAppRole) {
         this.email = email;
         this.nombre = nombre;
         this.rol = rol;
+        this.rolFromAppRole = rolFromAppRole;
     }
 
     public String getEmail() {
@@ -42,5 +47,13 @@ public class EntraSyncRequest {
 
     public void setRol(String rol) {
         this.rol = rol;
+    }
+
+    public boolean isRolFromAppRole() {
+        return rolFromAppRole;
+    }
+
+    public void setRolFromAppRole(boolean rolFromAppRole) {
+        this.rolFromAppRole = rolFromAppRole;
     }
 }

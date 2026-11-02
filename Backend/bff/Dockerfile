@@ -1,44 +1,24 @@
-# ─── Etapa 1: Build ──────────────────────────────────────────────────────────
-FROM eclipse-temurin:21-jdk-alpine AS builder
-
+FROM eclipse-temurin:21-jdk-alpine AS build
 WORKDIR /app
-
-# Copiar pom.xml y descargar dependencias primero (cache layer)
+COPY mvnw .
+COPY .mvn .mvn
 COPY pom.xml .
-RUN apk add --no-cache maven && \
-    mvn dependency:go-offline -B
+RUN chmod +x mvnw && ./mvnw dependency:go-offline -B
+COPY src src
+RUN ./mvnw package -DskipTests -B
 
-# Copiar código fuente y compilar
-COPY src ./src
-RUN mvn package -DskipTests -B
-
-# ─── Etapa 2: Runtime ─────────────────────────────────────────────────────────
 FROM eclipse-temurin:21-jre-alpine
-
 WORKDIR /app
 
-# Usuario no-root para seguridad
-RUN addgroup -S bff && adduser -S bff -G bff
-USER bff
+RUN addgroup -S -g 10001 appgroup && adduser -S -u 10001 -G appgroup appuser
+USER 10001:10001
 
-# Copiar el jar compilado
-COPY --from=builder /app/target/bff-*.jar app.jar
+COPY --from=build --chown=10001:10001 /app/target/*.jar app.jar
 
-# Puerto del BFF
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=70.0 -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom"
 EXPOSE 8090
 
-# Variables de entorno requeridas en Docker
-# (se pasan via docker-compose.yml)
-ENV AZURE_TENANT_ID=""
-ENV AZURE_API_CLIENT_ID=""
-ENV FRONTEND_ORIGIN="http://localhost:4200"
-ENV USUARIO_SERVICE_URL="http://usuario:8081"
-ENV PEDIDOS_SERVICE_URL="http://pedidos:8082"
-ENV CARRITO_SERVICE_URL="http://carrito:8083"
-ENV ANALITICA_SERVICE_URL="http://analitica:8084"
-ENV PRODUCTOS_SERVICE_URL="http://productos:8085"
-ENV NOTIFICACION_SERVICE_URL="http://notificacion:8086"
+HEALTHCHECK --interval=20s --timeout=5s --retries=5 --start-period=30s \
+  CMD wget -qO- http://localhost:8090/health || exit 1
 
-HEALTHCHECK --interval=15s --timeout=5s --retries=4 CMD wget -qO- http://localhost:8090/health || exit 1
-
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar app.jar"]

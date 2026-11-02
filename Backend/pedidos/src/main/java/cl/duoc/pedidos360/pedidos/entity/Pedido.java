@@ -43,6 +43,9 @@ public class Pedido {
     @Column(name = "direccion_entrega")
     private String direccionEntrega;
 
+    @Column(name = "idempotency_key", length = 128)
+    private String idempotencyKey;
+
     @Column(name = "fecha_creacion")
     private LocalDateTime fechaCreacion;
 
@@ -158,6 +161,14 @@ public class Pedido {
 
     public void setDireccionEntrega(String direccionEntrega) {
         this.direccionEntrega = direccionEntrega;
+    }
+
+    public String getIdempotencyKey() {
+        return idempotencyKey;
+    }
+
+    public void setIdempotencyKey(String idempotencyKey) {
+        this.idempotencyKey = idempotencyKey;
     }
 
     public LocalDateTime getFechaCreacion() {

@@ -18,12 +18,17 @@ import cl.duoc.pedidos360.usuario.event.UsuarioLoginExitosoEvent;
 import cl.duoc.pedidos360.usuario.event.UsuarioLoginFallidoEvent;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -38,6 +43,10 @@ public class UsuarioService {
     private final org.springframework.core.env.Environment environment;
     private final TurnstileVerificationService turnstileService;
     private final LoginAttemptService loginAttemptService;
+    private final SessionService sessionService;
+
+    @Value("${admin.bootstrap.enabled:false}")
+    private boolean bootstrapEnabled;
 
     @Autowired
     public UsuarioService(UsuarioRepository usuarioRepository,
@@ -46,7 +55,8 @@ public class UsuarioService {
                           @Autowired(required = false) RabbitTemplate rabbitTemplate,
                           @Autowired(required = false) org.springframework.core.env.Environment environment,
                           @Autowired(required = false) TurnstileVerificationService turnstileService,
-                          @Autowired(required = false) LoginAttemptService loginAttemptService) {
+                          @Autowired(required = false) LoginAttemptService loginAttemptService,
+                          @Autowired(required = false) SessionService sessionService) {
         this.usuarioRepository = usuarioRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
@@ -54,6 +64,7 @@ public class UsuarioService {
         this.environment = environment;
         this.turnstileService = turnstileService;
         this.loginAttemptService = loginAttemptService;
+        this.sessionService = sessionService;
     }
 
     public UsuarioService(UsuarioRepository usuarioRepository,
@@ -61,37 +72,49 @@ public class UsuarioService {
                           JwtUtil jwtUtil,
                           RabbitTemplate rabbitTemplate,
                           org.springframework.core.env.Environment environment) {
-        this(usuarioRepository, passwordEncoder, jwtUtil, rabbitTemplate, environment, null, null);
+        this(usuarioRepository, passwordEncoder, jwtUtil, rabbitTemplate, environment, null, null, null);
     }
 
     @Transactional
     public UsuarioResponseDTO bootstrapAdmin(AdminBootstrapDTO dto) {
-        log.info("[USER-SERVICE] Solicitud de bootstrap de administrador inicial para: {}", dto.getEmail());
-        long adminCount = usuarioRepository.countByRol(Rol.ADMIN);
-        if (adminCount > 0) {
-            log.warn("[USER-SERVICE] Bootstrap rechazado: ya existe al menos un administrador en el sistema");
-            throw new IllegalStateException("El sistema ya cuenta con un administrador registrado");
+        log.info("[USER-SERVICE] Solicitud de bootstrap de administrador inicial");
+
+        if (!bootstrapEnabled) {
+            log.warn("[USER-SERVICE] Bootstrap rechazado: procedimiento deshabilitado por configuración.");
+            throw new SecurityException("El procedimiento de bootstrap administrativo está deshabilitado.");
         }
 
         String expectedToken = environment != null ? environment.getProperty("ADMIN_BOOTSTRAP_TOKEN") : null;
-        if (expectedToken != null && !expectedToken.isBlank()) {
-            if (dto.getBootstrapToken() == null || !expectedToken.equals(dto.getBootstrapToken().trim())) {
-                throw new SecurityException("Token de bootstrap administrativo inválido o no suministrado");
-            }
+        if (expectedToken == null || expectedToken.trim().length() < 32) {
+            log.error("[USER-SERVICE] Bootstrap rechazado: ADMIN_BOOTSTRAP_TOKEN no configurado o longitud menor a 32 caracteres.");
+            throw new SecurityException("Token de bootstrap administrativo no configurado de forma segura.");
+        }
+
+        if (dto.getBootstrapToken() == null ||
+                !MessageDigest.isEqual(expectedToken.trim().getBytes(StandardCharsets.UTF_8),
+                        dto.getBootstrapToken().trim().getBytes(StandardCharsets.UTF_8))) {
+            log.warn("[USER-SERVICE] Bootstrap rechazado: token incorrecto.");
+            throw new SecurityException("Token de bootstrap administrativo inválido.");
+        }
+
+        long adminCount = usuarioRepository.countByRol(Rol.ADMIN);
+        if (adminCount > 0) {
+            log.warn("[USER-SERVICE] Bootstrap rechazado: ya existe al menos un administrador en el sistema.");
+            throw new IllegalStateException("El sistema ya cuenta con un administrador registrado. Bootstrap bloqueado.");
         }
 
         if (usuarioRepository.findByEmail(dto.getEmail()).isPresent()) {
-            throw new IllegalArgumentException("El email ya se encuentra registrado");
+            throw new IllegalArgumentException("El email ya se encuentra registrado.");
         }
 
         if (dto.getPassword() == null || dto.getPassword().length() < 12) {
-            throw new IllegalArgumentException("La contraseña debe tener al menos 12 caracteres");
+            throw new IllegalArgumentException("La contraseña debe tener al menos 12 caracteres.");
         }
 
         Usuario admin = new Usuario(
                 null,
                 dto.getNombre(),
-                dto.getEmail(),
+                dto.getEmail().trim().toLowerCase(),
                 passwordEncoder.encode(dto.getPassword()),
                 Rol.ADMIN,
                 dto.getTelefono(),
@@ -101,53 +124,72 @@ public class UsuarioService {
         );
 
         Usuario guardado = usuarioRepository.save(admin);
-        log.info("[USER-SERVICE] Administrador inicial creado exitosamente ID={} Email={}", guardado.getId(), guardado.getEmail());
+        log.info("[USER-SERVICE] Administrador inicial creado exitosamente ID={}", guardado.getId());
         return UsuarioResponseDTO.fromEntity(guardado);
     }
 
     @Transactional(readOnly = true)
-    public AuthResponse autenticar(AuthRequest request) {
-        log.info("[USER-SERVICE] Login attempt for: {}", request.getEmail());
+    public Usuario autenticarUsuario(String email, String password, String turnstileToken, String remoteIp) {
+        log.info("[USER-SERVICE] Intento de login para email");
 
-        if (loginAttemptService != null && loginAttemptService.isBlocked(request.getEmail())) {
-            log.warn("[USER-SERVICE] Login bloqueado temporalmente por intentos fallidos: {}", request.getEmail());
-            throw new RuntimeException("Cuenta bloqueada temporalmente por múltiples intentos fallidos. Intente más tarde.");
+        if (email == null || email.isBlank() || password == null || password.isBlank()) {
+            throw new IllegalArgumentException("Email y contraseña son obligatorios.");
         }
 
-        if (turnstileService != null && StringUtils.hasText(request.getTurnstileToken())) {
-            boolean validCaptcha = turnstileService.verifyToken(request.getTurnstileToken(), null);
+        String normalizedEmail = email.trim().toLowerCase();
+
+        if (loginAttemptService != null && loginAttemptService.isBlocked(normalizedEmail)) {
+            log.warn("[USER-SERVICE] Login bloqueado temporalmente por múltiples intentos fallidos.");
+            throw new SecurityException("Cuenta bloqueada temporalmente por múltiples intentos fallidos. Intente más tarde.");
+        }
+
+        if (turnstileService != null) {
+            boolean validCaptcha = turnstileService.verifyToken(turnstileToken, remoteIp, "login");
             if (!validCaptcha) {
-                log.warn("[USER-SERVICE] Falló validación Turnstile para: {}", request.getEmail());
-                throw new RuntimeException("Verificación de seguridad Turnstile inválida o expirada");
+                log.warn("[USER-SERVICE] Falló validación Turnstile en login.");
+                throw new SecurityException("Verificación de seguridad Turnstile inválida o expirada.");
             }
         }
 
-        Usuario usuario = usuarioRepository.findByEmail(request.getEmail()).orElse(null);
+        Optional<Usuario> usuarioOpt = usuarioRepository.findByEmail(normalizedEmail);
 
-        if (usuario == null) {
+        if (usuarioOpt.isEmpty()) {
             if (loginAttemptService != null) {
-                loginAttemptService.loginFailed(request.getEmail());
+                loginAttemptService.loginFailed(normalizedEmail);
             }
-            publicarLoginFallido(request.getEmail(), "Usuario no encontrado");
-            throw new RuntimeException("Credenciales inválidas: Usuario no encontrado");
+            publicarLoginFallido(normalizedEmail, "Usuario no encontrado");
+            throw new SecurityException("Credenciales inválidas.");
         }
 
-        if (!passwordEncoder.matches(request.getPassword(), usuario.getPasswordHash())) {
+        Usuario usuario = usuarioOpt.get();
+
+        if (!passwordEncoder.matches(password, usuario.getPasswordHash())) {
             if (loginAttemptService != null) {
-                loginAttemptService.loginFailed(request.getEmail());
+                loginAttemptService.loginFailed(normalizedEmail);
             }
-            log.warn("[USER-SERVICE] Invalid password attempt for: {}", request.getEmail());
-            publicarLoginFallido(request.getEmail(), "Contraseña incorrecta");
-            throw new RuntimeException("Credenciales inválidas: Contraseña incorrecta");
+            publicarLoginFallido(normalizedEmail, "Contraseña incorrecta");
+            throw new SecurityException("Credenciales inválidas.");
+        }
+
+        if (!"ACTIVO".equalsIgnoreCase(usuario.getEstado())) {
+            log.warn("[USER-SERVICE] Login rechazado para usuario inactivo ID={}", usuario.getId());
+            throw new SecurityException("La cuenta de usuario se encuentra inactiva o suspendida.");
         }
 
         if (loginAttemptService != null) {
-            loginAttemptService.loginSucceeded(request.getEmail());
+            loginAttemptService.loginSucceeded(normalizedEmail);
         }
 
-        String token = jwtUtil.generateToken(usuario.getEmail(), usuario.getRol());
-        log.info("[USER-SERVICE] Login successful for: {} ID={}", usuario.getEmail(), usuario.getId());
+        log.info("[USER-SERVICE] Login exitoso para ID={}", usuario.getId());
         publicarLoginExitoso(usuario);
+        return usuario;
+    }
+
+    // Método legacy para retrocompatibilidad
+    @Transactional(readOnly = true)
+    public AuthResponse autenticar(AuthRequest request) {
+        Usuario usuario = autenticarUsuario(request.getEmail(), request.getPassword(), request.getTurnstileToken(), null);
+        String token = jwtUtil.generateToken(usuario.getId(), usuario.getEmail(), usuario.getRol(), java.util.UUID.randomUUID().toString());
         return new AuthResponse(token, usuario.getId(), usuario.getNombre(), usuario.getEmail(), usuario.getRol());
     }
 
@@ -160,9 +202,8 @@ public class UsuarioService {
                     usuario.getRol() != null ? usuario.getRol().name() : "CLIENTE"
             );
             rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE_EVENTS, RabbitMQConfig.ROUTING_KEY_LOGIN_EXITOSO, event);
-            log.info("[USER-SERVICE] Published login success event: eventId={} email={}", event.getEventId(), event.getEmail());
         } catch (Exception ex) {
-            log.warn("[USER-SERVICE] Failed to publish login success event for email={}: {}", usuario.getEmail(), ex.getMessage());
+            log.warn("[USER-SERVICE] Fallo al publicar evento de login exitoso: {}", ex.getMessage());
         }
     }
 
@@ -171,40 +212,128 @@ public class UsuarioService {
         try {
             UsuarioLoginFallidoEvent event = new UsuarioLoginFallidoEvent(email, motivo);
             rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE_EVENTS, RabbitMQConfig.ROUTING_KEY_LOGIN_FALLIDO, event);
-            log.info("[USER-SERVICE] Published login failure event: eventId={} email={}", event.getEventId(), email);
         } catch (Exception ex) {
-            log.warn("[USER-SERVICE] Failed to publish login failure event for email={}: {}", email, ex.getMessage());
+            log.warn("[USER-SERVICE] Fallo al publicar evento de login fallido: {}", ex.getMessage());
         }
     }
 
-    /**
-     * Provisioning JIT para usuarios que inician sesión con Microsoft Entra ID.
-     */
     @Transactional
-    public UsuarioResponseDTO sincronizarUsuarioExterno(String email, String nombre, String rolNombre) {
-        Rol rol = parseRol(rolNombre);
-        Usuario usuario = usuarioRepository.findByEmail(email).orElse(null);
+    public UsuarioResponseDTO registrarCliente(UsuarioCreateDTO dto, String remoteIp) {
+        log.info("[USER-SERVICE] Registro público de cliente nuevo");
+
+        if (turnstileService != null) {
+            boolean validCaptcha = turnstileService.verifyToken(dto.getTurnstileToken(), remoteIp, "register");
+            if (!validCaptcha) {
+                log.warn("[USER-SERVICE] Falló validación Turnstile en registro público.");
+                throw new SecurityException("Verificación de seguridad Turnstile inválida o expirada.");
+            }
+        }
+
+        if (dto.getEmail() == null || dto.getEmail().isBlank()) {
+            throw new IllegalArgumentException("El email es obligatorio.");
+        }
+
+        String normalizedEmail = dto.getEmail().trim().toLowerCase();
+
+        if (usuarioRepository.findByEmail(normalizedEmail).isPresent()) {
+            log.warn("[USER-SERVICE] Intento de registro con email ya existente.");
+            throw new IllegalArgumentException("El email ya se encuentra registrado en el sistema.");
+        }
+
+        if (dto.getPassword() == null || dto.getPassword().length() < 8) {
+            throw new IllegalArgumentException("La contraseña debe tener al menos 8 caracteres.");
+        }
+
+        // REGLA CRÍTICA DE SEGURIDAD: El registro público SIEMPRE asigna rol CLIENTE y estado ACTIVO
+        Usuario usuario = new Usuario(
+                null,
+                dto.getNombre() != null ? dto.getNombre().trim() : "Cliente",
+                normalizedEmail,
+                passwordEncoder.encode(dto.getPassword()),
+                Rol.CLIENTE,
+                dto.getTelefono(),
+                dto.getDireccion(),
+                "FULL_TIME",
+                "ACTIVO"
+        );
+
+        Usuario guardado = usuarioRepository.save(usuario);
+        log.info("[USER-SERVICE] Cliente registrado correctamente ID={}", guardado.getId());
+        return UsuarioResponseDTO.fromEntity(guardado);
+    }
+
+    // Creación administrativa (solo invocable por ADMIN)
+    @Transactional
+    public UsuarioResponseDTO crearUsuario(UsuarioCreateDTO dto) {
+        log.info("[USER-SERVICE] Creación de usuario");
+
+        if (dto.getEmail() == null || dto.getEmail().isBlank()) {
+            throw new IllegalArgumentException("El email es obligatorio.");
+        }
+
+        String normalizedEmail = dto.getEmail().trim().toLowerCase();
+
+        if (usuarioRepository.findByEmail(normalizedEmail).isPresent()) {
+            throw new IllegalArgumentException("El email ya se encuentra registrado.");
+        }
+
+        Rol rolAsignado = dto.getRol() != null ? dto.getRol() : Rol.CLIENTE;
+        String rawPassword = (dto.getPassword() != null && !dto.getPassword().isBlank())
+                ? dto.getPassword()
+                : java.util.UUID.randomUUID().toString();
+
+        Usuario usuario = new Usuario(
+                null,
+                dto.getNombre(),
+                normalizedEmail,
+                passwordEncoder.encode(rawPassword),
+                rolAsignado,
+                dto.getTelefono(),
+                dto.getDireccion(),
+                dto.getTurno() != null ? dto.getTurno() : "FULL_TIME",
+                dto.getEstado() != null ? dto.getEstado() : "ACTIVO"
+        );
+
+        Usuario guardado = usuarioRepository.save(usuario);
+        log.info("[USER-SERVICE] Usuario creado ID={} Rol={}", guardado.getId(), guardado.getRol());
+        return UsuarioResponseDTO.fromEntity(guardado);
+    }
+
+    @Transactional
+    public UsuarioResponseDTO sincronizarUsuarioExterno(String email, String nombre, String rolNombre, boolean rolFromAppRole) {
+        String normalizedEmail = email.trim().toLowerCase();
+        Rol rolSolicitado = parseRol(rolNombre);
+        Usuario usuario = usuarioRepository.findByEmail(normalizedEmail).orElse(null);
 
         if (usuario == null) {
+            // Usuario nuevo proveniente de Entra ID
+            Rol rolInicial = rolFromAppRole ? rolSolicitado : Rol.CLIENTE;
             usuario = new Usuario(
                     null,
-                    (nombre != null && !nombre.isBlank()) ? nombre : email,
-                    email,
+                    (nombre != null && !nombre.isBlank()) ? nombre : normalizedEmail,
+                    normalizedEmail,
                     passwordEncoder.encode(java.util.UUID.randomUUID().toString()),
-                    rol
+                    rolInicial
             );
             usuario.setEstado("ACTIVO");
             usuario.setTurno("FULL_TIME");
-            log.info("[USER-SERVICE] Provisioning JIT (Entra ID) — nuevo usuario: {}", email);
+            log.info("[USER-SERVICE] Provisioning JIT (Entra ID) - nuevo usuario creado ID={} Rol={}", usuario.getEmail(), rolInicial);
         } else {
-            usuario.setRol(rol);
+            // Usuario existente: SOLO actualizar rol si proviene explícitamente de un app role validado de Entra ID
+            if (rolFromAppRole && rolSolicitado != Rol.CLIENTE) {
+                usuario.setRol(rolSolicitado);
+            }
             if (nombre != null && !nombre.isBlank()) {
                 usuario.setNombre(nombre);
             }
-            log.info("[USER-SERVICE] Provisioning JIT (Entra ID) — usuario existente: {} ID={}", email, usuario.getId());
+            log.info("[USER-SERVICE] Sincronización JIT (Entra ID) - usuario ID={} Rol={}", usuario.getId(), usuario.getRol());
         }
 
         return UsuarioResponseDTO.fromEntity(usuarioRepository.save(usuario));
+    }
+
+    public UsuarioResponseDTO sincronizarUsuarioExterno(String email, String nombre, String rolNombre) {
+        return sincronizarUsuarioExterno(email, nombre, rolNombre, false);
     }
 
     private Rol parseRol(String nombre) {
@@ -216,49 +345,8 @@ public class UsuarioService {
         }
     }
 
-    @Transactional
-    public UsuarioResponseDTO crearUsuario(UsuarioCreateDTO dto) {
-        log.info("[USER-SERVICE] Creating user: {}", dto.getEmail());
-
-        if (turnstileService != null && StringUtils.hasText(dto.getTurnstileToken())) {
-            boolean validCaptcha = turnstileService.verifyToken(dto.getTurnstileToken(), null);
-            if (!validCaptcha) {
-                log.warn("[USER-SERVICE] Falló validación Turnstile en registro para: {}", dto.getEmail());
-                throw new RuntimeException("Verificación de seguridad Turnstile inválida o expirada");
-            }
-        }
-
-        if (usuarioRepository.findByEmail(dto.getEmail()).isPresent()) {
-            log.warn("[USER-SERVICE] Duplicate email creation attempt: {}", dto.getEmail());
-            throw new RuntimeException("El email ya se encuentra registrado");
-        }
-
-        // Prevención de elevación de privilegios: no permitir registrarse como ADMIN de forma directa
-        Rol rolAsignado = (dto.getRol() != null && dto.getRol() != Rol.ADMIN) ? dto.getRol() : Rol.CLIENTE;
-        String rawPassword = (dto.getPassword() != null && !dto.getPassword().isBlank())
-                ? dto.getPassword()
-                : java.util.UUID.randomUUID().toString();
-
-        Usuario usuario = new Usuario(
-                null,
-                dto.getNombre(),
-                dto.getEmail(),
-                passwordEncoder.encode(rawPassword),
-                rolAsignado,
-                dto.getTelefono(),
-                dto.getDireccion(),
-                dto.getTurno() != null ? dto.getTurno() : "FULL_TIME",
-                dto.getEstado() != null ? dto.getEstado() : "ACTIVO"
-        );
-
-        Usuario guardado = usuarioRepository.save(usuario);
-        log.info("[USER-SERVICE] User created successfully ID={} Email={}", guardado.getId(), guardado.getEmail());
-        return UsuarioResponseDTO.fromEntity(guardado);
-    }
-
     @Transactional(readOnly = true)
     public List<UsuarioResponseDTO> obtenerTodos() {
-        log.info("[USER-SERVICE] Listing all users");
         return usuarioRepository.findAll().stream()
                 .map(UsuarioResponseDTO::fromEntity)
                 .collect(Collectors.toList());
@@ -266,32 +354,30 @@ public class UsuarioService {
 
     @Transactional(readOnly = true)
     public UsuarioResponseDTO obtenerPorId(Long id) {
-        log.info("[USER-SERVICE] Fetching user by ID={}", id);
         Usuario usuario = usuarioRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado con ID: " + id));
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado con ID: " + id));
         return UsuarioResponseDTO.fromEntity(usuario);
     }
 
     @Transactional(readOnly = true)
     public UsuarioResponseDTO obtenerPorEmail(String email) {
-        log.info("[USER-SERVICE] Fetching user by email={}", email);
-        Usuario usuario = usuarioRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado con email: " + email));
+        Usuario usuario = usuarioRepository.findByEmail(email.trim().toLowerCase())
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado con email: " + email));
         return UsuarioResponseDTO.fromEntity(usuario);
     }
 
     @Transactional
     public UsuarioResponseDTO actualizarUsuario(Long id, UsuarioCreateDTO dto) {
-        log.info("[USER-SERVICE] Updating user ID={}", id);
         Usuario usuario = usuarioRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado con ID: " + id));
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado con ID: " + id));
 
         if (dto.getEmail() != null && !dto.getEmail().isBlank()) {
-            if (!usuario.getEmail().equalsIgnoreCase(dto.getEmail()) &&
-                    usuarioRepository.findByEmail(dto.getEmail()).isPresent()) {
-                throw new RuntimeException("El email ya se encuentra registrado");
+            String newEmail = dto.getEmail().trim().toLowerCase();
+            if (!usuario.getEmail().equalsIgnoreCase(newEmail) &&
+                    usuarioRepository.findByEmail(newEmail).isPresent()) {
+                throw new IllegalArgumentException("El email ya se encuentra registrado");
             }
-            usuario.setEmail(dto.getEmail());
+            usuario.setEmail(newEmail);
         }
 
         if (dto.getNombre() != null && !dto.getNombre().isBlank()) {
@@ -311,65 +397,66 @@ public class UsuarioService {
         }
         if (dto.getEstado() != null && !dto.getEstado().isBlank()) {
             usuario.setEstado(dto.getEstado());
+            if (!"ACTIVO".equalsIgnoreCase(dto.getEstado()) && sessionService != null) {
+                sessionService.revocarTodasLasSesiones(id);
+            }
         }
         if (dto.getPassword() != null && !dto.getPassword().isBlank()) {
+            if (dto.getPassword().length() < 8) {
+                throw new IllegalArgumentException("La nueva contraseña debe tener al menos 8 caracteres");
+            }
             usuario.setPasswordHash(passwordEncoder.encode(dto.getPassword()));
+            if (sessionService != null) {
+                sessionService.revocarTodasLasSesiones(id);
+            }
         }
 
         Usuario actualizado = usuarioRepository.save(usuario);
-        log.info("[USER-SERVICE] User updated successfully ID={}", actualizado.getId());
         return UsuarioResponseDTO.fromEntity(actualizado);
     }
 
     @Transactional
     public void cambiarPassword(Long id, String currentPassword, String newPassword) {
         Usuario usuario = usuarioRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado con ID: " + id));
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado con ID: " + id));
         if (!passwordEncoder.matches(currentPassword, usuario.getPasswordHash())) {
             throw new IllegalArgumentException("La contraseña actual es incorrecta");
         }
-        if (newPassword == null || newPassword.length() < 6) {
-            throw new IllegalArgumentException("La nueva contraseña debe tener al menos 6 caracteres");
+        if (newPassword == null || newPassword.length() < 8) {
+            throw new IllegalArgumentException("La nueva contraseña debe tener al menos 8 caracteres");
         }
         usuario.setPasswordHash(passwordEncoder.encode(newPassword));
         usuarioRepository.save(usuario);
-        log.info("[USER-SERVICE] Password changed successfully for user ID={}", id);
+        if (sessionService != null) {
+            sessionService.revocarTodasLasSesiones(id);
+        }
+        log.info("[USER-SERVICE] Contraseña cambiada para ID={}", id);
     }
 
     @Transactional
     public void cambiarPasswordPorEmail(String email, String currentPassword, String newPassword) {
-        Usuario usuario = usuarioRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado con email: " + email));
-        if (!passwordEncoder.matches(currentPassword, usuario.getPasswordHash())) {
-            throw new IllegalArgumentException("La contraseña actual es incorrecta");
-        }
-        if (newPassword == null || newPassword.length() < 6) {
-            throw new IllegalArgumentException("La nueva contraseña debe tener al menos 6 caracteres");
-        }
-        usuario.setPasswordHash(passwordEncoder.encode(newPassword));
-        usuarioRepository.save(usuario);
-        log.info("[USER-SERVICE] Password changed successfully for user email={}", email);
+        Usuario usuario = usuarioRepository.findByEmail(email.trim().toLowerCase())
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
+        cambiarPassword(usuario.getId(), currentPassword, newPassword);
     }
 
     @Transactional
     public UsuarioResponseDTO actualizarEstado(Long id, String nuevoEstado) {
         Usuario usuario = usuarioRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado con ID: " + id));
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado con ID: " + id));
         usuario.setEstado(nuevoEstado);
+        if (!"ACTIVO".equalsIgnoreCase(nuevoEstado) && sessionService != null) {
+            sessionService.revocarTodasLasSesiones(id);
+        }
         Usuario guardado = usuarioRepository.save(usuario);
-        log.info("[USER-SERVICE] User ID={} status updated to {}", id, nuevoEstado);
         return UsuarioResponseDTO.fromEntity(guardado);
     }
 
     @Transactional
     public void solicitarRecuperacionPassword(String email) {
-        log.info("[USER-SERVICE] Password reset requested for email: {}", email);
-        java.util.Optional<Usuario> usuarioOpt = usuarioRepository.findByEmail(email);
-
-        if (usuarioOpt.isEmpty()) {
-            log.info("[USER-SERVICE] Password reset requested for non-existent email: {}", email);
-            return;
-        }
+        if (email == null || email.isBlank()) return;
+        Optional<Usuario> usuarioOpt = usuarioRepository.findByEmail(email.trim().toLowerCase());
+        if (usuarioOpt.isEmpty()) return;
 
         Usuario usuario = usuarioOpt.get();
         String resetToken = java.util.UUID.randomUUID().toString();
@@ -387,20 +474,20 @@ public class UsuarioService {
                         RabbitMQConfig.ROUTING_KEY_PASSWORD_RESET,
                         event
                 );
-                log.info("[USER-SERVICE] Published password reset event: eventId={} email={}", event.getEventId(), email);
             } catch (Exception ex) {
-                log.warn("[USER-SERVICE] Failed to publish password reset event for email={}: {}", email, ex.getMessage());
+                log.warn("[USER-SERVICE] Fallo al publicar evento de recuperación: {}", ex.getMessage());
             }
         }
     }
 
     @Transactional
     public void eliminarUsuario(Long id) {
-        log.info("[USER-SERVICE] Deleting user ID={}", id);
         if (!usuarioRepository.existsById(id)) {
-            throw new RuntimeException("Usuario no encontrado con ID: " + id);
+            throw new IllegalArgumentException("Usuario no encontrado con ID: " + id);
+        }
+        if (sessionService != null) {
+            sessionService.revocarTodasLasSesiones(id);
         }
         usuarioRepository.deleteById(id);
-        log.info("[USER-SERVICE] User deleted successfully ID={}", id);
     }
 }

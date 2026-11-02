@@ -48,6 +48,26 @@ public class JwtUtil {
         }
     }
 
+    public Long extractUserId(String token) {
+        try {
+            Object uid = getClaims(token).get("uid");
+            if (uid instanceof Number) {
+                return ((Number) uid).longValue();
+            }
+            return null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    public String extractSessionId(String token) {
+        try {
+            return getClaims(token).get("sid", String.class);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     private Claims getClaims(String token) {
         return Jwts.parser()
                 .verifyWith(key)

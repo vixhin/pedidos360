@@ -4,8 +4,8 @@
 #   docker compose -f docker-compose.yml -f docker-compose.ec2.yml --env-file .env.production up -d --build
 #
 # Variables requeridas en .env.production:
-#   PUBLIC_DOMAIN = 3-92-44-37.sslip.io        (sin esquema)
-#   PUBLIC_URL    = https://3-92-44-37.sslip.io  (con esquema)
+#   PUBLIC_DOMAIN = 3-92-44-37.sslip.io          (sin esquema)
+#   PUBLIC_URL    = https://3-92-44-37.sslip.io    (con esquema)
 
 version: '3.8'
 
@@ -20,6 +20,13 @@ services:
         TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-1x00000000000000000000AA}
     container_name: pedidos360-frontend
     restart: unless-stopped
+    mem_limit: 128m
+    mem_reservation: 64m
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       - bff
 
@@ -30,6 +37,13 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    mem_limit: 128m
+    mem_reservation: 64m
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       PUBLIC_DOMAIN: ${PUBLIC_DOMAIN}
     volumes:
@@ -46,25 +60,57 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER required}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
     ports: !reset []
+    mem_limit: 512m
+    mem_reservation: 256m
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   pgadmin:
     ports: !reset []
+    profiles:
+      - ops
+    mem_limit: 192m
+    mem_reservation: 64m
 
   rabbitmq:
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?RABBITMQ_USER required}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD required}
     ports: !reset []
+    mem_limit: 384m
+    mem_reservation: 192m
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   bff:
     ports: !reset []
+    mem_limit: 384m
+    mem_reservation: 192m
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       SPRING_PROFILES_ACTIVE: prod
       FRONTEND_ORIGIN: ${PUBLIC_URL}
-      BFF_INTERNAL_KEY: ${BFF_INTERNAL_KEY}
+      BFF_INTERNAL_KEY: ${BFF_INTERNAL_KEY:?BFF_INTERNAL_KEY required}
 
   usuario:
     ports: !reset []
+    mem_limit: 384m
+    mem_reservation: 192m
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       SPRING_PROFILES_ACTIVE: prod
       FRONTEND_ORIGIN: ${PUBLIC_URL}
@@ -72,22 +118,37 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
       RABBITMQ_USER: ${RABBITMQ_USER:?RABBITMQ_USER required}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD required}
-      JWT_SECRET: ${JWT_SECRET}
-      BFF_INTERNAL_KEY: ${BFF_INTERNAL_KEY}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET required}
+      BFF_INTERNAL_KEY: ${BFF_INTERNAL_KEY:?BFF_INTERNAL_KEY required}
       TURNSTILE_ENABLED: ${TURNSTILE_ENABLED:-true}
-      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY}
+      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
       ADMIN_BOOTSTRAP_TOKEN: ${ADMIN_BOOTSTRAP_TOKEN:-}
 
   productos:
     ports: !reset []
+    mem_limit: 320m
+    mem_reservation: 160m
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       SPRING_PROFILES_ACTIVE: prod
       FRONTEND_ORIGIN: ${PUBLIC_URL}
       DB_USER: ${POSTGRES_USER:?POSTGRES_USER required}
       DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
+      BFF_INTERNAL_KEY: ${BFF_INTERNAL_KEY:?BFF_INTERNAL_KEY required}
 
   pedidos:
     ports: !reset []
+    mem_limit: 384m
+    mem_reservation: 192m
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       SPRING_PROFILES_ACTIVE: prod
       FRONTEND_ORIGIN: ${PUBLIC_URL}
@@ -95,11 +156,18 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
       RABBITMQ_USER: ${RABBITMQ_USER:?RABBITMQ_USER required}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD required}
-      JWT_SECRET: ${JWT_SECRET}
-      BFF_INTERNAL_KEY: ${BFF_INTERNAL_KEY}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET required}
+      BFF_INTERNAL_KEY: ${BFF_INTERNAL_KEY:?BFF_INTERNAL_KEY required}
 
   carrito:
     ports: !reset []
+    mem_limit: 320m
+    mem_reservation: 160m
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       SPRING_PROFILES_ACTIVE: prod
       FRONTEND_ORIGIN: ${PUBLIC_URL}
@@ -107,9 +175,18 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
       RABBITMQ_USER: ${RABBITMQ_USER:?RABBITMQ_USER required}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET required}
+      BFF_INTERNAL_KEY: ${BFF_INTERNAL_KEY:?BFF_INTERNAL_KEY required}
 
   notificacion:
     ports: !reset []
+    mem_limit: 288m
+    mem_reservation: 144m
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       SPRING_PROFILES_ACTIVE: prod
       FRONTEND_ORIGIN: ${PUBLIC_URL}
@@ -117,9 +194,18 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
       RABBITMQ_USER: ${RABBITMQ_USER:?RABBITMQ_USER required}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET required}
+      BFF_INTERNAL_KEY: ${BFF_INTERNAL_KEY:?BFF_INTERNAL_KEY required}
 
   analitica:
     ports: !reset []
+    mem_limit: 320m
+    mem_reservation: 160m
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       SPRING_PROFILES_ACTIVE: prod
       FRONTEND_ORIGIN: ${PUBLIC_URL}
@@ -127,9 +213,18 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
       RABBITMQ_USER: ${RABBITMQ_USER:?RABBITMQ_USER required}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET required}
+      BFF_INTERNAL_KEY: ${BFF_INTERNAL_KEY:?BFF_INTERNAL_KEY required}
 
   chat:
     ports: !reset []
+    mem_limit: 320m
+    mem_reservation: 160m
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       SPRING_PROFILES_ACTIVE: prod
       FRONTEND_ORIGIN: ${PUBLIC_URL}
@@ -137,8 +232,8 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
       RABBITMQ_USER: ${RABBITMQ_USER:?RABBITMQ_USER required}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD required}
-      JWT_SECRET: ${JWT_SECRET}
-      BFF_INTERNAL_KEY: ${BFF_INTERNAL_KEY}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET required}
+      BFF_INTERNAL_KEY: ${BFF_INTERNAL_KEY:?BFF_INTERNAL_KEY required}
 
 volumes:
   caddy_data:

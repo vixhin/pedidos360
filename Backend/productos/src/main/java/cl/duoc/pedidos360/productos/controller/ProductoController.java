@@ -108,4 +108,46 @@ public class ProductoController {
         productoService.eliminar(id);
         return ResponseEntity.ok(ApiResponse.ok("Producto eliminado correctamente", null));
     }
+
+    // ─── ENDPOINTS INTERNOS DE GESTIÓN DE STOCK (S2S con clave interna) ──
+
+    @PostMapping("/internal/stock/reservas")
+    public ResponseEntity<?> reservarStockInterno(
+            jakarta.servlet.http.HttpServletRequest request,
+            @RequestBody cl.duoc.pedidos360.productos.dto.ReservaStockRequestDTO dto,
+            @org.springframework.beans.factory.annotation.Value("${bff.internal-key:${BFF_INTERNAL_KEY:}}") String expectedKey) {
+
+        String key = request.getHeader("X-Internal-Service-Key");
+        if (key == null || expectedKey == null || expectedKey.isBlank() ||
+                !java.security.MessageDigest.isEqual(key.getBytes(java.nio.charset.StandardCharsets.UTF_8), expectedKey.getBytes(java.nio.charset.StandardCharsets.UTF_8))) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error("Acceso denegado: Clave de servicio interno inválida o faltante"));
+        }
+
+        try {
+            cl.duoc.pedidos360.productos.entity.StockReserva reserva = productoService.reservarStock(dto);
+            return ResponseEntity.ok(ApiResponse.ok("Stock reservado exitosamente", reserva));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.error(e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(e.getMessage()));
+        }
+    }
+
+    @PostMapping("/internal/stock/reservas/{reservaId}/liberar")
+    public ResponseEntity<?> liberarStockInterno(
+            jakarta.servlet.http.HttpServletRequest request,
+            @PathVariable String reservaId,
+            @org.springframework.beans.factory.annotation.Value("${bff.internal-key:${BFF_INTERNAL_KEY:}}") String expectedKey) {
+
+        String key = request.getHeader("X-Internal-Service-Key");
+        if (key == null || expectedKey == null || expectedKey.isBlank() ||
+                !java.security.MessageDigest.isEqual(key.getBytes(java.nio.charset.StandardCharsets.UTF_8), expectedKey.getBytes(java.nio.charset.StandardCharsets.UTF_8))) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error("Acceso denegado: Clave de servicio interno inválida o faltante"));
+        }
+
+        productoService.liberarReserva(reservaId);
+        return ResponseEntity.ok(ApiResponse.ok("Reserva de stock liberada correctamente", null));
+    }
 }

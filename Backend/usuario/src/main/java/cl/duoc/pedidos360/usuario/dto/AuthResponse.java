@@ -9,6 +9,7 @@ public class AuthResponse {
     private String nombre;
     private String email;
     private Rol rol;
+    private Long accessExpiresAt;
 
     public AuthResponse() {}
 
@@ -18,6 +19,15 @@ public class AuthResponse {
         this.nombre = nombre;
         this.email = email;
         this.rol = rol;
+    }
+
+    public AuthResponse(String token, Long id, String nombre, String email, Rol rol, Long accessExpiresAt) {
+        this.token = token;
+        this.id = id;
+        this.nombre = nombre;
+        this.email = email;
+        this.rol = rol;
+        this.accessExpiresAt = accessExpiresAt;
     }
 
     public String getToken() {
@@ -66,5 +76,13 @@ public class AuthResponse {
 
     public void setRol(Rol rol) {
         this.rol = rol;
+    }
+
+    public Long getAccessExpiresAt() {
+        return accessExpiresAt;
+    }
+
+    public void setAccessExpiresAt(Long accessExpiresAt) {
+        this.accessExpiresAt = accessExpiresAt;
     }
 }

@@ -38,8 +38,19 @@ public class MotorComercialService {
         this.coberturaRepository = coberturaRepository;
     }
 
+    private String normalizarClave(String clave) {
+        if (clave == null) return "";
+        String upper = clave.trim().toUpperCase();
+        if ("TARIFA_SERVICIO_BASE".equals(upper)) {
+            return "TARIFA_SERVICIO";
+        }
+        return upper;
+    }
+
     public BigDecimal obtenerConfig(String clave, BigDecimal defaultVal) {
-        return configRepository.findByClaveIgnoreCase(clave)
+        String normalized = normalizarClave(clave);
+        return configRepository.findByClaveIgnoreCase(normalized)
+                .or(() -> configRepository.findByClaveIgnoreCase(clave))
                 .map(ConfiguracionComercial::getValor)
                 .orElse(defaultVal);
     }
@@ -53,14 +64,9 @@ public class MotorComercialService {
 
     @Transactional(readOnly = true)
     public CotizacionResponseDTO cotizar(CotizacionRequestDTO request) {
-        log.info("[MOTOR-COMERCIAL] Cotizando orden...");
-
-        BigDecimal umbralEnvioGratis = obtenerConfig("UMBRAL_ENVIO_GRATIS", new BigDecimal("20000.00"));
-        BigDecimal costoEnvioBase = obtenerConfig("COSTO_ENVIO_BASE", new BigDecimal("2990.00"));
-        BigDecimal tarifaServicio = obtenerConfig("TARIFA_SERVICIO", new BigDecimal("1500.00"));
-
+        // Cálculo del subtotal basado en los ítems cotizados
         BigDecimal subtotal = BigDecimal.ZERO;
-        if (request.getItems() != null) {
+        if (request != null && request.getItems() != null) {
             for (CotizacionRequestDTO.ItemCotizacion item : request.getItems()) {
                 if (item.getPrecioUnitario() != null && item.getCantidad() != null && item.getCantidad() > 0) {
                     BigDecimal itemTotal = item.getPrecioUnitario().multiply(BigDecimal.valueOf(item.getCantidad()));
@@ -69,30 +75,32 @@ public class MotorComercialService {
             }
         }
 
-        // Validación de cobertura geográfica y comuna
-        Integer tiempoEstimado = 35;
-        BigDecimal costoAdicionalComuna = BigDecimal.ZERO;
-        String nombreComuna = request.getComuna();
+        // Obtención de parámetros comerciales autoritativos de BD
+        BigDecimal umbralEnvioGratis = obtenerConfig("UMBRAL_ENVIO_GRATIS", new BigDecimal("20000.00"));
+        BigDecimal costoEnvioBase = obtenerConfig("COSTO_ENVIO_BASE", new BigDecimal("2990.00"));
+        BigDecimal tarifaServicio = obtenerConfig("TARIFA_SERVICIO", new BigDecimal("1500.00"));
 
+        BigDecimal costoEnvio = costoEnvioBase;
+        boolean envioGratis = false;
+        BigDecimal faltanteParaEnvioGratis = BigDecimal.ZERO;
+        Integer tiempoEstimado = 35;
+        String nombreComuna = (request != null && request.getComuna() != null) ? request.getComuna().trim() : null;
+
+        // Evaluación de comuna
         if (nombreComuna != null && !nombreComuna.isBlank()) {
-            Optional<CoberturaComuna> comunaOpt = coberturaRepository.findByNombreIgnoreCaseAndActivaTrue(nombreComuna.trim());
+            Optional<CoberturaComuna> comunaOpt = coberturaRepository.findByNombreIgnoreCaseAndActivaTrue(nombreComuna);
             if (comunaOpt.isPresent()) {
-                CoberturaComuna c = comunaOpt.get();
-                tiempoEstimado = c.getTiempoEstimadoMinutos();
-                costoAdicionalComuna = c.getCostoAdicional();
+                CoberturaComuna comuna = comunaOpt.get();
+                costoEnvio = costoEnvio.add(comuna.getCostoAdicional());
+                tiempoEstimado = comuna.getTiempoEstimadoMinutos();
             }
         }
 
-        // Cálculo de costo de envío según umbral dinámico de la BD
-        boolean envioGratis = subtotal.compareTo(umbralEnvioGratis) >= 0;
-        BigDecimal costoEnvio;
-        BigDecimal faltanteParaEnvioGratis;
-
-        if (envioGratis) {
+        // Evaluación de umbral de envío gratis
+        if (subtotal.compareTo(umbralEnvioGratis) >= 0) {
             costoEnvio = BigDecimal.ZERO;
-            faltanteParaEnvioGratis = BigDecimal.ZERO;
+            envioGratis = true;
         } else {
-            costoEnvio = costoEnvioBase.add(costoAdicionalComuna);
             faltanteParaEnvioGratis = umbralEnvioGratis.subtract(subtotal);
             if (faltanteParaEnvioGratis.compareTo(BigDecimal.ZERO) < 0) {
                 faltanteParaEnvioGratis = BigDecimal.ZERO;
@@ -104,7 +112,7 @@ public class MotorComercialService {
         String codigoAplicado = null;
         String mensajeCupon = null;
 
-        if (request.getCodigoCupon() != null && !request.getCodigoCupon().trim().isBlank()) {
+        if (request != null && request.getCodigoCupon() != null && !request.getCodigoCupon().trim().isBlank()) {
             String codigo = request.getCodigoCupon().trim().toUpperCase();
             Optional<Cupon> cuponOpt = cuponRepository.findByCodigoIgnoreCaseAndActivoTrue(codigo);
 
@@ -114,12 +122,17 @@ public class MotorComercialService {
 
                 if (!vigente) {
                     mensajeCupon = "El cupón ha expirado";
+                } else if (cupon.getUsosMaximos() != null && cupon.getUsosActuales() >= cupon.getUsosMaximos()) {
+                    mensajeCupon = "El cupón ha alcanzado el límite de usos permitidos";
                 } else if (subtotal.compareTo(cupon.getMontoMinimo()) < 0) {
                     mensajeCupon = "El monto mínimo para aplicar este cupón es $" + cupon.getMontoMinimo().intValue();
                 } else {
                     if ("PORCENTAJE".equalsIgnoreCase(cupon.getTipoDescuento())) {
                         descuentoCupon = subtotal.multiply(cupon.getValor())
                                 .divide(new BigDecimal("100"), 0, RoundingMode.HALF_UP);
+                        if (cupon.getDescuentoMaximo() != null && descuentoCupon.compareTo(cupon.getDescuentoMaximo()) > 0) {
+                            descuentoCupon = cupon.getDescuentoMaximo();
+                        }
                     } else {
                         descuentoCupon = cupon.getValor();
                     }
@@ -187,11 +200,12 @@ public class MotorComercialService {
 
     @Transactional
     public ConfiguracionComercial actualizarConfiguracion(String clave, BigDecimal valor) {
-        ConfiguracionComercial cfg = configRepository.findByClaveIgnoreCase(clave)
-                .orElseGet(() -> new ConfiguracionComercial(null, clave, valor, "Configuración " + clave));
+        String normalized = normalizarClave(clave);
+        ConfiguracionComercial cfg = configRepository.findByClaveIgnoreCase(normalized)
+                .or(() -> configRepository.findByClaveIgnoreCase(clave))
+                .orElseGet(() -> new ConfiguracionComercial(null, normalized, valor, "Configuración " + normalized));
         cfg.setValor(valor);
         cfg.setActualizadoEl(LocalDateTime.now());
         return configRepository.save(cfg);
     }
 }
-

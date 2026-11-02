@@ -10,17 +10,15 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 
 /**
  * InternalController — Endpoint interno de comunicación entre microservicios (BFF -> usuario-service).
  * No expuesto directamente a clientes externos/navegador.
- * Protegido mediante cabecera X-Internal-Service-Key.
+ * Protegido estrictamente mediante cabecera X-Internal-Service-Key (comparación tiempo constante).
  */
 @RestController
 @RequestMapping("/api/internal")
@@ -38,11 +36,20 @@ public class InternalController {
         this.internalKey = internalKey;
     }
 
+    private boolean isAuthorizedInternal(HttpServletRequest request) {
+        String clientKey = request.getHeader("X-Internal-Service-Key");
+        if (clientKey == null || internalKey == null || internalKey.isBlank()) {
+            return false;
+        }
+        return MessageDigest.isEqual(
+                internalKey.getBytes(StandardCharsets.UTF_8),
+                clientKey.getBytes(StandardCharsets.UTF_8)
+        );
+    }
+
     @PostMapping("/entra-sync")
     public ResponseEntity<?> syncInternal(HttpServletRequest request, @RequestBody EntraSyncRequest dto) {
-        String clientKey = request.getHeader("X-Internal-Service-Key");
-
-        if (clientKey == null || !clientKey.equals(internalKey)) {
+        if (!isAuthorizedInternal(request)) {
             log.warn("[USER-SERVICE][INTERNAL] Unauthorized internal sync attempt. Invalid/missing X-Internal-Service-Key");
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(ApiResponse.error("Acceso denegado: Clave de servicio interno inválida o faltante"));
@@ -51,16 +58,14 @@ public class InternalController {
         log.info("[USER-SERVICE][INTERNAL] Internal sync request verified for email: {} with role: {}", dto.getEmail(), dto.getRol());
 
         UsuarioResponseDTO response = usuarioService.sincronizarUsuarioExterno(
-                dto.getEmail(), dto.getNombre(), dto.getRol());
+                dto.getEmail(), dto.getNombre(), dto.getRol(), dto.isRolFromAppRole());
 
         return ResponseEntity.ok(ApiResponse.ok("Usuario sincronizado internamente", response));
     }
 
     @GetMapping("/usuario/by-email")
     public ResponseEntity<?> obtenerPorEmailInternal(HttpServletRequest request, @RequestParam String email) {
-        String clientKey = request.getHeader("X-Internal-Service-Key");
-
-        if (clientKey == null || !clientKey.equals(internalKey)) {
+        if (!isAuthorizedInternal(request)) {
             log.warn("[USER-SERVICE][INTERNAL] Unauthorized by-email lookup attempt. Invalid/missing X-Internal-Service-Key");
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(ApiResponse.error("Acceso denegado: Clave de servicio interno inválida o faltante"));

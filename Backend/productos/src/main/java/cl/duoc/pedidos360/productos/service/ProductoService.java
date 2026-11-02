@@ -28,23 +28,26 @@ public class ProductoService {
     private final ProductoRepository productoRepository;
     private final FavoritoRepository favoritoRepository;
     private final PromocionRepository promocionRepository;
+    private final cl.duoc.pedidos360.productos.repository.StockReservaRepository stockReservaRepository;
     private final org.springframework.core.env.Environment environment;
 
     @org.springframework.beans.factory.annotation.Autowired
     public ProductoService(ProductoRepository productoRepository,
                            FavoritoRepository favoritoRepository,
                            PromocionRepository promocionRepository,
+                           cl.duoc.pedidos360.productos.repository.StockReservaRepository stockReservaRepository,
                            org.springframework.core.env.Environment environment) {
         this.productoRepository = productoRepository;
         this.favoritoRepository = favoritoRepository;
         this.promocionRepository = promocionRepository;
+        this.stockReservaRepository = stockReservaRepository;
         this.environment = environment;
     }
 
     public ProductoService(ProductoRepository productoRepository,
                            FavoritoRepository favoritoRepository,
                            PromocionRepository promocionRepository) {
-        this(productoRepository, favoritoRepository, promocionRepository, null);
+        this(productoRepository, favoritoRepository, promocionRepository, null, null);
     }
 
     @Transactional
@@ -285,5 +288,99 @@ public class ProductoService {
     @Transactional(readOnly = true)
     public List<Promocion> obtenerPromociones() {
         return promocionRepository.findByActivaTrue();
+    }
+
+    // ─── RESERVAS ATÓMICAS DE STOCK ────────────────────────────
+
+    @Transactional
+    public cl.duoc.pedidos360.productos.entity.StockReserva reservarStock(cl.duoc.pedidos360.productos.dto.ReservaStockRequestDTO request) {
+        if (stockReservaRepository == null) {
+            throw new IllegalStateException("Repositorio de reservas no configurado");
+        }
+
+        // Idempotencia: si la reserva ya existe, retornarla
+        java.util.Optional<cl.duoc.pedidos360.productos.entity.StockReserva> existing =
+                stockReservaRepository.findByReservaId(request.getReservaId());
+        if (existing.isPresent()) {
+            log.info("[PRODUCTOS-STOCK] Reserva {} ya existente (idempotencia).", request.getReservaId());
+            return existing.get();
+        }
+
+        if (request.getItems() == null || request.getItems().isEmpty()) {
+            throw new IllegalArgumentException("La solicitud de reserva debe contener al menos un producto.");
+        }
+
+        StringBuilder itemsJson = new StringBuilder("[");
+        for (int i = 0; i < request.getItems().size(); i++) {
+            cl.duoc.pedidos360.productos.dto.ItemReservaDTO item = request.getItems().get(i);
+            int qty = (item.getCantidad() != null && item.getCantidad() > 0) ? item.getCantidad() : 1;
+            int decremented = productoRepository.decrementarStockSiDisponible(item.getProductoId(), qty);
+            if (decremented == 0) {
+                log.warn("[PRODUCTOS-STOCK] Stock insuficiente para productoId={} solicitado={}", item.getProductoId(), qty);
+                throw new IllegalStateException("Stock insuficiente para el producto ID: " + item.getProductoId());
+            }
+            if (i > 0) itemsJson.append(",");
+            itemsJson.append(String.format("{\"productoId\":%d,\"cantidad\":%d}", item.getProductoId(), qty));
+        }
+        itemsJson.append("]");
+
+        cl.duoc.pedidos360.productos.entity.StockReserva reserva =
+                new cl.duoc.pedidos360.productos.entity.StockReserva(
+                        request.getReservaId(),
+                        request.getPedidoId(),
+                        "RESERVADO",
+                        itemsJson.toString(),
+                        java.time.LocalDateTime.now().plusMinutes(30)
+                );
+
+        cl.duoc.pedidos360.productos.entity.StockReserva guardada = stockReservaRepository.save(reserva);
+        log.info("[PRODUCTOS-STOCK] Reserva atómica {} completada exitosamente.", request.getReservaId());
+        return guardada;
+    }
+
+    @Transactional
+    public void liberarReserva(String reservaId) {
+        if (stockReservaRepository == null) return;
+
+        java.util.Optional<cl.duoc.pedidos360.productos.entity.StockReserva> existing =
+                stockReservaRepository.findByReservaId(reservaId);
+        if (existing.isEmpty()) {
+            log.warn("[PRODUCTOS-STOCK] Solicitud de liberación para reserva {} no encontrada.", reservaId);
+            return;
+        }
+
+        cl.duoc.pedidos360.productos.entity.StockReserva reserva = existing.get();
+        if (!"RESERVADO".equalsIgnoreCase(reserva.getEstado())) {
+            log.info("[PRODUCTOS-STOCK] Reserva {} ya se encuentra en estado {}. No requiere liberación.",
+                    reservaId, reserva.getEstado());
+            return;
+        }
+
+        // Parsear items y reponer stock
+        String json = reserva.getItemsJson();
+        if (json != null && json.startsWith("[") && json.endsWith("]")) {
+            String content = json.substring(1, json.length() - 1);
+            String[] items = content.split("},\\{");
+            for (String raw : items) {
+                String clean = raw.replace("{", "").replace("}", "");
+                String[] parts = clean.split(",");
+                Long prodId = null;
+                Integer qty = null;
+                for (String p : parts) {
+                    if (p.contains("productoId")) {
+                        prodId = Long.parseLong(p.split(":")[1].trim());
+                    } else if (p.contains("cantidad")) {
+                        qty = Integer.parseInt(p.split(":")[1].trim());
+                    }
+                }
+                if (prodId != null && qty != null && qty > 0) {
+                    productoRepository.incrementarStock(prodId, qty);
+                }
+            }
+        }
+
+        reserva.setEstado("LIBERADO");
+        stockReservaRepository.save(reserva);
+        log.info("[PRODUCTOS-STOCK] Reserva {} liberada exitosamente y stock repuesto.", reservaId);
     }
 }

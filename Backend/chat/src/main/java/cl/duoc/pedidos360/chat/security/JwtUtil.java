@@ -86,6 +86,20 @@ public class JwtUtil {
         }
     }
 
+        public Long extractUserId(String token) {
+        try {
+            Claims claims = parseAndVerify(token);
+            if (claims == null) return null;
+            Object uid = claims.get("uid");
+            if (uid instanceof Number) {
+                return ((Number) uid).longValue();
+            }
+            return null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     public String extractRole(String token) {
         try {
             Claims claims = parseAndVerify(token);
@@ -213,3 +227,4 @@ public class JwtUtil {
         }
     }
 }
+

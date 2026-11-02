@@ -1,42 +1,133 @@
-# Caddyfile — HTTPS automático (Let's Encrypt) + proxy reverso.
+# Caddyfile — HTTPS automático (Let's Encrypt) + proxy reverso seguro.
 # PUBLIC_DOMAIN se pasa como variable de entorno, ej: 34-207-191-208.nip.io
 
-{$PUBLIC_DOMAIN} {
+{$PUBLIC_DOMAIN:localhost} {
     encode zstd gzip
+
+    # Cabeceras de seguridad globales
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+        -Server
+    }
+
+    # Bloqueo estricto de endpoints internos y de diagnóstico para clientes externos
+    @blocked_internal {
+        path /actuator/*
+        path /api/internal/*
+        path /api/*/internal/*
+        path /api/admin/outbox/*
+    }
+    respond @blocked_internal 403 {
+        body "{\"success\":false,\"message\":\"Acceso denegado: Endpoint administrativo interno restringido.\"}"
+        close
+    }
+
+    # Bloqueo del endpoint de bootstrap en producción
+    @blocked_bootstrap {
+        path /api/auth/bootstrap-admin*
+    }
+    respond @blocked_bootstrap 404
 
     # BFF (API Manager) — valida JWT de Microsoft Entra ID
     handle /api/bff/* {
-        reverse_proxy bff:8090
+        reverse_proxy bff:8090 {
+            header_up -X-Internal-Service-Key
+            header_up -X-User-Id
+            header_up -X-User-Email
+            header_up -X-User-Role
+            header_up -X-User-Roles
+            header_up -X-User-Sub
+        }
     }
 
     # Login/registro de cuenta BD y auth interno
     handle /api/auth/* {
-        reverse_proxy usuario:8081
+        reverse_proxy usuario:8081 {
+            header_up -X-Internal-Service-Key
+            header_up -X-User-Id
+            header_up -X-User-Email
+            header_up -X-User-Role
+            header_up -X-User-Roles
+            header_up -X-User-Sub
+        }
     }
     handle /api/usuario/* {
-        reverse_proxy usuario:8081
+        reverse_proxy usuario:8081 {
+            header_up -X-Internal-Service-Key
+            header_up -X-User-Id
+            header_up -X-User-Email
+            header_up -X-User-Role
+            header_up -X-User-Roles
+            header_up -X-User-Sub
+        }
     }
 
     # Microservicios directos (compatibilidad con login de cuenta BD)
     handle /api/productos/* {
-        reverse_proxy productos:8085
+        reverse_proxy productos:8085 {
+            header_up -X-Internal-Service-Key
+            header_up -X-User-Id
+            header_up -X-User-Email
+            header_up -X-User-Role
+            header_up -X-User-Roles
+            header_up -X-User-Sub
+        }
     }
     handle /api/pedidos/* {
-        reverse_proxy pedidos:8082
+        reverse_proxy pedidos:8082 {
+            header_up -X-Internal-Service-Key
+            header_up -X-User-Id
+            header_up -X-User-Email
+            header_up -X-User-Role
+            header_up -X-User-Roles
+            header_up -X-User-Sub
+        }
     }
     handle /api/carrito/* {
-        reverse_proxy carrito:8083
+        reverse_proxy carrito:8083 {
+            header_up -X-Internal-Service-Key
+            header_up -X-User-Id
+            header_up -X-User-Email
+            header_up -X-User-Role
+            header_up -X-User-Roles
+            header_up -X-User-Sub
+        }
     }
     handle /api/notificacion/* {
-        reverse_proxy notificacion:8086
+        reverse_proxy notificacion:8086 {
+            header_up -X-Internal-Service-Key
+            header_up -X-User-Id
+            header_up -X-User-Email
+            header_up -X-User-Role
+            header_up -X-User-Roles
+            header_up -X-User-Sub
+        }
     }
     handle /api/analitica/* {
-        reverse_proxy analitica:8084
+        reverse_proxy analitica:8084 {
+            header_up -X-Internal-Service-Key
+            header_up -X-User-Id
+            header_up -X-User-Email
+            header_up -X-User-Role
+            header_up -X-User-Roles
+            header_up -X-User-Sub
+        }
     }
 
     # Chat Service (REST directo + WebSocket STOMP)
     handle /api/chat/* {
-        reverse_proxy chat:8091
+        reverse_proxy chat:8091 {
+            header_up -X-Internal-Service-Key
+            header_up -X-User-Id
+            header_up -X-User-Email
+            header_up -X-User-Role
+            header_up -X-User-Roles
+            header_up -X-User-Sub
+        }
     }
     handle /ws-chat* {
         reverse_proxy chat:8091
