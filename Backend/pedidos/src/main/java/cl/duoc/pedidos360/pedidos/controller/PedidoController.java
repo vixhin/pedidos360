@@ -38,15 +38,10 @@ public class PedidoController {
     @Value("${services.usuario-url:${USUARIO_SERVICE_URL:http://localhost:8081}}")
     private String usuarioServiceUrl;
 
-    @org.springframework.beans.factory.annotation.Autowired
     public PedidoController(PedidoService pedidoService, JwtUtil jwtUtil, @org.springframework.beans.factory.annotation.Autowired(required = false) cl.duoc.pedidos360.pedidos.service.MotorComercialService motorComercialService) {
         this.pedidoService = pedidoService;
         this.jwtUtil = jwtUtil;
         this.motorComercialService = motorComercialService;
-    }
-
-    public PedidoController(PedidoService pedidoService, JwtUtil jwtUtil) {
-        this(pedidoService, jwtUtil, null);
     }
 
     @PostMapping("/cotizar")

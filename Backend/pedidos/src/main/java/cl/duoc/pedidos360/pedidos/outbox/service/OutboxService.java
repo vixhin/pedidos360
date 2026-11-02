@@ -36,11 +36,6 @@ public class OutboxService {
     @Value("${kafka.outbox.max-backoff-ms:60000}")
     private long maxBackoffMs;
 
-    public OutboxService(OutboxEventRepository outboxEventRepository) {
-        this(outboxEventRepository, null);
-    }
-
-    @Autowired
     public OutboxService(OutboxEventRepository outboxEventRepository,
                          @Autowired(required = false) MeterRegistry meterRegistry) {
         this.outboxEventRepository = outboxEventRepository;

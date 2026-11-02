@@ -48,6 +48,10 @@ public class UsuarioService {
     @Value("${admin.bootstrap.enabled:false}")
     private boolean bootstrapEnabled;
 
+    public void setBootstrapEnabled(boolean bootstrapEnabled) {
+        this.bootstrapEnabled = bootstrapEnabled;
+    }
+
     @Autowired
     public UsuarioService(UsuarioRepository usuarioRepository,
                           PasswordEncoder passwordEncoder,
@@ -65,14 +69,6 @@ public class UsuarioService {
         this.turnstileService = turnstileService;
         this.loginAttemptService = loginAttemptService;
         this.sessionService = sessionService;
-    }
-
-    public UsuarioService(UsuarioRepository usuarioRepository,
-                          PasswordEncoder passwordEncoder,
-                          JwtUtil jwtUtil,
-                          RabbitTemplate rabbitTemplate,
-                          org.springframework.core.env.Environment environment) {
-        this(usuarioRepository, passwordEncoder, jwtUtil, rabbitTemplate, environment, null, null, null);
     }
 
     @Transactional

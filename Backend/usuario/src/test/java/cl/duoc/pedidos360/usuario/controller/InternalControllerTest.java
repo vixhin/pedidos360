@@ -64,7 +64,7 @@ class InternalControllerTest {
         EntraSyncRequest dto = new EntraSyncRequest("admin@pedidos360.cl", "Admin User", "ADMIN");
 
         UsuarioResponseDTO mockResponse = new UsuarioResponseDTO(10L, "Admin User", "admin@pedidos360.cl", Rol.ADMIN, null, null);
-        when(usuarioService.sincronizarUsuarioExterno(anyString(), anyString(), anyString())).thenReturn(mockResponse);
+        when(usuarioService.sincronizarUsuarioExterno(anyString(), anyString(), anyString(), org.mockito.ArgumentMatchers.anyBoolean())).thenReturn(mockResponse);
 
         ResponseEntity<?> response = internalController.syncInternal(request, dto);
 

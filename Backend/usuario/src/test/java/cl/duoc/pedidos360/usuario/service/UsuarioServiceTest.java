@@ -47,6 +47,9 @@ class UsuarioServiceTest {
     @Mock
     private RabbitTemplate rabbitTemplate;
 
+    @Mock
+    private org.springframework.core.env.Environment environment;
+
     @InjectMocks
     private UsuarioService usuarioService;
 
@@ -63,7 +66,7 @@ class UsuarioServiceTest {
         AuthRequest request = new AuthRequest("test@pedidos360.cl", "password123");
         when(usuarioRepository.findByEmail("test@pedidos360.cl")).thenReturn(Optional.of(mockUsuario));
         when(passwordEncoder.matches("password123", "encoded_password")).thenReturn(true);
-        when(jwtUtil.generateToken("test@pedidos360.cl", Rol.CLIENTE)).thenReturn("fake-jwt-token");
+        when(jwtUtil.generateToken(eq(1L), eq("test@pedidos360.cl"), eq(Rol.CLIENTE), anyString())).thenReturn("fake-jwt-token");
 
         AuthResponse response = usuarioService.autenticar(request);
 
@@ -105,7 +108,7 @@ class UsuarioServiceTest {
         RuntimeException exception = assertThrows(RuntimeException.class,
                 () -> usuarioService.autenticar(request));
 
-        assertThat(exception.getMessage()).contains("Contraseña incorrecta");
+        assertThat(exception.getMessage()).contains("Credenciales inválidas");
         verify(rabbitTemplate).convertAndSend(
                 eq(RabbitMQConfig.EXCHANGE_EVENTS),
                 eq(RabbitMQConfig.ROUTING_KEY_LOGIN_FALLIDO),
@@ -178,9 +181,9 @@ class UsuarioServiceTest {
     @Test
     @DisplayName("actualizarUsuario - modifica datos correctamente")
     void testActualizarUsuarioExito() {
-        UsuarioCreateDTO dto = new UsuarioCreateDTO("Updated Name", "test@pedidos360.cl", "newpass", Rol.VENDEDOR);
+        UsuarioCreateDTO dto = new UsuarioCreateDTO("Updated Name", "test@pedidos360.cl", "newpassword123", Rol.VENDEDOR);
         when(usuarioRepository.findById(1L)).thenReturn(Optional.of(mockUsuario));
-        when(passwordEncoder.encode("newpass")).thenReturn("encoded_newpass");
+        when(passwordEncoder.encode("newpassword123")).thenReturn("encoded_newpass");
         when(usuarioRepository.save(any(Usuario.class))).thenReturn(mockUsuario);
 
         UsuarioResponseDTO response = usuarioService.actualizarUsuario(1L, dto);
@@ -211,7 +214,11 @@ class UsuarioServiceTest {
     @Test
     @DisplayName("bootstrapAdmin - éxito al crear el primer administrador")
     void testBootstrapAdminExito() {
-        AdminBootstrapDTO dto = new AdminBootstrapDTO("Admin Inicial", "admin@pedidos360.cl", "SuperPass1234!", "+56911112222", null);
+        usuarioService.setBootstrapEnabled(true);
+        String token = "SuperSecureBootstrapToken123456789012";
+        when(environment.getProperty("ADMIN_BOOTSTRAP_TOKEN")).thenReturn(token);
+
+        AdminBootstrapDTO dto = new AdminBootstrapDTO("Admin Inicial", "admin@pedidos360.cl", "SuperPass1234!", "+56911112222", token);
         when(usuarioRepository.countByRol(Rol.ADMIN)).thenReturn(0L);
         when(usuarioRepository.findByEmail("admin@pedidos360.cl")).thenReturn(Optional.empty());
         when(passwordEncoder.encode("SuperPass1234!")).thenReturn("encoded_admin_pass");
@@ -229,7 +236,11 @@ class UsuarioServiceTest {
     @Test
     @DisplayName("bootstrapAdmin - rechaza si ya existe un administrador")
     void testBootstrapAdminRechazaSiYaExiste() {
-        AdminBootstrapDTO dto = new AdminBootstrapDTO("Admin 2", "admin2@pedidos360.cl", "SuperPass1234!", "+56911112222", null);
+        usuarioService.setBootstrapEnabled(true);
+        String token = "SuperSecureBootstrapToken123456789012";
+        when(environment.getProperty("ADMIN_BOOTSTRAP_TOKEN")).thenReturn(token);
+
+        AdminBootstrapDTO dto = new AdminBootstrapDTO("Admin 2", "admin2@pedidos360.cl", "SuperPass1234!", "+56911112222", token);
         when(usuarioRepository.countByRol(Rol.ADMIN)).thenReturn(1L);
 
         assertThrows(IllegalStateException.class, () -> usuarioService.bootstrapAdmin(dto));

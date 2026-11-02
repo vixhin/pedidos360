@@ -53,11 +53,6 @@ public class AuthController {
         this.jwtUtil = jwtUtil;
     }
 
-    // Constructor de retrocompatibilidad para tests existentes
-    public AuthController(UsuarioService usuarioService) {
-        this(usuarioService, null, null);
-    }
-
     @PostMapping("/bootstrap-admin")
     public ResponseEntity<ApiResponse<UsuarioResponseDTO>> bootstrapAdmin(@Valid @RequestBody AdminBootstrapDTO req) {
         UsuarioResponseDTO admin = usuarioService.bootstrapAdmin(req);

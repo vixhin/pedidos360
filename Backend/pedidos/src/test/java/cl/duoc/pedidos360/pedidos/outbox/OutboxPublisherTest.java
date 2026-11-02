@@ -38,7 +38,7 @@ class OutboxPublisherTest {
 
     @BeforeEach
     void setUp() {
-        outboxPublisher = new OutboxPublisher(outboxService, kafkaTemplate);
+        outboxPublisher = new OutboxPublisher(outboxService, kafkaTemplate, null);
         ReflectionTestUtils.setField(outboxPublisher, "kafkaEnabled", true);
         ReflectionTestUtils.setField(outboxPublisher, "timeoutSeconds", 5);
         ReflectionTestUtils.setField(outboxPublisher, "batchSize", 50);

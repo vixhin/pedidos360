@@ -2,6 +2,7 @@ package cl.duoc.pedidos360.usuario.security;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
 import org.springframework.http.*;
@@ -39,16 +40,15 @@ public class TurnstileVerificationService {
     @Value("${turnstile.verify-action:false}")
     private boolean verifyAction;
 
-    public TurnstileVerificationService(Environment environment) {
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(4000);
-        factory.setReadTimeout(4000);
-        this.restTemplate = new RestTemplate(factory);
-        this.environment = environment;
-    }
-
-    public TurnstileVerificationService(RestTemplate restTemplate, Environment environment) {
-        this.restTemplate = restTemplate;
+    public TurnstileVerificationService(@Autowired(required = false) RestTemplate restTemplate, Environment environment) {
+        if (restTemplate != null) {
+            this.restTemplate = restTemplate;
+        } else {
+            SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+            factory.setConnectTimeout(4000);
+            factory.setReadTimeout(4000);
+            this.restTemplate = new RestTemplate(factory);
+        }
         this.environment = environment;
     }
 

@@ -14,7 +14,7 @@ class JwtUtilTest {
 
     @BeforeEach
     void setUp() {
-        jwtUtil = new JwtUtil("pedidos360_secret_key_for_jwt_token_generation_2026_super_secure", 86400000L);
+        jwtUtil = new JwtUtil("pedidos360_secret_key_for_jwt_token_generation_2026_super_secure", "PT24H");
     }
 
     @Test
@@ -37,7 +37,7 @@ class JwtUtilTest {
     @Test
     @DisplayName("constructor - lanza excepción si secret es nulo o menor a 32 caracteres")
     void testSecretInseguroLanzaExcepcion() {
-        assertThrows(IllegalStateException.class, () -> new JwtUtil(null, 86400000L));
-        assertThrows(IllegalStateException.class, () -> new JwtUtil("short-secret", 86400000L));
+        assertThrows(IllegalStateException.class, () -> new JwtUtil(null, "PT24H"));
+        assertThrows(IllegalStateException.class, () -> new JwtUtil("short-secret", "PT24H"));
     }
 }

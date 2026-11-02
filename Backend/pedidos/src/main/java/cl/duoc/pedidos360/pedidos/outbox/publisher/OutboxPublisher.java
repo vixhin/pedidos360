@@ -45,12 +45,6 @@ public class OutboxPublisher {
     private final MeterRegistry meterRegistry;
 
     public OutboxPublisher(OutboxService outboxService,
-                           @Autowired(required = false) KafkaTemplate<String, String> kafkaTemplate) {
-        this(outboxService, kafkaTemplate, null);
-    }
-
-    @Autowired
-    public OutboxPublisher(OutboxService outboxService,
                            @Autowired(required = false) KafkaTemplate<String, String> kafkaTemplate,
                            @Autowired(required = false) MeterRegistry meterRegistry) {
         this.outboxService = outboxService;

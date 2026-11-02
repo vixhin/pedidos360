@@ -30,14 +30,6 @@ public class JwtUtil {
         this.expirationMs = parseExpirationMs(expirationConfig);
     }
 
-    public JwtUtil(String secret, long expirationMs) {
-        if (secret == null || secret.trim().length() < 32) {
-            throw new IllegalStateException("La propiedad 'jwt.secret' (o variable de entorno JWT_SECRET) es obligatoria y debe tener al menos 32 caracteres para garantizar la seguridad criptográfica (HMAC-SHA256).");
-        }
-        this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
-        this.expirationMs = expirationMs;
-    }
-
     private long parseExpirationMs(String config) {
         try {
             if (config.startsWith("PT") || config.startsWith("P")) {

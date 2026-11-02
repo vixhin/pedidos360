@@ -31,23 +31,16 @@ public class ProductoService {
     private final cl.duoc.pedidos360.productos.repository.StockReservaRepository stockReservaRepository;
     private final org.springframework.core.env.Environment environment;
 
-    @org.springframework.beans.factory.annotation.Autowired
     public ProductoService(ProductoRepository productoRepository,
                            FavoritoRepository favoritoRepository,
                            PromocionRepository promocionRepository,
                            cl.duoc.pedidos360.productos.repository.StockReservaRepository stockReservaRepository,
-                           org.springframework.core.env.Environment environment) {
+                           @org.springframework.beans.factory.annotation.Autowired(required = false) org.springframework.core.env.Environment environment) {
         this.productoRepository = productoRepository;
         this.favoritoRepository = favoritoRepository;
         this.promocionRepository = promocionRepository;
         this.stockReservaRepository = stockReservaRepository;
         this.environment = environment;
-    }
-
-    public ProductoService(ProductoRepository productoRepository,
-                           FavoritoRepository favoritoRepository,
-                           PromocionRepository promocionRepository) {
-        this(productoRepository, favoritoRepository, promocionRepository, null, null);
     }
 
     @Transactional
