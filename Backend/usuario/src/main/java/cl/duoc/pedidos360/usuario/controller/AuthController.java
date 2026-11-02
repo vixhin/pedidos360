@@ -40,7 +40,7 @@ public class AuthController {
     private String cookieDomain;
 
     @Value("${auth.refresh-token-ttl:PT8H}")
-    private String refreshTokenTtlStr;
+    private String refreshTokenTtlStr = "PT8H";
 
     @Autowired(required = false)
     private HttpServletRequest request;
@@ -98,7 +98,7 @@ public class AuthController {
 
         // 2. Cookie de rotación HttpOnly con Refresh Token
         if (rawRefreshToken != null) {
-            Duration refreshDuration = Duration.parse(refreshTokenTtlStr);
+            Duration refreshDuration = Duration.parse(refreshTokenTtlStr != null ? refreshTokenTtlStr : "PT8H");
             ResponseCookie refreshCookie = buildCookie("p360_refresh", rawRefreshToken, "/api/auth",
                     refreshDuration, true, "Strict");
             headers.add(HttpHeaders.SET_COOKIE, refreshCookie.toString());
@@ -166,7 +166,7 @@ public class AuthController {
         long accessDurationMs = jwtUtil.getExpirationMs();
         long expiresAtTimestamp = System.currentTimeMillis() + accessDurationMs;
         String nuevoCsrf = SessionService.generarTokenAleatorio(24);
-        Duration refreshDuration = Duration.parse(refreshTokenTtlStr);
+        Duration refreshDuration = Duration.parse(refreshTokenTtlStr != null ? refreshTokenTtlStr : "PT8H");
 
         HttpHeaders headers = new HttpHeaders();
         headers.add(HttpHeaders.SET_COOKIE, buildCookie("p360_session", nuevoJwt, "/", Duration.ofMillis(accessDurationMs), true, "Lax").toString());
