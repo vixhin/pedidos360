@@ -1,78 +1,117 @@
-# Pedidos360 — Sistema de Gestión de Pedidos & Repartidor con Chat en Tiempo Real
+# Pedidos360 — Plataforma Cloud Native de E-Commerce, Logística, Streaming y Analítica
 
-Plataforma e-commerce y logística en tiempo real para gestión de pedidos, productos, carrito, analítica, **portal de repartidor** y **chat en tiempo real (WebSocket/STOMP)**, con autenticación híbrida (**Microsoft Entra ID / Azure AD** y **JWT con cuenta local en BD**), arquitectura **BFF (Backend for Frontend)** sobre microservicios **Spring Boot 4 / Java 21**, eventos asíncronos con **RabbitMQ**, administración dinámica y resiliente de topología con persistencia en **PostgreSQL 16** y despliegue en **AWS EC2** con **Docker Compose**, **Caddy** (HTTPS automático) e infraestructura como código con **Terraform**.
-
-**Frontend:** Angular 21 + MSAL · **Backend:** 7 microservicios + BFF · **Broker:** RabbitMQ 3.13 (ACK/NACK manual, DLQ, API REST) · **BD:** PostgreSQL 16 (una base por servicio, migraciones con Flyway)
+Plataforma integral de comercio electrónico y logística de última milla en tiempo real con arquitectura de microservicios sobre **Spring Boot / Java 21**, frontend moderno en **Angular 21**, autenticación híbrida (**Microsoft Entra ID / Azure AD** y **JWT local en base de datos**), protección anti-bot con **Cloudflare Turnstile**, mensajería transaccional asíncrona con **RabbitMQ (DLX/DLQ y administración dinámica de topología)**, procesamiento de eventos en streaming con **Apache Kafka (KRaft / ZooKeeper con Outbox Pattern y Dead Letter Topic)**, persistencia aislada en **PostgreSQL 16** con versionamiento **Flyway**, proxy inverso seguro con **Caddy (HTTPS automático)** e infraestructura como código con **Terraform en AWS**.
 
 ---
 
 ## Contenido
 
-1. [Arquitectura general](#arquitectura-general-del-sistema)
-2. [Estructura del repositorio](#estructura-del-repositorio)
-3. [Autenticación híbrida y enrutamiento](#autenticacion-hibrida-y-enrutamiento-de-trafico)
-4. [Componentes principales](#funcionamiento-interno-por-componente)
-5. [Eventos asíncronos y administración RabbitMQ](#eventos-asincronos-y-administracion-de-rabbitmq)
-6. [Contenedores y puertos](#microservicios-y-contenedores-docker-compose)
-7. [Roles y credenciales de demo](#roles-del-sistema-y-permisos)
-8. [Variables de entorno](#variables-de-entorno)
-9. [Migraciones de base de datos](#migraciones-de-base-de-datos-flyway)
-10. [Ejecución local](#ejecucion-local-rapida)
-11. [Infraestructura como código (Terraform)](#infraestructura-como-codigo-terraform-en-aws)
-12. [Despliegue en AWS EC2](#despliegue-en-aws-ec2)
-13. [Pruebas y calidad](#pruebas-y-calidad)
-14. [Solución de problemas](#solucion-de-problemas)
-15. [CI/CD](#integracion-continua-github-actions)
-16. [Seguridad: pendientes conocidos](#seguridad-pendientes-conocidos)
-17. [Mejoras pendientes](#mejoras-pendientes)
+1. [Arquitectura General del Sistema](#arquitectura-general-del-sistema)
+2. [Arquitectura de Uso y Flujos por Rol](#arquitectura-de-uso-y-flujos-por-rol)
+3. [Integración de Mensajería y Streaming (RabbitMQ + Kafka)](#integracion-de-mensajeria-y-streaming-rabbitmq--kafka)
+4. [Estructura del Repositorio](#estructura-del-repositorio)
+5. [Autenticación Híbrida y Seguridad](#autenticacion-hibrida-y-seguridad)
+6. [Microservicios y Puertos](#microservicios-y-puertos)
+7. [APIs de Administración (RabbitMQ y Kafka)](#apis-de-administracion-rabbitmq-y-kafka)
+8. [Opciones de Ejecución con Docker Compose](#opciones-de-ejecucion-con-docker-compose)
+9. [Scripts de Infraestructura y Gestión](#scripts-de-infraestructura-y-gestion)
+10. [Variables de Entorno y Manejo Seguro de Secretos](#variables-de-entorno-y-manejo-seguro-de-secretos)
+11. [Infraestructura como Código (Terraform) y Despliegue en AWS](#infraestructura-como-codigo-terraform-y-despliegue-en-aws)
+12. [Pruebas y Calidad de Código](#pruebas-y-calidad-de-codigo)
 
 ---
 
 ## Arquitectura General del Sistema
 
-```
-                                Terraform (IaC)
-                                       │
-            ┌──────────────────────────┼──────────────────────────┐
-            │                          │                          │
-            v                          v                          v
-     AWS Networking & SG         API Gateway & EIP          EC2 Instance
-   (VPC, Subnets, SG 80/443/22)  (ANY /api/bff/*)        (Docker Engine)
+El sistema implementa el patrón **BFF (Backend for Frontend)** y **API Gateway** con aislamiento estricto de redes internas:
 
-                                   INTERNET
-                                      │
-                         ┌────────────┴────────────┐
-                         │                         │
-                   Microsoft REST               WebSocket /
-                    (Entra ID)                  login local
-                         │                         │
-                         v                         │
-                  AWS API Gateway                  │
-                (ANY /api/bff/*)                   │
-                         │                         │
-                         v                         v
-                  Elastic IP / Caddy <─────────────┘
-               (https://*.sslip.io)
-                         │
-                ┌────────┴─────────┐
-                │                  │
-           Angular/nginx          BFF :8090
-                                   │
-          ┌────────────────┬───────┼────────┬───────────────┬───────────────┐
-          │                │       │        │               │               │
-        usuario         pedidos  carrito productos      analitica    notificacion
-        :8081            :8082    :8083    :8085          :8084          :8086
-        (Admin Rabbit)     │
-          │             chat :8091 (/ws-chat)
-          │                │
-          ┌────────────────┴───────────────┐
-          │                                │
-     PostgreSQL 16                      RabbitMQ
-   (7 DBs Flyway)               (Manual ACK/NACK, DLQ,
-                                 Topology Sync & REST)
+```
+                                  USUARIO / CLIENTE
+                                          │
+                        ┌─────────────────┴─────────────────┐
+                        │                                   │
+                   (Navegador)                         (Navegador)
+               Microsoft Entra ID                  Login Local + Captcha
+             (OAuth2 / PKCE Tokens)               (Cloudflare Turnstile)
+                        │                                   │
+                        └─────────────────┬─────────────────┘
+                                          │  HTTPS / WSS
+                                          v
+                                    CADDY PROXY
+                         (TLS Automático / Reverse Proxy)
+                                          │
+                    ┌─────────────────────┴─────────────────────┐
+                    │                                           │
+                    v                                           v
+         Angular 21 Frontend (SPA)                     BFF / API Gateway :8090
+       (Portal Cliente, Vendedor,                     (Validador Resource Server
+        Repartidor, Analítica, Staff)                  de Entra ID, Filtros RBAC)
+                                                                │
+     ┌──────────────────┬─────────────────┬─────────────────────┼─────────────────────┬──────────────────┐
+     │                  │                 │                     │                     │                  │
+     v                  v                 v                     v                     v                  v
+usuario :8081     pedidos :8082     carrito :8083        productos :8085        analitica :8084     notificacion :8086
+ (RBAC, Sesiones,  (Outbox Pattern,  (Expiración,          (Stock, Reservas,     (Kafka Consumer,    (Push/Inbox,
+  Admin Rabbit)     Motor Precios)   Idempotencia)         Catálogo)             Admin Kafka)        Plantillas)
+     │                  │                 │                     │                     │                  │
+     │            chat :8091              │                     │                     │                  │
+     │            (WebSocket/STOMP)       │                     │                     │                  │
+     │                  │                 │                     │                     │                  │
+     └──────────────────┴────────┬────────┴─────────────────────┴─────────────────────┴──────────────────┘
+                                 │
+                 ┌───────────────┴───────────────┐
+                 │                               │
+                 v                               v
+          PostgreSQL 16                  RABBITMQ CLUSTER (AMQP)
+     (7 Bases de Datos Aisladas           (Eventos Operacionales,
+       con Migraciones Flyway)             ACK/NACK manual, DLX/DLQ)
+                                                 │
+                                 ┌───────────────┴───────────────┐
+                                 v                               v
+                       APACHE KAFKA CLUSTER              KAFKA UI :8089
+                     (KRaft / ZooKeeper Brokers,     (Gestión Visual Web
+                      Event Streaming, Outbox DLT)    de Brokers y Tópicos)
 ```
 
-> Dentro de la EC2 **solo Caddy publica puertos al host (80/443)**: el overlay `docker-compose.ec2.yml` elimina la publicación de puertos del resto de los contenedores (`ports: !reset []`). Los servicios se hablan por la red interna de Docker usando el nombre del servicio (p. ej. `http://usuario:8081`).
+---
+
+## Arquitectura de Uso y Flujos por Rol
+
+Pedidos360 organiza sus funcionalidades según roles y casos de negocio:
+
+```
+┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
+│     CLIENTE     │       │    VENDEDOR     │       │   REPARTIDOR    │       │  ADMINISTRADOR  │
+├─────────────────┤       ├─────────────────┤       ├─────────────────┤       ├─────────────────┤
+│• Catálogo/Stock │       │• Gestión Stock  │       │• Pedidos Libres │       │• Panel Métricas │
+│• Carrito activo │       │• Reservas Stock │       │• Autoasignación │       │• Admin RabbitMQ │
+│• Cupones/Reglas │       │• Lista Pedidos  │       │• Estado Entrega │       │• Admin Kafka    │
+│• Seguimiento    │       │• Notificaciones │       │• Chat en Vivo   │       │• Gestión Users  │
+│• Chat Repartidor│       │• Actualizaciones│       │• Historial Ruta │       │• Bootstrap Prod │
+└─────────────────┘       └─────────────────┘       └─────────────────┘       └─────────────────┘
+```
+
+### 1. Flujo de Compra y Despacho (Cliente ➔ Vendedor ➔ Repartidor)
+1. **Autenticación:** El usuario inicia sesión mediante Microsoft Entra ID o cuenta local en base de datos protegida con **Cloudflare Turnstile**.
+2. **Catálogo y Carrito:** El cliente explora productos en `productos-service`. Al agregar artículos, `carrito-service` valida propiedad e interactúa con el stock.
+3. **Cotización y Cupones:** `pedidos-service` evalúa reglas comerciales en `MotorComercialService` (tarifas comunales, umbrales de envío gratis y cupones de descuento).
+4. **Confirmación con Outbox Pattern:** Al crearse el pedido, se almacena transaccionalmente en PostgreSQL y en la tabla de Outbox. El publicador asíncrono distribuye el evento a:
+   * **RabbitMQ:** Para notificar a `carrito-service` (vaciar carrito) y `notificacion-service`.
+   * **Apache Kafka (`pedidos360.pedidos.v1`):** Para alimentar analítica en tiempo real y registro histórico de eventos.
+5. **Asignación y Entrega:** Los repartidores visualizan pedidos libres en el portal `/repartidor`. Al tomar un pedido, se habilita una sala de **Chat en Tiempo Real** mediante WebSocket/STOMP en `chat-service`.
+
+---
+
+## Integración de Mensajería y Streaming (RabbitMQ + Kafka)
+
+El diseño arquitectónico desacopla deliberadamente los propósitos de mensajería:
+
+| Característica | RabbitMQ (Event-Driven Microservices) | Apache Kafka (Event Streaming & Analytics) |
+| :--- | :--- | :--- |
+| **Propósito Principal** | Coordinación operativa síncrona/asíncrona entre microservicios de negocio. | Streaming continuo de eventos, auditoría inmutable y analítica en tiempo real. |
+| **Garantía de Entrega** | Confirmaciones manuales `basicAck` / `basicNack` con Dead Letter Exchange (`pedidos360.dlx`). | Outbox Pattern transaccional, `acks=all`, productor idempotente y Dead Letter Topic (`pedidos360.pedidos.dlt.v1`). |
+| **Retención** | Efímera (el mensaje se elimina al confirmarse el consumo). | Persistente y configurable (retención de 24h para datos y 7 días para DLT con política de limpieza). |
+| **Administración** | API REST dinámica en `usuario-service` (`/api/admin/rabbit/**`). | API REST y cliente administrativo en `analitica-service` (`/api/admin/kafka/**`) y CLI scripts. |
 
 ---
 
@@ -81,446 +120,219 @@ Plataforma e-commerce y logística en tiempo real para gestión de pedidos, prod
 ```
 pedidos360/
 ├── Backend/
-│   ├── usuario/ pedidos/ carrito/ productos/     # Microservicios Spring Boot (cada uno con su Dockerfile y mvnw)
-│   ├── analitica/ notificacion/ chat/ bff/       # (analítica, notificaciones, chat WebSocket y BFF)
-│   ├── docker-compose.yml                        # Stack completo para desarrollo local
-│   ├── docker-compose.ec2.yml                    # Overlay para EC2: Caddy + frontend, puertos privados, perfil prod
-│   ├── Caddyfile                                 # Reverse proxy HTTPS (rutas hacia cada servicio)
-│   ├── init-dbs.sql                              # Creación de las 7 bases de datos
-│   ├── .env.example / env/{dev,prod}/            # Plantillas de variables de entorno por ambiente
-│   └── README.md                                 # Guía de uso de la API por microservicio
-├── pedidos360-frontend/                          # Angular 21 + MSAL (+ pruebas e2e con Playwright en e2e/)
-├── terraform/                                    # IaC: módulos (network, security_group, ec2, elastic_ip, api_gateway) y entornos dev/prod
-├── scripts/                                      # deploy-ec2.sh / deploy-ec2.ps1 (despliegue idempotente por SSH)
-└── .github/workflows/                            # ci.yml (tests/build/validaciones) y cd.yml (terraform plan)
+│   ├── usuario/                     # Auth, JWT, RBAC, Sessions, Turnstile, RabbitMQ Admin
+│   ├── pedidos/                     # Pedidos, Outbox Pattern, Motor Comercial, Cupones
+│   ├── productos/                   # Catálogo, Stock, Reservas temporales
+│   ├── carrito/                     # Carrito de compra, expiración programada
+│   ├── notificacion/                # Notificaciones por usuario, plantillas de evento
+│   ├── analitica/                   # Métricas, consumidores Kafka/Rabbit, Kafka Admin API
+│   ├── chat/                        # WebSocket / STOMP, conversaciones pedido-repartidor
+│   ├── bff/                         # Backend for Frontend, Resource Server Entra ID
+│   ├── docker-compose.yml           # Stack estándar para desarrollo local
+│   ├── docker-compose.kafka.yml     # Overlay Kafka KRaft + Kafka UI
+│   ├── docker-compose.kafka-zookeeper.yml # Clúster Kafka con ZooKeeper y 2 brokers
+│   ├── docker-compose.rabbitmq-cluster.yml # Clúster RabbitMQ 3 nodos alta disponibilidad
+│   ├── docker-compose.ec2.yml       # Overlay para producción EC2 con Caddy HTTPS
+│   ├── Caddyfile                    # Configuración de proxy inverso y TLS automático
+│   ├── init-dbs.sql                 # Inicialización de bases de datos PostgreSQL
+│   └── .env.example                 # Plantilla de variables de entorno para desarrollo
+├── pedidos360-frontend/             # SPA en Angular 21 (vistas de cliente, staff, admin, courier)
+├── terraform/                       # Módulos Terraform (network, security_group, ec2, api_gateway)
+├── scripts/
+│   ├── kafka-admin.sh / .ps1        # Scripts de administración e inspección de tópicos y grupos Kafka
+│   ├── backup-postgres.sh           # Respaldo automatizado con compresión gzip
+│   ├── restore-postgres.sh          # Restauración controlada de base de datos
+│   └── deploy-ec2.sh / .ps1         # Despliegue automatizado idempotente por SSH
+└── docs/                            # Documentación de arquitectura, costos AWS y runbooks
 ```
 
 ---
 
-## Autenticación Híbrida y Enrutamiento de Tráfico
+## Autenticación Híbrida y Seguridad
 
-Pedidos360 implementa un esquema de autenticación doble:
+Pedidos360 cuenta con dos vías seguras de autenticación:
 
 1. **Microsoft Entra ID (Azure AD):**
-   - **Flujo:** Angular (MSAL, Authorization Code + PKCE) ──▶ `/api/bff/*` (vía API Gateway o Caddy) ──▶ BFF (`:8090`) ──▶ microservicios internos.
-   - El BFF actúa como *OAuth2 Resource Server*: valida firma (JWKS de Microsoft), `issuer`, `audience` (`api://<apiClientId>`), expiración y `scope` (`access_as_user`) antes de reenviar a los microservicios.
-   - Tras el login, el frontend llama a `POST /api/bff/auth/entra-sync`: el BFF aprovisiona (JIT) o actualiza el usuario en la BD local y devuelve su ID numérico (los microservicios identifican usuarios por ese ID, no por el GUID de Azure).
-2. **Login local (JWT propio, cuenta en BD):**
-   - **Endpoints:** `POST /api/auth/login`, `POST /api/auth/register`, `POST /api/auth/forgot-password` (servicio `usuario`).
-   - **Flujo:** Angular ──▶ Caddy (HTTPS) ──▶ microservicios directos. El `authInterceptor` adjunta `Authorization: Bearer <token_local>` solo cuando la sesión proviene del proveedor local, sin interferir con `MsalInterceptor`.
-
-### Enrutamiento de Caddy (`Backend/Caddyfile`)
-
-| Ruta | Destino |
-| :--- | :--- |
-| `/api/bff/*` | `bff:8090` |
-| `/api/auth/*`, `/api/usuario/*` | `usuario:8081` |
-| `/api/admin/rabbit/*` | `usuario:8081` (o vía BFF `/api/bff/admin/rabbit/*`) |
-| `/api/productos/*` | `productos:8085` |
-| `/api/pedidos/*` | `pedidos:8082` |
-| `/api/carrito/*` | `carrito:8083` |
-| `/api/notificacion/*` | `notificacion:8086` |
-| `/api/analitica/*` | `analitica:8084` |
-| `/api/chat/*`, `/ws-chat*` | `chat:8091` |
-| cualquier otra | `frontend:80` (Angular servido por nginx) |
+   * El frontend utiliza `@azure/msal-browser` y `@azure/msal-angular` para autenticar usuarios mediante Authorization Code Flow con PKCE.
+   * Las peticiones se dirigen a `/api/bff/**`. El BFF valida el token JWT contra los endpoints públicos JWKS de Microsoft, verificando firma, `issuer`, `audience` y scopes antes de comunicarse con los microservicios internos.
+2. **Autenticación Local (Base de Datos + JWT):**
+   * Endpoint de autenticación propio en `usuario-service` con contraseñas encriptadas mediante BCrypt (cost factor 12).
+   * Validado en frontend y backend mediante **Cloudflare Turnstile** para mitigar ataques de fuerza bruta y bots.
+   * Emisión de Access Token JWT (HMAC-SHA256 con secreto de longitud criptográfica) y Refresh Tokens rotativos con persistencia de sesiones en tabla `user_sessions`.
 
 ---
 
-## Funcionamiento Interno por Componente
+## Microservicios y Puertos
 
-### 1. Frontend Angular (`pedidos360-frontend`)
-- **`core/interceptors/auth.interceptor.ts`:** si el proveedor activo es `db` (login local), agrega `Authorization: Bearer <token_local>` a las llamadas directas a microservicios.
-- **`core/services/chat.service.ts` + `shared/components/chat/`:** conexión STOMP (`@stomp/stompjs`) al endpoint `/ws-chat`; envía el JWT en el frame `CONNECT` y se suscribe a `/topic/chat/{conversacionId}`. El **envío** de mensajes se hace por REST (`POST /api/chat/mensaje`); STOMP se usa para recibir en tiempo real.
-- **`pages/courier/`:** portal de repartidor (pedidos disponibles, tomar pedido, cambiar estado, chat con el cliente).
-- **`environments/`:** `environment.ts` (dev, apunta a `localhost`) y `environment.prod.ts`. En producción la URL pública se inyecta **en el build** (`PUBLIC_URL`/`BFF_PUBLIC_URL`), por lo que cambiar el dominio exige reconstruir la imagen del frontend.
-
-### 2. BFF (`bff`)
-- **`SecurityConfig`:** valida el JWT de Entra ID y aplica autorización por rol/método sobre `/api/bff/**`.
-- **`ProxyController`:** reenvía `/api/bff/{productos,pedidos,carrito,notificaciones,analitica,usuarios,chat,admin/rabbit}/**` a su microservicio correspondiente.
-- **`BffEntraSyncController`:** `POST /api/bff/auth/entra-sync` (aprovisionamiento JIT de usuarios Entra ID).
-- **`HealthController`:** `/health` y `/ready` (readiness consulta los servicios internos).
-
-### 3. `usuario` (`:8081`)
-- **`AuthController`** (`/api/auth`): login, registro y recuperación de contraseña.
-- **`security/JwtUtil`:** emite y valida el JWT local (HMAC, secreto `jwt.secret`/`JWT_SECRET`) con ID, correo y rol (`CLIENTE`, `REPARTIDOR`, `VENDEDOR`, `ADMIN`). Contraseñas con BCrypt.
-- **`InternalController`:** endpoints servicio-a-servicio (clave `X-Internal-Service-Key`).
-- **`UsuarioService`:** seed de usuarios demo y publicación de eventos de autenticación a RabbitMQ.
-- **`RabbitAdminController`** (`/api/admin/rabbit`): API REST administrativa para queues, exchanges y bindings protegida con `@PreAuthorize("hasRole('ADMIN')")`.
-- **`RabbitAdminService`:** administración transaccional de RabbitMQ contra PostgreSQL (`rabbit_exchange`, `rabbit_queue`, `rabbit_binding`) y sincronización en caliente con el broker.
-- **`RabbitTopologyService`:** reconciliador que sincroniza la topología persistida hacia RabbitMQ al iniciar el microservicio (`ApplicationReadyEvent`) y bajo demanda (`POST /api/admin/rabbit/sync`).
-
-### 4. `pedidos` (`:8082`)
-- **`PedidoController`** (`/api/pedidos/**`): matriz de autorización por rol (el cliente solo ve sus pedidos; el repartidor gestiona sus asignaciones; el admin accede a todo).
-- **`InternalPedidoController`** (`/api/internal/pedidos/{id}`): consulta S2S (la usa `chat`), protegida por **`ServiceKeyFilter`** (valida `X-Internal-Service-Key`).
-- **`PedidoService`:** publica `pedido.creado`, `pedido.estado.actualizado` y `pedido.repartidor.asignado` en RabbitMQ.
-
-### 5. `chat` (`:8091`)
-- **`ChatController`** (`/api/chat`): `POST /conversacion`, `GET /pedido/{pedidoId}`, `GET /usuario/{usuarioId}`, `POST /mensaje`, `DELETE /conversacion/{id}`.
-- **`WebSocketConfig`:** endpoint `/ws-chat` (STOMP, con y sin SockJS), broker `/topic` y `/queue`. Un interceptor del canal entrante **exige JWT en `CONNECT`** y valida que el usuario participe de la conversación antes de permitir `SUBSCRIBE` a `/topic/chat/{id}`.
-- **`ChatService`:** reglas de conversación; consulta el pedido a `pedidos` por S2S.
-- **`PedidoEventListener`:** consumidor con **ACK/NACK manual** (`ackMode = "MANUAL"`). Procesa `pedido.estado.actualizado`; al pasar a `ENTREGADO` cierra la conversación y confirma con `basicAck`. En caso de fallo envía `basicNack(deliveryTag, false, false)` enrutando a `chat.dlq`.
-- **`RetentionService`:** purga diaria (`@Scheduled`, 03:00) de conversaciones cerradas más antiguas que `CHAT_RETENTION_DAYS`.
-
-### 6. `carrito`, `productos`, `analitica`, `notificacion`
-- **`carrito`:** carrito por usuario; `CarritoExpiracionService` expira carritos y publica `carrito.expirado`; `CarritoEventListener` consume `pedido.creado` con confirmación manual `basicAck` y control de errores con `basicNack` hacia `cart.dlq`, verificando idempotencia en `rabbit_processed_event`.
-- **`productos`:** catálogo, stock y precios.
-- **`analitica`:** consume **todos** los eventos (`#`) con confirmaciones explícitas `basicAck`/`basicNack` en sus 6 manejadores y los persiste como métricas.
-- **`notificacion`:** consume `pedido.#`, `carrito.#` y `usuario.#` con confirmaciones explícitas `basicAck`/`basicNack` en sus 5 manejadores y genera notificaciones por usuario.
+| Servicio | Puerto Local | Responsabilidad | Base de Datos |
+| :--- | :---: | :--- | :--- |
+| **Caddy** | `80, 443` | Reverse proxy HTTPS y terminación TLS automática (en despliegue EC2). | — |
+| **Frontend** | `4200` | Aplicación Angular 21 (servida vía `npm start` en local o Nginx en contenedor). | — |
+| **bff** | `8090` | OAuth2 Resource Server para Entra ID y Gateway para el frontend. | — |
+| **usuario** | `8081` | Gestión de usuarios, perfiles, sesiones, Turnstile y Admin RabbitMQ. | `usuario_db` |
+| **pedidos** | `8082` | Gestión de pedidos, motor comercial, Outbox Publisher a Kafka y RabbitMQ. | `pedidos_db` |
+| **carrito** | `8083` | Carrito de compras y control de expiración. | `carrito_db` |
+| **productos** | `8085` | Catálogo, inventario y reservas de stock. | `productos_db` |
+| **analitica** | `8084` | Procesamiento analítico de streaming, métricas y Admin API de Kafka. | `analitica_db` |
+| **notificacion**| `8086` | Notificaciones en tiempo real derivadas de eventos. | `notificacion_db` |
+| **chat** | `8091` | WebSocket / STOMP (`/ws-chat`) para comunicación cliente-repartidor. | `chat_db` |
+| **PostgreSQL 16**| `5432` | Motor de base de datos relacional para los microservicios. | Multi-DB |
+| **RabbitMQ** | `5672 / 15672`| Broker de mensajería AMQP y consola web de gestión. | — |
+| **Apache Kafka**| `9092 / 9094`| Broker de streaming de eventos distribuido. | — |
+| **Kafka UI** | `8089` | Interfaz gráfica web para administración de Kafka. | — |
 
 ---
 
-## Eventos Asíncronos y Administración de RabbitMQ
+## APIs de Administración (RabbitMQ y Kafka)
 
-El sistema utiliza RabbitMQ con una topología dinámica administrable y mecanismos robustos de resiliencia ante fallos.
+### 1. Administración de RabbitMQ (`/api/admin/rabbit/**`)
+Disponible en `usuario-service` y ruteado a través del BFF (`/api/bff/admin/rabbit/**`):
+* `GET /queues`, `POST /queues`, `PUT /queues/{id}`, `DELETE /queues/{id}`: Gestión dinámica de colas y parámetros DLX.
+* `GET /exchanges`, `POST /exchanges`, `PUT /exchanges/{id}`, `DELETE /exchanges/{id}`: Gestión de exchanges.
+* `GET /bindings`, `POST /bindings`, `DELETE /bindings/{id}`: Enrutamiento dinámico de mensajes.
+* `POST /sync`: Sincronización forzada en caliente entre base de datos y broker RabbitMQ.
+* *Protección de Recursos:* Los elementos nucleares poseen la marca `protected_resource = true` impidiendo su eliminación accidental (HTTP 409 Conflict).
 
-### Matriz de Eventos y Enrutamiento
-
-| Routing key | Publica | Consumen |
-| :--- | :--- | :--- |
-| `pedido.creado` | `pedidos` | `carrito`, `notificacion`, `analitica` |
-| `pedido.estado.actualizado` | `pedidos` | `chat`, `notificacion`, `analitica` |
-| `pedido.repartidor.asignado` | `pedidos` | `notificacion`, `analitica` |
-| `carrito.expirado` | `carrito` | `notificacion`, `analitica` |
-| `usuario.login.exitoso` / `usuario.login.fallido` | `usuario` | `analitica` |
-| `usuario.password.reset` | `usuario` | `notificacion` |
-| `chat.creado` / `chat.mensaje.enviado` | `chat` | sin consumidor específico (la cola de analítica recibe todo por `#`) |
-
-### Confirmaciones Explícitas ACK / NACK y Resiliencia
-
-1. **Confirmaciones manuales:** todos los listeners están anotados con `ackMode = "MANUAL"` y configurados con `spring.rabbitmq.listener.simple.acknowledge-mode=manual`.
-2. **basicAck:** se emite solo cuando el evento se procesó y persistió exitosamente en la base de datos del consumidor, o cuando se detecta un mensaje nulo o duplicado ya procesado.
-3. **basicNack sin requeue:** en caso de excepción no recuperable o error de negocio, se invoca `channel.basicNack(deliveryTag, false, false)`. Al tener `requeue = false`, RabbitMQ no reinyecta el mensaje en la cabeza de la cola evitando bucles infinitos, sino que lo envía directamente al Dead Letter Exchange (DLX).
-4. **Idempotencia persistente:** los consumidores registran los identificadores de eventos procesados en la tabla `rabbit_processed_event`, descartando duplicados provenientes de reintentos de red.
-5. **Colas de Dead Letter:**
-   - `cart.queue` ➔ DLX `pedidos360.dlx` (routing key `cart.dead-letter`) ➔ `cart.dlq`
-   - `notifications.queue` ➔ DLX `pedidos360.dlx` (routing key `notifications.dead-letter`) ➔ `notifications.dlq`
-   - `analytics.queue` ➔ DLX `pedidos360.dlx` (routing key `analytics.dead-letter`) ➔ `analytics.dlq`
-   - `chat.pedido.estado.queue` ➔ DLX `chat.dlx` (routing key `chat.deadletter`) ➔ `chat.dlq`
-
-### API REST de Administración Dinámica de RabbitMQ
-
-Disponible en `usuario-service` bajo `/api/admin/rabbit` (requiere rol `ADMIN`):
-
-- **Queues:**
-  - `GET /api/admin/rabbit/queues`: listar todas las colas configuradas en BD.
-  - `GET /api/admin/rabbit/queues/{id}`: detalle de cola por ID.
-  - `POST /api/admin/rabbit/queues`: crear cola (declara en PostgreSQL y en RabbitMQ con soporte DLX).
-  - `PUT /api/admin/rabbit/queues/{id}`: actualizar configuración o estado activo.
-  - `DELETE /api/admin/rabbit/queues/{id}`: eliminar cola de BD y del broker (si no es recurso protegido).
-- **Exchanges:**
-  - `GET /api/admin/rabbit/exchanges`: listar exchanges.
-  - `GET /api/admin/rabbit/exchanges/{id}`: detalle de exchange por ID.
-  - `POST /api/admin/rabbit/exchanges`: crear exchange (`DIRECT`, `TOPIC`, `FANOUT`, `HEADERS`).
-  - `PUT /api/admin/rabbit/exchanges/{id}`: actualizar exchange.
-  - `DELETE /api/admin/rabbit/exchanges/{id}`: eliminar exchange (si no es protegido).
-- **Bindings:**
-  - `GET /api/admin/rabbit/bindings`: listar bindings.
-  - `GET /api/admin/rabbit/bindings/{id}`: detalle de binding.
-  - `POST /api/admin/rabbit/bindings`: asociar cola con exchange y routing key.
-  - `PUT /api/admin/rabbit/bindings/{id}`: actualizar routing key o estado activo.
-  - `DELETE /api/admin/rabbit/bindings/{id}`: desvincular y eliminar binding.
-- **Sincronización:**
-  - `POST /api/admin/rabbit/sync`: fuerza la declaración en RabbitMQ de todos los exchanges, queues y bindings activos registrados en PostgreSQL.
-
-### Protección de Recursos del Sistema
-
-Las colas, exchanges y bindings nucleares del sistema se encuentran marcados con `protected_resource = TRUE` en la base de datos (poblados mediante la migración `V4__seed_rabbit_topology.sql`).
-Cualquier intento de eliminar o desactivar un recurso protegido es bloqueado por `RabbitAdminService`, respondiendo con código HTTP 409 (`ProtectedResourceException`).
+### 2. Administración de Kafka (`/api/admin/kafka/**`)
+Disponible en `analitica-service` y ruteado a través del BFF (`/api/bff/admin/kafka/**`):
+* `GET /topics`: Listar todos los tópicos del clúster con sus particiones, réplicas y configuraciones activas.
+* `GET /topics/{name}`: Detalle e inspección de un tópico específico.
+* `POST /topics`: Creación dinámica de tópicos con particiones, factor de replicación, retención (`retention.ms`) y cleanup policy.
+* `PUT /topics/{name}`: Modificación de configuraciones o adición de particiones.
+* `DELETE /topics/{name}`: Eliminación controlada de tópicos.
+* `GET /consumer-groups`: Listar todos los Consumer Groups activos en el clúster.
+* `GET /consumer-groups/{groupId}`: Inspección del estado, miembros asignados y coordinador del grupo.
 
 ---
 
-## Microservicios y Contenedores (Docker Compose)
+## Opciones de Ejecución con Docker Compose
 
-| Servicio | Puerto (dev) | Responsabilidad | Base de datos |
-| :--- | :--- | :--- | :--- |
-| **Caddy** *(solo EC2)* | `80, 443` | Reverse proxy HTTPS, TLS automático (Let's Encrypt sobre sslip.io), WebSocket `/ws-chat`. | N/A |
-| **Frontend (nginx)** *(solo EC2)* | — | SPA Angular 21 (clientes, repartidores, vendedores, admin). En dev se usa `npm start` en `:4200`. | N/A |
-| **bff** | `8090` | Puerta de entrada para Microsoft Entra ID; autorización por rol y proxy a microservicios. | N/A |
-| **usuario** | `8081` | Login/registro, JWT local, usuarios, roles y administración dinámica de RabbitMQ. | `usuario_db` |
-| **pedidos** | `8082` | Pedidos, autorización por rol, S2S, eventos. | `pedidos_db` |
-| **carrito** | `8083` | Carrito con validación de propiedad; expiración. | `carrito_db` |
-| **analitica** | `8084` | Métricas a partir de eventos. | `analitica_db` |
-| **productos** | `8085` | Catálogo, stock y precios. | `productos_db` |
-| **notificacion** | `8086` | Notificaciones por usuario. | `notificacion_db` |
-| **chat** | `8091` | Conversaciones, STOMP/WebSocket, purga programada. | `chat_db` |
-| **PostgreSQL 16** | `5432` | Una base por servicio (se crean con `init-dbs.sql`). | Multi-DB |
-| **pgAdmin 4** | `5050` *(solo dev; en EC2 no se publica)* | Administración visual de la BD. | — |
-| **RabbitMQ** | `5672 / 15672` | Broker de eventos, administración y colas dead-letter. | N/A |
+El repositorio provee entornos reproducibles para diferentes escenarios:
 
----
-
-## Roles del Sistema y Permisos
-
-| Rol | Permisos principales | Rutas del frontend |
-| :--- | :--- | :--- |
-| **ADMIN** | Control total: analítica, productos, pedidos, usuarios y administración de RabbitMQ. | todas (`/analitica` y `/personal` son exclusivas de ADMIN) |
-| **VENDEDOR** | Gestión de productos y pedidos recibidos. | `/vendedor` |
-| **REPARTIDOR** | Ver y tomar pedidos disponibles, marcar entregado, chatear con el cliente. | `/repartidor` |
-| **CLIENTE** | Catálogo, carrito, pedidos, seguimiento y chat con su repartidor. | `/`, `/carrito`, `/cliente` |
-
-Todos los roles acceden a `/cuenta`, `/perfil` y `/notificaciones`.
-
-### Credenciales de demo (usuarios semilla del login local)
-
-`usuario-service` crea estos usuarios al arrancar (`UsuarioService`). **Son datos de demostración**:
-
-| Usuario | Contraseña | Rol |
-|---|---|---|
-| `admin@pedidos360.cl` | `Password123!` | ADMIN |
-| `vendedor@pedidos360.cl` | `Password123!` | VENDEDOR |
-| `camila.reyes@pedidos360.cl` | `Password123!` | VENDEDOR (soporte) |
-| `rodrigo.morales@pedidos360.cl` | `Password123!` | REPARTIDOR |
-| `cliente@pedidos360.cl` | `Password123!` | CLIENTE |
-
-> Nota: Estas credenciales están publicadas en este repositorio. Úsalas solo en desarrollo/demo; en un despliegue con datos reales hay que deshabilitar el seed o cambiar las contraseñas (ver [Seguridad](#seguridad-pendientes-conocidos)).
-
----
-
-## Variables de Entorno
-
-Plantillas: `Backend/.env.example` (dev) y `Backend/env/prod/.env.example` (prod). Para EC2 el despliegue usa un `.env.production` (lo genera `scripts/deploy-ec2.sh`).
-
-| Variable | Uso |
-| :--- | :--- |
-| `SPRING_PROFILES_ACTIVE` | `dev` (por defecto) o `prod` (el overlay de EC2 lo fija en `prod`: `ddl-auto=validate`, sin SQL en logs). |
-| `PUBLIC_DOMAIN` / `PUBLIC_URL` | Dominio (`3-92-44-37.sslip.io`) y URL con esquema (`https://…`) públicos. Los usa Caddy y el build del frontend. |
-| `BFF_PUBLIC_URL` | URL base del BFF que usará el frontend (API Gateway o `PUBLIC_URL/api/bff`). |
-| `FRONTEND_ORIGIN` | Origen permitido por CORS. |
-| `BFF_INTERNAL_KEY` | Clave compartida para llamadas servicio-a-servicio (`X-Internal-Service-Key`). |
-| `JWT_SECRET` | Secreto HMAC del JWT local. **Debe ser el mismo en todos los servicios que emiten/validan el token.** |
-| `AZURE_TENANT_ID` / `AZURE_API_CLIENT_ID` | Identificadores públicos del tenant y de la API en Entra ID. |
-| `POSTGRES_USER` / `POSTGRES_PASSWORD` | Credenciales de PostgreSQL. |
-| `RABBITMQ_USER` / `RABBITMQ_PASSWORD` | Credenciales de RabbitMQ (por defecto `guest/guest`). |
-| `CHAT_RETENTION_DAYS` | Días de retención de conversaciones cerradas (30 por defecto). |
-
----
-
-## Migraciones de Base de Datos (Flyway)
-
-Cada servicio versiona su esquema con Flyway (`ddl-auto=validate` en producción):
-
-- **`usuario`:**
-  - `V1__init_schema.sql`: usuarios, roles y credenciales.
-  - `V2__agregar_rol_repartidor.sql`: actualización de enumeraciones de rol.
-  - `V3__create_rabbit_admin_tables.sql`: tablas `rabbit_exchange`, `rabbit_queue`, `rabbit_binding` y `rabbit_processed_event`.
-  - `V4__seed_rabbit_topology.sql`: población versionada de exchanges, queues y bindings protegidos del sistema.
-- **`pedidos`:** `V1__init_schema.sql`, `V2__agregar_columna_repartidor.sql`
-- **`chat`:** `V1__init_chat_schema.sql`, `V2__create_rabbit_processed_event.sql`
-- **`carrito`:** `V1__init_schema.sql`, `V2__create_rabbit_processed_event.sql`
-- **`notificacion`:** `V1__init_schema.sql`, `V2__create_rabbit_processed_event.sql`
-- **`analitica`:** `V1__init_schema.sql`, `V2__create_rabbit_processed_event.sql`
-- **`productos`:** `V1__init_schema.sql`
-
----
-
-## Ejecución Local Rápida
-
+### Opción 1: Desarrollo Local Estándar (Base + Kafka KRaft + Kafka UI)
+Inicia los 8 microservicios, PostgreSQL, RabbitMQ, Apache Kafka en modo KRaft y Kafka UI:
 ```bash
-# 1. Clonar repositorio
-git clone https://github.com/vixhin/pedidos360.git
-cd pedidos360/Backend
+cd Backend
+docker compose -f docker-compose.yml -f docker-compose.kafka.yml up -d --build
+```
+* **Frontend Angular:**
+  ```bash
+  cd pedidos360-frontend
+  npm install
+  npm start
+  ```
+  Acceso en `http://localhost:4200`.
+* **Consolas Administrativas:**
+  * Kafka UI: `http://localhost:8089`
+  * RabbitMQ Management: `http://localhost:15672`
+  * pgAdmin (opcional): `http://localhost:5050`
 
-# 2. Configurar variables de entorno
-cp .env.example .env
-
-# 3. Levantar stack completo: PostgreSQL, pgAdmin, RabbitMQ, 7 microservicios y BFF
-docker compose up --build -d
-
-# 4. Iniciar frontend Angular
-cd ../pedidos360-frontend
-npm install
-npm start          # http://localhost:4200
+### Opción 2: Clúster de RabbitMQ (3 Nodos en Alta Disponibilidad)
+Para evaluar resiliencia y clustering de RabbitMQ:
+```bash
+docker compose -f Backend/docker-compose.rabbitmq-cluster.yml up -d
+```
+Verificar estado del clúster:
+```bash
+docker exec -it pedidos360-rabbit1 rabbitmqctl cluster_status
 ```
 
-> Cada servicio Java tarda ~1–2 min en arrancar la primera vez. Revisa el estado con `docker compose ps`. Panel de RabbitMQ: `http://localhost:15672`. Panel pgAdmin: `http://localhost:5050`. Guía de la API por microservicio: [`Backend/README.md`](Backend/README.md).
+### Opción 3: Clúster de Kafka con ZooKeeper y Múltiples Brokers
+Para evaluar topología tradicional de streaming con ZooKeeper y 2 brokers Kafka:
+```bash
+docker compose -f Backend/docker-compose.kafka-zookeeper.yml up -d
+```
+Consola Kafka UI vinculada al clúster ZooKeeper disponible en `http://localhost:8089`.
 
 ---
 
-## Infraestructura como Código (Terraform en AWS)
+## Scripts de Infraestructura y Gestión
 
-Definida en `terraform/` con módulos reutilizables y entornos independientes (`dev`, `prod`):
+Ubicados en la carpeta `scripts/`:
 
+### 1. Administración de Kafka vía Terminal
+* **Linux / macOS / WSL:** `scripts/kafka-admin.sh`
+* **Windows PowerShell:** `scripts/kafka-admin.ps1`
+
+Ejemplos de uso:
+```bash
+# Listar tópicos
+./scripts/kafka-admin.sh list-topics
+
+# Describir un tópico y ver particiones
+./scripts/kafka-admin.sh describe-topic pedidos360.pedidos.v1
+
+# Crear un nuevo tópico
+./scripts/kafka-admin.sh create-topic mi-nuevo-topico 3 1
+
+# Listar Consumer Groups e inspeccionar lag
+./scripts/kafka-admin.sh list-groups
+./scripts/kafka-admin.sh describe-group analitica-group
 ```
-Terraform
-   ├──▶ network         VPC, subred pública, Internet Gateway, rutas
-   ├──▶ security_group  Ingress 80/443 (0.0.0.0/0) y 22 (solo allowed_ssh_cidr)
-   ├──▶ elastic_ip      IP pública fija asociada a la EC2
-   ├──▶ ec2             Ubuntu 22.04 + Docker Engine + Compose plugin (user_data)
-   └──▶ api_gateway     HTTP API v2 → proxy a Caddy/BFF (ANY /api/bff/{proxy+}), CORS y throttling
-```
 
-- **Mínimo privilegio:** solo `80`, `443` y `22` (restringido). PostgreSQL, RabbitMQ, BFF y microservicios no son alcanzables desde Internet.
-- **IP estable:** la Elastic IP evita que la IP cambie al detener/iniciar la instancia (`stop`/`start`), y de ahí el dominio `<ip-con-guiones>.sslip.io` usado por Caddy para el certificado.
-- El estado de Terraform es **local** (`terraform.tfstate`, ignorado por git). Detalle de comandos, `stop` vs `destroy` y rollback: [`terraform/README.md`](terraform/README.md).
+### 2. Respaldos y Restauración de Base de Datos
+* **Respaldo con compresión gzip y verificación de integridad:**
+  ```bash
+  ./scripts/backup-postgres.sh
+  ```
+* **Restauración asistida desde respaldo comprimido:**
+  ```bash
+  ./scripts/restore-postgres.sh /ruta/al/backup_pedidos360_fecha.sql.gz
+  ```
 
 ---
 
-## Despliegue en AWS EC2
+## Variables de Entorno y Manejo Seguro de Secretos
 
-El stack de producción se levanta con `docker-compose.yml` + el overlay `docker-compose.ec2.yml` (agrega Caddy y el frontend, deja los demás servicios sin puertos publicados y activa el perfil `prod`).
+El proyecto cuenta con un validador estricto de secretos en el arranque (`StartupSecretsValidator`) que bloquea el inicio en entornos productivos si faltan variables críticas o si se detectan valores por defecto inseguros.
 
-### Opción A — Terraform + script (recomendada)
+> [!IMPORTANT]
+> **NUNCA** suba archivos `.env` reales con claves privadas al control de versiones. El archivo `.gitignore` raíz excluye automáticamente todos los patrones `.env*`.
 
+Para configurar el entorno local, copie la plantilla base:
 ```bash
-cd terraform/environments/dev
-cp terraform.tfvars.example terraform.tfvars   # define allowed_ssh_cidr = "<tu-ip>/32"
-terraform init && terraform apply
-
-# Exporta los secretos ANTES de desplegar (si no, el script usa valores por defecto públicos)
-export POSTGRES_PASSWORD=... RABBITMQ_PASSWORD=... BFF_INTERNAL_KEY=... JWT_SECRET=...
-./scripts/deploy-ec2.sh dev ~/.ssh/<llave>.pem      # en Windows: .\scripts\deploy-ec2.ps1
+cp Backend/.env.example Backend/.env
 ```
 
-El script obtiene la IP desde `terraform output`, genera `PUBLIC_DOMAIN`/`PUBLIC_URL`, clona o actualiza el repo en `/opt/pedidos360/app`, escribe `Backend/.env.production` y ejecuta `docker compose … up -d --build`.
+Parámetros clave requeridos:
 
-### Opción B — EC2 ya creada (despliegue manual)
-
-1. **Security Group** de la instancia: solo `22`, `80` y `443` (no abrir `5050`, `8081-8090`, `4200`, `5432`, `5672`).
-2. Conéctate por SSH (usuario `ubuntu` en AMI Ubuntu) e ingresa a la carpeta del proyecto:
-   ```bash
-   ssh -i <llave>.pem ubuntu@<IP-PUBLICA>
-   cd ~/pedidos360/Backend          # o /opt/pedidos360/app/Backend si lo creó el script
-   git fetch origin && git pull     # asegúrate de tener el último commit
-   ```
-3. Define el dominio con la IP pública (guiones en vez de puntos) y levanta:
-   ```bash
-   export PUBLIC_DOMAIN=3-92-44-37.sslip.io
-   export PUBLIC_URL=https://3-92-44-37.sslip.io
-   export BFF_INTERNAL_KEY=... JWT_SECRET=...        # o usa --env-file .env.production
-   docker compose -f docker-compose.yml -f docker-compose.ec2.yml up -d --build
-   ```
-4. Espera 1–2 minutos (arrancan 8 JVM) y verifica: `docker ps` (debe aparecer `pedidos360-rabbitmq` healthy) y `curl -I https://$PUBLIC_DOMAIN`.
-
-### API Gateway (opcional, desde la consola de AWS)
-
-*API Gateway → Create API → HTTP API*: integración **HTTP** `ANY` hacia `https://<dominio>/{proxy}` (usar el dominio sslip.io, **no la IP**, para que valide el certificado de Caddy), ruta `ANY /{proxy+}` y stage `$default` con auto-deploy. Con Terraform el módulo `api_gateway` crea una API equivalente restringida a `ANY /api/bff/{proxy+}`.
-
-### Checklist cuando cambia la IP pública
-
-Ocurre si la instancia no tiene Elastic IP (por ejemplo, al reiniciar un AWS Academy Learner Lab):
-
-1. Anota la IP nueva y calcula `PUBLIC_DOMAIN` (`3-92-44-37.sslip.io`).
-2. Re-despliega con las variables nuevas (paso 3 de la opción B). El **frontend debe reconstruirse**: la URL queda incrustada en el JavaScript compilado.
-3. **Microsoft Entra ID:** *Registros de aplicaciones → `Pedidos360-SPA` → Authentication* → agrega el *Redirect URI* `https://<dominio>` (la app `Pedidos360-API` no necesita URI de redirección).
-4. **API Gateway:** edita la integración y actualiza la URL a `https://<dominio nuevo>/{proxy}`.
-5. Pruebas e2e: `PLAYWRIGHT_BASE_URL=https://<dominio nuevo>`.
-
-### Comportamiento de Volúmenes Persistentes (PostgreSQL y RabbitMQ)
-
-Es fundamental entender cómo operan las imágenes oficiales respecto a los volúmenes ya inicializados:
-
-1. **PostgreSQL (`postgres_data`):** Las variables `POSTGRES_USER` y `POSTGRES_PASSWORD` solo tienen efecto durante la creación inicial del clúster (cuando el directorio de datos está vacío). Si el volumen ya existía, PostgreSQL **no actualizará** las credenciales automáticamente al cambiar el archivo `.env.production`.
-   - **Diagnóstico:** Para verificar si las credenciales actuales coinciden:
-     ```bash
-     docker exec -i pedidos360-postgres psql -U <usuario> -d postgres -c "SELECT current_user;"
-     ```
-   - Si hubo un cambio de credenciales, deben actualizarse mediante `ALTER USER ... WITH PASSWORD ...;` dentro de la sesión de `psql`. **No ejecute `docker compose down -v`** como primera solución, ya que destruirá permanentemente los datos existentes.
-
-2. **RabbitMQ (`rabbitmq_data`):** Las variables `RABBITMQ_DEFAULT_USER` y `RABBITMQ_DEFAULT_PASS` solo se procesan en el primer arranque. Si el volumen persiste, las cuentas previas se mantienen.
-   - **Diagnóstico:** Para consultar los usuarios existentes:
-     ```bash
-     docker exec -i pedidos360-rabbitmq rabbitmqctl list_users
-     ```
-   - Si se requiere un nuevo usuario o permisos, use `rabbitmqctl add_user` y `rabbitmqctl set_permissions`.
-
-### Administrar la base de datos en la EC2
-
-PostgreSQL, pgAdmin y RabbitMQ **no se publican** en la EC2. Para inspeccionar datos usa la consola del contenedor, sin abrir puertos al exterior:
-
-```bash
-docker exec -it pedidos360-postgres psql -U postgres -d usuario_db
-docker logs pedidos360-<servicio> --tail 100
-```
-
----
-
-## Pruebas y Calidad
-
-| Tipo | Herramienta | Cómo ejecutarla |
-| :--- | :--- | :--- |
-| Unitarias / integración (caja blanca) | JUnit 5 + Mockito, JaCoCo | `cd Backend/<servicio> && ./mvnw test` (Windows: `.\mvnw test`). Reporte de cobertura: `target/site/jacoco/index.html`. |
-| Resiliencia y ACK/NACK | JUnit 5 + Mockito (Channel, DLQ, DeliveryTag) | Integradas en la suite de cada consumidor (`carrito`, `chat`, `notificacion`, `analitica`) y en `usuario` (`RabbitAdminServiceTest`). |
-| E2E (caja negra) | Playwright (`pedidos360-frontend/e2e/`: 13 casos TC-01…TC-13) | Ver abajo. |
-| Carga / estrés | Apache JMeter | Medido contra el entorno desplegado. |
-| Rendimiento web | Google Lighthouse | Desde Chrome DevTools o CLI sobre la URL pública. |
-
-El repositorio contiene **198 casos `@Test` automatizados** repartidos en los 8 módulos Java (100% pasando sin fallas ni errores):
-- `usuario-service`: 72 pruebas (autenticación, usuarios, tokens, `RabbitAdminServiceTest`, `RabbitTopologyServiceTest`, `RabbitAdminControllerTest`).
-- `pedidos-service`: 32 pruebas (flujos de pedidos, cambio de estados, asignación de repartidores).
-- `chat-service`: 23 pruebas (WebSocket, conversaciones, retención y `PedidoEventListenerTest` con ACK/NACK explícito).
-- `analitica-service`: 20 pruebas (métricas y `AnaliticaEventListenerTest` para los 6 handlers con ACK/NACK y DLQ).
-- `notificacion-service`: 18 pruebas (generación de notificaciones y `NotificacionEventListenerTest` con ACK/NACK).
-- `carrito-service`: 18 pruebas (gestión de carrito, expiración y `CarritoEventListenerTest` con ACK/NACK e idempotencia).
-- `bff`: 15 pruebas (seguridad Entra ID, proxy inverso, health checks).
-
-**E2E contra un entorno desplegado** (requiere `npx playwright install chromium` la primera vez):
-
-```bash
-cd pedidos360-frontend
-npm ci
-PLAYWRIGHT_BASE_URL=https://<dominio> npx playwright test --config=playwright.config.ec2.ts
-# PowerShell: $env:PLAYWRIGHT_BASE_URL="https://<dominio>"; npx playwright test --config=playwright.config.ec2.ts
-```
-
-Reporte HTML en `playwright-report-ec2/` (`npx playwright show-report playwright-report-ec2`). Ojo: `TC-06` registra un usuario nuevo en el entorno que se pruebe. `playwright.config.ts` (sin sufijo) levanta `ng serve` y prueba en `localhost:4200`.
-
-**Mediciones de referencia** (11-sep-2026, EC2 `t3.medium` de Learner Lab, antes de integrar RabbitMQ y chat; conviene volver a medir):
-
-| Prueba | Resultado |
+| Variable | Descripción |
 | :--- | :--- |
-| Playwright | 13/13 casos exitosos contra la EC2 |
-| Lighthouse (inicio) | Performance 74 móvil / 68 escritorio · Accessibility 90 · Best Practices 100 · SEO 73 |
-| JMeter, 100 usuarios concurrentes (login + catálogo + carrito) | 27,5 % de error, p95 ≈ 21 s: saturación de conexiones de la instancia y errores 500 en `carrito` por agotamiento del pool de BD |
+| `BFF_INTERNAL_KEY` | Clave interna para comunicación S2S entre microservicios (mínimo 32 caracteres). |
+| `JWT_SECRET` | Secreto criptográfico HMAC para generación y firma de tokens JWT locales. |
+| `ADMIN_BOOTSTRAP_TOKEN` | Token secreto utilizado para el procedimiento de bootstrap inicial del usuario administrador. |
+| `AZURE_TENANT_ID` | Identificador de inquilino de Microsoft Entra ID. |
+| `AZURE_API_CLIENT_ID`| Identificador de aplicación de la API (BFF) en Entra ID. |
+| `TURNSTILE_SITE_KEY` | Clave pública del widget de Cloudflare Turnstile. |
+| `TURNSTILE_SECRET_KEY` | Clave secreta para la validación servidor a servidor de Turnstile. |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` | Credenciales de conexión al motor de base de datos PostgreSQL. |
+| `RABBITMQ_USER` / `RABBITMQ_PASSWORD` | Credenciales del broker de RabbitMQ. |
 
 ---
 
-## Solución de Problemas
+## Infraestructura como Código (Terraform) y Despliegue en AWS
 
-| Síntoma | Causa probable y solución |
-| :--- | :--- |
-| `502 Bad Gateway` en `/api/*` justo después de desplegar | Los microservicios aún están arrancando (~1–2 min con 8 JVM). Revisa `docker ps` y los logs de Caddy (`connection refused` = el servicio todavía no escucha); reintenta. |
-| Error TLS / `internal_error` al abrir el dominio | El certificado se pidió para otra IP. Re-despliega con el `PUBLIC_DOMAIN` actual y revisa `docker logs pedidos360-caddy`. |
-| `pedidos360-rabbitmq` no aparece en `docker ps -a` | La EC2 tiene código antiguo: `git fetch origin && git pull` y volver a ejecutar `docker compose … up -d --build`. |
-| Mensajes en RabbitMQ quedan en Unacked | Verificar que los consumidores tengan acceso a la base de datos o revisar logs del consumidor para identificar fallos antes del ACK explícito. |
-| Error 409 al borrar una cola o exchange | El recurso tiene `protected_resource = true`. Es una cola/exchange estructural del sistema que no puede eliminarse. |
-| Login con Microsoft falla tras reiniciar el lab | Falta el *Redirect URI* de la IP nueva en Entra ID o el frontend no se reconstruyó con la URL nueva. |
-| API Gateway devuelve `503` | La integración sigue apuntando a la IP/dominio anterior. |
-| Playwright: `Executable doesn't exist` | Ejecuta `npx playwright install chromium`. |
-| PowerShell: `mvnw no se reconoce` | Usa `.\mvnw` (PowerShell no ejecuta comandos de la carpeta actual sin `.\`). |
+La infraestructura está automatizada en `terraform/` con módulos desacoplados:
+* `network`: VPC con subred pública, Internet Gateway y tablas de ruteo.
+* `security_group`: Filtrado de puertos de mínimo privilegio (`80`, `443` y SSH `22` restringido a IP autorizada).
+* `ec2`: Instancia Ubuntu 22.04 optimizada (t3.medium o t3.large, EBS gp3 cifrado e IMDSv2 obligatorio).
+* `elastic_ip`: Dirección IP pública persistente asociada al dominio sslip.io.
+* `api_gateway`: API Gateway HTTP para enrutamiento seguro hacia el BFF.
+
+> [!NOTE]
+> La arquitectura está diseñada específicamente para optimizar costos en **AWS Academy Learner Lab**, evitando servicios administrados de alto costo (RDS, EKS, ALB o NAT Gateway) y manteniendo un gasto mensual estimado inferior al límite de créditos asignados.
 
 ---
 
-## Integración Continua (GitHub Actions)
+## Pruebas y Calidad de Código
 
-- **`ci.yml`** (push/PR a `main` y `develop`): `./mvnw test` en los 8 módulos Java (JDK 21), `npm ci && npm run build` del frontend, `terraform fmt -check` + `terraform validate` (dev y prod) y `docker compose config` del stack local y del overlay EC2.
-- **`cd.yml`** (manual, `workflow_dispatch`): `terraform init/validate/plan` del entorno elegido. No hace `apply` mientras el estado de Terraform sea local.
+El repositorio incluye suites exhaustivas de pruebas automatizadas:
+* **Pruebas Unitarias y de Integración Backend:** JUnit 5, Mockito y Spring Boot Starter Test en los 8 microservicios con reporte de cobertura generado por JaCoCo.
+* **Pruebas E2E de Frontend:** Playwright (`pedidos360-frontend/e2e/`) que valida flujos completos de inicio de sesión, compra, carrito y navegación entre perfiles.
+* **Pipeline de Integración Continua (GitHub Actions):** Automatiza la compilación de microservicios, ejecución de pruebas unitarias, validación de sintaxis de Terraform (`terraform fmt -check`), build del frontend y verificación de configuraciones de Docker Compose en cada Pull Request.
 
----
-
-## Seguridad y Buenas Prácticas Implementadas
-
-Mejoras de seguridad y robustez implementadas en la arquitectura:
-
-1. **Secretos obligatorios en Producción (Fail-Fast):** En `scripts/deploy-ec2.sh` y `scripts/deploy-ec2.ps1`, el despliegue a entorno `prod` exige obligatoriamente las variables `POSTGRES_PASSWORD`, `RABBITMQ_PASSWORD`, `BFF_INTERNAL_KEY` y `JWT_SECRET`, bloqueando la ejecución si falta algún secreto o se intentan usar valores por defecto inseguros.
-2. **Propagación completa de secretos:** `docker-compose.yml` y `docker-compose.ec2.yml` propagan de forma uniforme `JWT_SECRET` y `BFF_INTERNAL_KEY` a todos los microservicios que validan tokens (`usuario`, `pedidos`, `chat`, `bff`).
-3. **Parametrización dinámica de base de datos y broker:** Tanto `POSTGRES_USER`/`POSTGRES_PASSWORD` como `RABBITMQ_USER`/`RABBITMQ_PASSWORD` están completamente parametrizados en `docker-compose.yml`, eliminando credenciales fijas y configurando comprobaciones `pg_isready` y `rabbitmq-diagnostics` acordes.
-4. **Health Checks y Despliegue Fail-Fast:** Todos los microservicios cuentan con endpoints `/health` y comprobaciones `healthcheck` en Docker Compose. Los scripts de despliegue ejecutan un bucle activo de sondeo que detecta contenedores fallidos o no saludables y aborta de inmediato con los logs de diagnóstico.
-5. **Manejo de saltos de línea (CRLF/LF):** Se integró `.gitattributes` y sanitización en PowerShell (`deploy-ec2.ps1`) para asegurar que scripts y archivos `.env.production` mantengan saltos de línea UNIX (LF) sin corrupción por retorno de carro (`\r`).
-6. **Validación estricta de migraciones (Flyway):** Todos los microservicios de base de datos cuentan con `validate-on-migrate=true` y `baseline-on-migrate=true` en sus perfiles de producción.
-
-## Seguridad: Pendientes Conocidos
-
-1. **Usuarios semilla y credenciales de demo públicas:** En un despliegue con datos reales hay que deshabilitar el seed o cambiar las contraseñas iniciales.
-2. **Security Group:** Mantener únicamente puertos `22` (restringido al CIDR del desarrollador/bastion), `80` y `443`.
-
-
----
-
-## Mejoras Pendientes
-
-- **Autorización fina** en `carrito`, `productos`, `notificacion` y `analitica` (hoy depende sobre todo del BFF).
-- **Concurrencia de repartidores:** bloqueo optimista (`@Version`) o update condicional cuando varios toman el mismo pedido.
-- **Terraform:** backend remoto (S3 + DynamoDB) en lugar de estado local.
-- **API Gateway:** unificar el gateway de Terraform (solo `/api/bff/*`) con el que se crea manualmente (`/{proxy+}`), y conectar todo el frontend a su endpoint.
-- **Documentación de la API:** integrar OpenAPI/Swagger con `springdoc` o una colección Postman versionada.
-- **Pruebas:** versionar el plan de JMeter (sin credenciales) y volver a medir carga con RabbitMQ y chat activos.
+Para ejecutar las pruebas en un microservicio:
+```bash
+cd Backend/<servicio>
+./mvnw test          # En Windows PowerShell: .\mvnw test
+```

@@ -1,6 +1,7 @@
 package cl.duoc.pedidos360.pedidos.kafka.config;
 
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.common.config.TopicConfig;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -28,7 +29,9 @@ public class KafkaTopicsConfig {
         return TopicBuilder.name(pedidosTopic)
                 .partitions(partitions)
                 .replicas(replicationFactor)
-                .config("retention.ms", "86400000") // 24 horas
+                .config(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE)
+                .config(TopicConfig.RETENTION_MS_CONFIG, "86400000") // 24 horas
+                .config(TopicConfig.SEGMENT_BYTES_CONFIG, "104857600") // 100 MB
                 .build();
     }
 
@@ -37,7 +40,9 @@ public class KafkaTopicsConfig {
         return TopicBuilder.name(pedidosDltTopic)
                 .partitions(partitions)
                 .replicas(replicationFactor)
-                .config("retention.ms", "604800000") // 7 días
+                .config(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE)
+                .config(TopicConfig.RETENTION_MS_CONFIG, "604800000") // 7 días
+                .config(TopicConfig.SEGMENT_BYTES_CONFIG, "104857600") // 100 MB
                 .build();
     }
 

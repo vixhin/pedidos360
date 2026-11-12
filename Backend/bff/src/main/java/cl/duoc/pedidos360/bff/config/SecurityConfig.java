@@ -138,6 +138,10 @@ public class SecurityConfig {
                 .requestMatchers("/api/bff/admin/rabbit/**")
                     .hasRole("ADMIN")
 
+                // ── ADMINISTRACIÓN KAFKA ───────────────────────────────────
+                .requestMatchers("/api/bff/admin/kafka/**")
+                    .hasRole("ADMIN")
+
                 // ── CHAT ───────────────────────────────────────────
                 .requestMatchers("/api/bff/chat/**")
                     .hasAnyAuthority("ROLE_CLIENTE", "ROLE_REPARTIDOR", "ROLE_ADMIN", "SCOPE_access_as_user")

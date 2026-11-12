@@ -83,8 +83,6 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
-    profiles:
-      - kafka-ui
 
   # Overlays para conectar pedidos y analítica a Kafka cuando se levante este compose
   pedidos:

@@ -180,6 +180,19 @@ public class ProxyController {
         return proxy(usuarioClient, request, jwt, body, "usuario-service", "/api/bff/admin/rabbit", "/api/admin/rabbit");
     }
 
+    // ─── KAFKA ADMIN ─────────────────────────────────────────────────────────
+
+    @RequestMapping(value = "/admin/kafka/**", method = {
+            RequestMethod.GET, RequestMethod.POST,
+            RequestMethod.PUT, RequestMethod.DELETE
+    })
+    public ResponseEntity<String> proxiarKafkaAdmin(
+            HttpServletRequest request,
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestBody(required = false) String body) {
+        return proxy(analiticaClient, request, jwt, body, "analitica-service", "/api/bff/admin/kafka", "/api/admin/kafka");
+    }
+
     // ─── HELPER GENÉRICO ────────────────────────────────────────────────────
 
     /**

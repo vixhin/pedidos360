@@ -1,0 +1,105 @@
+version: '3.8'
+
+# ==============================================================================
+# RABBITMQ CLUSTER - 3 NODES HIGH AVAILABILITY (PEDIDOS360)
+# ==============================================================================
+# Cumple el requisito académico del encargo DSY1107:
+# "El proyecto debe incluir un archivo docker-compose funcional para levantar un clúster de RabbitMQ."
+#
+# Uso:
+#   docker compose -f docker-compose.rabbitmq-cluster.yml up -d
+#
+# Verificación del estado del clúster:
+#   docker exec -it pedidos360-rabbit1 rabbitmqctl cluster_status
+# ==============================================================================
+
+services:
+  rabbit1:
+    image: rabbitmq:3.13-management-alpine
+    container_name: pedidos360-rabbit1
+    hostname: rabbit1
+    restart: unless-stopped
+    ports:
+      - "5672:5672"     # AMQP
+      - "15672:15672"   # Management UI
+    environment:
+      RABBITMQ_ERLANG_COOKIE: "pedidos360_erlang_cluster_secret_cookie_2026"
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+      RABBITMQ_NODENAME: rabbit@rabbit1
+    volumes:
+      - rabbit1_data:/var/lib/rabbitmq
+    networks:
+      - rabbitmq-cluster-net
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 25s
+
+  rabbit2:
+    image: rabbitmq:3.13-management-alpine
+    container_name: pedidos360-rabbit2
+    hostname: rabbit2
+    restart: unless-stopped
+    ports:
+      - "5673:5672"     # AMQP nodo 2
+      - "15673:15672"   # Management UI nodo 2
+    environment:
+      RABBITMQ_ERLANG_COOKIE: "pedidos360_erlang_cluster_secret_cookie_2026"
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+      RABBITMQ_NODENAME: rabbit@rabbit2
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbit cluster_nodes {['rabbit@rabbit1'],disc}"
+    volumes:
+      - rabbit2_data:/var/lib/rabbitmq
+    networks:
+      - rabbitmq-cluster-net
+    depends_on:
+      rabbit1:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 25s
+
+  rabbit3:
+    image: rabbitmq:3.13-management-alpine
+    container_name: pedidos360-rabbit3
+    hostname: rabbit3
+    restart: unless-stopped
+    ports:
+      - "5674:5672"     # AMQP nodo 3
+      - "15674:15672"   # Management UI nodo 3
+    environment:
+      RABBITMQ_ERLANG_COOKIE: "pedidos360_erlang_cluster_secret_cookie_2026"
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+      RABBITMQ_NODENAME: rabbit@rabbit3
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbit cluster_nodes {['rabbit@rabbit1'],disc}"
+    volumes:
+      - rabbit3_data:/var/lib/rabbitmq
+    networks:
+      - rabbitmq-cluster-net
+    depends_on:
+      rabbit1:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 25s
+
+volumes:
+  rabbit1_data:
+  rabbit2_data:
+  rabbit3_data:
+
+networks:
+  rabbitmq-cluster-net:
+    driver: bridge
+
