@@ -16,6 +16,10 @@ public class PedidoEstadoActualizadoPayload implements Serializable {
         this.anteriorEstado = anteriorEstado;
     }
 
+    public static PedidoEstadoActualizadoPayload of(Long usuarioId, String nuevoEstado, String anteriorEstado) {
+        return new PedidoEstadoActualizadoPayload(usuarioId, nuevoEstado, anteriorEstado);
+    }
+
     public Long getUsuarioId() {
         return usuarioId;
     }

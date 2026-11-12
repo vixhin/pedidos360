@@ -212,9 +212,9 @@ public class PedidoService {
         if (outboxService != null) {
             try {
                 PedidoEstadoActualizadoPayload payload = new PedidoEstadoActualizadoPayload(
-                        actualizado.getId(),
-                        estadoAnterior,
-                        nuevoEstado
+                        actualizado.getUsuarioId(),
+                        nuevoEstado,
+                        estadoAnterior
                 );
 
                 KafkaEvent<PedidoEstadoActualizadoPayload> kafkaEvent = new KafkaEvent<>(
