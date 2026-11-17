@@ -1,10 +1,12 @@
 package cl.duoc.pedidos360.pedidos.controller;
 
+import cl.duoc.pedidos360.pedidos.dto.CrearPedidoRequestDTO;
+import cl.duoc.pedidos360.pedidos.dto.CuponRequestDTO;
 import cl.duoc.pedidos360.pedidos.entity.ConfiguracionComercial;
-import cl.duoc.pedidos360.pedidos.entity.Cupon;
 import cl.duoc.pedidos360.pedidos.entity.Pedido;
 import cl.duoc.pedidos360.pedidos.security.JwtUtil;
 import cl.duoc.pedidos360.pedidos.service.PedidoService;
+import cl.duoc.pedidos360.pedidos.service.PrecioPedidoService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +32,7 @@ public class PedidoController {
     private final PedidoService pedidoService;
     private final JwtUtil jwtUtil;
     private final cl.duoc.pedidos360.pedidos.service.MotorComercialService motorComercialService;
+    private final PrecioPedidoService precioPedidoService;
     private final RestTemplate restTemplate = new RestTemplate();
 
     @Value("${bff.internal-key:${BFF_INTERNAL_KEY:pedidos360-internal-secret-key-local-2026}}")
@@ -38,10 +41,13 @@ public class PedidoController {
     @Value("${services.usuario-url:${USUARIO_SERVICE_URL:http://localhost:8081}}")
     private String usuarioServiceUrl;
 
-    public PedidoController(PedidoService pedidoService, JwtUtil jwtUtil, @org.springframework.beans.factory.annotation.Autowired(required = false) cl.duoc.pedidos360.pedidos.service.MotorComercialService motorComercialService) {
+    public PedidoController(PedidoService pedidoService, JwtUtil jwtUtil,
+                            @org.springframework.beans.factory.annotation.Autowired(required = false) cl.duoc.pedidos360.pedidos.service.MotorComercialService motorComercialService,
+                            @org.springframework.beans.factory.annotation.Autowired(required = false) PrecioPedidoService precioPedidoService) {
         this.pedidoService = pedidoService;
         this.jwtUtil = jwtUtil;
         this.motorComercialService = motorComercialService;
+        this.precioPedidoService = precioPedidoService;
     }
 
     @PostMapping("/cotizar")
@@ -77,11 +83,11 @@ public class PedidoController {
     }
 
     @PostMapping("/cupones")
-    public ResponseEntity<?> crearCupon(@RequestBody Cupon cupon) {
+    public ResponseEntity<?> crearCupon(@RequestBody CuponRequestDTO cupon) {
         if (motorComercialService == null) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Motor comercial no disponible");
         }
-        return ResponseEntity.ok(motorComercialService.crearCupon(cupon));
+        return ResponseEntity.ok(motorComercialService.crearCupon(cupon.toEntity()));
     }
 
     @PutMapping("/cupones/{id}/toggle")
@@ -160,10 +166,17 @@ public class PedidoController {
     }
 
     @PostMapping
-    public ResponseEntity<?> crear(@RequestBody Pedido pedido, HttpServletRequest request) {
+    public ResponseEntity<?> crear(@RequestBody CrearPedidoRequestDTO dto, HttpServletRequest request) {
+        Pedido pedido = dto.toEntity();
         try {
             UserIdentity identity = resolveIdentity(request);
             validarPuedeCrearPedido(identity, pedido);
+            // Precios y totales se recalculan en el servidor; los montos del cliente se descartan
+            if (precioPedidoService == null) {
+                return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                        .body(Map.of("success", false, "message", "Servicio de precios no disponible"));
+            }
+            precioPedidoService.recalcular(pedido, dto.codigoCupon(), dto.comuna());
             String idempotencyKey = request.getHeader("Idempotency-Key");
             if (StringUtils.hasText(idempotencyKey)) {
                 pedido.setIdempotencyKey(idempotencyKey.trim());
@@ -172,6 +185,13 @@ public class PedidoController {
         } catch (SecurityException se) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("success", false, "message", se.getMessage()));
+        } catch (IllegalArgumentException iae) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("success", false, "message", iae.getMessage()));
+        } catch (IllegalStateException ise) {
+            log.warn("[PEDIDOS] No se pudo recalcular el pedido: {}", ise.getMessage());
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(Map.of("success", false, "message", "No fue posible validar los precios. Intente nuevamente."));
         }
     }
 

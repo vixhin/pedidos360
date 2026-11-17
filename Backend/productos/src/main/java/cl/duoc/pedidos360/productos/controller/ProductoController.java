@@ -6,6 +6,7 @@ import cl.duoc.pedidos360.productos.dto.ProductoCreateDTO;
 import cl.duoc.pedidos360.productos.dto.ProductoResponseDTO;
 import cl.duoc.pedidos360.productos.entity.Promocion;
 import cl.duoc.pedidos360.productos.service.ProductoService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -60,7 +61,15 @@ public class ProductoController {
     }
 
     @PostMapping("/favoritos")
-    public ResponseEntity<ApiResponse<Void>> agregarFavorito(@Valid @RequestBody FavoritoRequestDTO dto) {
+    public ResponseEntity<ApiResponse<Void>> agregarFavorito(@Valid @RequestBody FavoritoRequestDTO dto,
+                                                            HttpServletRequest request) {
+        // Un usuario que no es ADMIN sólo puede agregar favoritos a su propia cuenta
+        Long callerId = request != null ? (Long) request.getAttribute("p360.userId") : null;
+        String role = request != null ? (String) request.getAttribute("p360.role") : null;
+        boolean interno = request != null && Boolean.TRUE.equals(request.getAttribute("p360.internal"));
+        if (!interno && callerId != null && (role == null || !role.toUpperCase().contains("ADMIN"))) {
+            dto.setUsuarioId(callerId);
+        }
         productoService.agregarFavorito(dto.getUsuarioId(), dto.getProductoId());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.ok("Producto agregado a favoritos correctamente", null));

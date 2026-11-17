@@ -163,7 +163,9 @@ export class Cart {
         this.cart.subtotal(),
         this.shippingCost(),
         this.serviceFee(),
-        this.addresses[0]?.detail || 'Santiago, Chile'
+        this.addresses[0]?.detail || 'Santiago, Chile',
+        this.couponCode(),
+        this.selectedComuna()
       )
       .subscribe({
         next: (created) => {

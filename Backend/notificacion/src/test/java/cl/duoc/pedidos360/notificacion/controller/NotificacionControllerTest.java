@@ -1,5 +1,6 @@
 package cl.duoc.pedidos360.notificacion.controller;
 
+import cl.duoc.pedidos360.notificacion.dto.NotificacionRequestDTO;
 import cl.duoc.pedidos360.notificacion.entity.Notificacion;
 import cl.duoc.pedidos360.notificacion.service.NotificacionService;
 import org.junit.jupiter.api.BeforeEach;
@@ -63,7 +64,7 @@ class NotificacionControllerTest {
     void testEnviar() {
         when(notificacionService.enviarNotificacion(any(Notificacion.class))).thenReturn(mockNotif);
 
-        ResponseEntity<Notificacion> response = notificacionController.enviar(mockNotif);
+        ResponseEntity<Notificacion> response = notificacionController.enviar(new NotificacionRequestDTO(5L, "Tu pedido va en camino", "PEDIDOS", null));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().getId()).isEqualTo(1L);

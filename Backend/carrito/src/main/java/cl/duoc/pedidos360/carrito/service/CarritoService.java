@@ -56,6 +56,10 @@ public class CarritoService {
         return carritoRepository.save(item);
     }
 
+    public Optional<CarritoItem> obtenerPorId(Long id) {
+        return carritoRepository.findById(id);
+    }
+
     public void eliminarItem(Long id) {
         carritoRepository.deleteById(id);
     }

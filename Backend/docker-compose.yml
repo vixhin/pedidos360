@@ -93,6 +93,8 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       BFF_INTERNAL_KEY: ${BFF_INTERNAL_KEY}
       JWT_SECRET: ${JWT_SECRET}
+      # Precios autoritativos y descuento de stock (sin esto apunta a localhost dentro del contenedor)
+      PRODUCTOS_SERVICE_URL: http://productos:8085
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: ${RABBITMQ_USER:-guest}
