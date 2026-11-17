@@ -42,6 +42,9 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
+            // El CSRF de Spring se desactiva porque la protección se implementa en JwtAuthenticationFilter:
+            // las peticiones mutantes autenticadas por cookie (p360_session, SameSite=Lax) deben enviar
+            // X-XSRF-TOKEN igual a la cookie XSRF-TOKEN (patrón double-submit). Con Bearer no aplica CSRF.
             .csrf(AbstractHttpConfigurer::disable)
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
