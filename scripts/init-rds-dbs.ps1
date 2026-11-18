@@ -48,10 +48,11 @@ Write-Host "==================================================================" 
 function Run-Query ([string]$query) {
     if (Get-Command psql -ErrorAction SilentlyContinue) {
         $env:PGPASSWORD = $DbPassword
+        $env:PGSSLMODE  = "prefer"
         $res = & psql -h $DbHost -p $DbPort -U $DbUser -d postgres -tAc $query 2>$null
         return $res
     } elseif (Get-Command docker -ErrorAction SilentlyContinue) {
-        $res = & docker run --rm -e PGPASSWORD=$DbPassword postgres:16-alpine psql -h $DbHost -p $DbPort -U $DbUser -d postgres -tAc $query 2>$null
+        $res = & docker run --rm -e PGPASSWORD=$DbPassword -e PGSSLMODE=prefer postgres:16-alpine psql -h $DbHost -p $DbPort -U $DbUser -d postgres -tAc $query 2>$null
         return $res
     } else {
         throw "No se encontro 'psql' ni 'docker' en el sistema."

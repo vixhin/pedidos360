@@ -64,10 +64,11 @@ echo "=================================================================="
 run_sql() {
     local sql_query="$1"
     if command -v psql >/dev/null 2>&1; then
-        PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d postgres -tAc "$sql_query"
+        PGPASSWORD="$DB_PASSWORD" PGSSLMODE="prefer" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d postgres -tAc "$sql_query"
     elif command -v docker >/dev/null 2>&1; then
         docker run --rm --net=host \
             -e PGPASSWORD="$DB_PASSWORD" \
+            -e PGSSLMODE="prefer" \
             postgres:16-alpine \
             psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d postgres -tAc "$sql_query"
     else

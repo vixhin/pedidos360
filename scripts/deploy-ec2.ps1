@@ -159,6 +159,7 @@ DB_HOST=$DbHostVal
 DB_PORT=$DbPortVal
 POSTGRES_USER=$PgUser
 POSTGRES_PASSWORD=$PgPass
+PGSSLMODE=require
 RABBITMQ_USER=$RmqUser
 RABBITMQ_PASSWORD=$RmqPass
 BFF_INTERNAL_KEY=$BffKey
@@ -174,8 +175,24 @@ $EnvWriteCmd = $EnvWriteCmd -replace "`r", ""
 ssh @SshArgs "ubuntu@$PublicIp" $EnvWriteCmd
 
 if ($DbHostVal -ne "postgres") {
-  Write-Host "=== Inicializando bases de datos en AWS RDS ($DbHostVal) ===" -ForegroundColor Cyan
-  $InitRdsCmd = "cd /opt/pedidos360/app && chmod +x scripts/init-rds-dbs.sh && ./scripts/init-rds-dbs.sh"
+  Write-Host "=== Inicializando bases de datos en AWS RDS ($DbHostVal) con SSL ===" -ForegroundColor Cyan
+  $InitRdsCmd = @"
+export PGSSLMODE=require
+export PGPASSWORD='$PgPass'
+for db in usuario_db pedidos_db carrito_db analitica_db productos_db notificacion_db chat_db; do
+  EXISTS=`$(docker run --rm --net=host -e PGPASSWORD='$PgPass' -e PGSSLMODE=require postgres:16-alpine \
+    psql -h "$DbHostVal" -p "$DbPortVal" -U "$PgUser" -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname = '`$db';" 2>/dev/null || echo "0")
+  if [ "`$EXISTS" = "1" ]; then
+    echo "  [OK] Base de datos '`$db' ya existe."
+  else
+    echo "  [CREANDO] Creando base de datos '`$db'..."
+    docker run --rm --net=host -e PGPASSWORD='$PgPass' -e PGSSLMODE=require postgres:16-alpine \
+      psql -h "$DbHostVal" -p "$DbPortVal" -U "$PgUser" -d postgres -tAc "CREATE DATABASE `$db;"
+    echo "  [CREADA] '`$db' creada exitosamente."
+  fi
+done
+"@
+  $InitRdsCmd = $InitRdsCmd -replace "`r", ""
   ssh @SshArgs "ubuntu@$PublicIp" $InitRdsCmd
 }
 
@@ -271,7 +288,7 @@ $ComposeFn
 for svc in usuario pedidos productos carrito notificacion analitica chat; do
   echo "--- Verificando Flyway en `${svc} ---"
   if [ "$DbHostVal" != "postgres" ]; then
-    FAILED=`$(docker run --rm --net=host -e PGPASSWORD="$PgPass" postgres:16-alpine \
+    FAILED=`$(docker run --rm --net=host -e PGPASSWORD="$PgPass" -e PGSSLMODE=prefer postgres:16-alpine \
       psql -h "$DbHostVal" -p "$DbPortVal" -U "$PgUser" -d "`${svc}_db" \
       -tAc "SELECT COUNT(*) FROM flyway_schema_history WHERE success = false;" 2>/dev/null || echo "ERROR")
   else

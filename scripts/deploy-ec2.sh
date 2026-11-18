@@ -157,6 +157,7 @@ DB_HOST=${DB_HOST_VAL}
 DB_PORT=${DB_PORT_VAL}
 POSTGRES_USER=${POSTGRES_USER_VAL}
 POSTGRES_PASSWORD=${POSTGRES_PASS_VAL}
+PGSSLMODE=require
 RABBITMQ_USER=${RABBITMQ_USER_VAL}
 RABBITMQ_PASSWORD=${RABBITMQ_PASS_VAL}
 BFF_INTERNAL_KEY=${BFF_KEY_VAL}
@@ -168,13 +169,24 @@ INNEREOF
 sed -i 's/\r$//' /opt/pedidos360/app/Backend/.env.production
 REMOTE_ENV
 
-# Si se usa AWS RDS, inicializar las 7 bases de datos antes de arrancar los servicios
+# Si se usa AWS RDS, inicializar las 7 bases de datos con SSL requerido antes de arrancar los servicios
 if [ "${DB_HOST_VAL}" != "postgres" ]; then
-  echo "=== Inicializando bases de datos en AWS RDS (${DB_HOST_VAL}) ==="
+  echo "=== Inicializando bases de datos en AWS RDS (${DB_HOST_VAL}) con SSL ==="
   ssh ${SSH_OPTS} ubuntu@"${PUBLIC_IP}" 'bash -s' <<REMOTE_INIT_RDS
-    cd /opt/pedidos360/app
-    chmod +x scripts/init-rds-dbs.sh
-    ./scripts/init-rds-dbs.sh
+    export PGSSLMODE=require
+    export PGPASSWORD='${POSTGRES_PASS_VAL}'
+    for db in usuario_db pedidos_db carrito_db analitica_db productos_db notificacion_db chat_db; do
+      EXISTS=\$(docker run --rm --net=host -e PGPASSWORD='${POSTGRES_PASS_VAL}' -e PGSSLMODE=require postgres:16-alpine \
+        psql -h "${DB_HOST_VAL}" -p "${DB_PORT_VAL}" -U "${POSTGRES_USER_VAL}" -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname = '\$db';" 2>/dev/null || echo "0")
+      if [ "\$EXISTS" = "1" ]; then
+        echo "  [OK] Base de datos '\$db' ya existe."
+      else
+        echo "  [CREANDO] Creando base de datos '\$db'..."
+        docker run --rm --net=host -e PGPASSWORD='${POSTGRES_PASS_VAL}' -e PGSSLMODE=require postgres:16-alpine \
+          psql -h "${DB_HOST_VAL}" -p "${DB_PORT_VAL}" -U "${POSTGRES_USER_VAL}" -d postgres -tAc "CREATE DATABASE \$db;"
+        echo "  [CREADA] '\$db' creada exitosamente."
+      fi
+    done
 REMOTE_INIT_RDS
 fi
 
@@ -289,7 +301,7 @@ ssh ${SSH_OPTS} ubuntu@"${PUBLIC_IP}" 'bash -s' <<REMOTE_POSTDEPLOY
   for svc in usuario pedidos productos carrito notificacion analitica chat; do
     echo "--- Verificando Flyway en \${svc} ---"
     if [ "${DB_HOST_VAL}" != "postgres" ]; then
-      FAILED=\$(docker run --rm --net=host -e PGPASSWORD="${POSTGRES_PASS_VAL}" postgres:16-alpine \
+      FAILED=\$(docker run --rm --net=host -e PGPASSWORD="${POSTGRES_PASS_VAL}" -e PGSSLMODE=prefer postgres:16-alpine \
         psql -h "${DB_HOST_VAL}" -p "${DB_PORT_VAL}" -U "${POSTGRES_USER_VAL}" -d "\${svc}_db" \
         -tAc "SELECT COUNT(*) FROM flyway_schema_history WHERE success = false;" 2>/dev/null || echo "ERROR")
     else
