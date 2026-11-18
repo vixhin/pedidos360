@@ -1,3 +1,7 @@
+data "aws_availability_zones" "available" {
+  state = "available"
+}
+
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_support   = true
@@ -19,6 +23,26 @@ resource "aws_subnet" "public" {
 
   tags = {
     Name        = "pedidos360-public-subnet-${var.environment}"
+    Project     = "Pedidos360"
+    Environment = var.environment
+    ManagedBy   = "Terraform"
+  }
+}
+
+resource "aws_subnet" "secondary" {
+  vpc_id     = aws_vpc.main.id
+  cidr_block = var.secondary_subnet_cidr
+  availability_zone = var.secondary_availability_zone != null ? var.secondary_availability_zone : (
+    length(data.aws_availability_zones.available.names) > 1 ? (
+      data.aws_availability_zones.available.names[0] != aws_subnet.public.availability_zone ?
+      data.aws_availability_zones.available.names[0] :
+      data.aws_availability_zones.available.names[1]
+    ) : null
+  )
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name        = "pedidos360-secondary-subnet-${var.environment}"
     Project     = "Pedidos360"
     Environment = var.environment
     ManagedBy   = "Terraform"
@@ -54,5 +78,10 @@ resource "aws_route_table" "public" {
 
 resource "aws_route_table_association" "public" {
   subnet_id      = aws_subnet.public.id
+  route_table_id = aws_route_table.public.id
+}
+
+resource "aws_route_table_association" "secondary" {
+  subnet_id      = aws_subnet.secondary.id
   route_table_id = aws_route_table.public.id
 }

@@ -51,8 +51,10 @@ if (-not (Test-Path $TfDir)) { Write-Error "El directorio $TfDir no existe." }
 
 Push-Location $TfDir
 try {
-  $PublicIp  = (terraform output -raw public_ip 2>$null).Trim()
-  $PublicDns = (terraform output -raw public_dns 2>$null).Trim()
+  $PublicIp     = (terraform output -raw public_ip 2>$null).Trim()
+  $PublicDns    = (terraform output -raw public_dns 2>$null).Trim()
+  $DbHostOutput = (terraform output -raw db_host 2>$null).Trim()
+  $DbPortOutput = (terraform output -raw db_port 2>$null).Trim()
 } finally { Pop-Location }
 
 if ([string]::IsNullOrWhiteSpace($PublicIp)) {
@@ -66,6 +68,11 @@ Write-Host "-> Elastic IP     : $PublicIp"  -ForegroundColor Green
 Write-Host "-> AWS Public DNS : $PublicDns" -ForegroundColor Green
 Write-Host "-> PUBLIC_DOMAIN  : $PublicDomain" -ForegroundColor Green
 Write-Host "-> PUBLIC_URL     : $PublicUrl" -ForegroundColor Green
+if ($DbHostOutput -and $DbHostOutput -ne "null") {
+  Write-Host "-> AWS RDS Host   : $DbHostOutput`:$($DbPortOutput ?? '5432')" -ForegroundColor Green
+} else {
+  Write-Host "-> PostgreSQL     : Contenedor Docker Local" -ForegroundColor Yellow
+}
 
 # ------------------------------------------------------------------------------
 # Resolución opcional de API Gateway
@@ -135,11 +142,21 @@ if ($Environment -eq "prod") {
 $AzTenant   = if ($env:AZURE_TENANT_ID)    { $env:AZURE_TENANT_ID }    else { "a50f6528-499a-4d94-bcad-ed9b200f7c7b" }
 $AzClientId = if ($env:AZURE_API_CLIENT_ID){ $env:AZURE_API_CLIENT_ID }else { "5febc8e2-ee14-4452-8914-7d237eb5a6f5" }
 
+if ($DbHostOutput -and $DbHostOutput -ne "null") {
+  $DbHostVal = $DbHostOutput
+  $DbPortVal = if ($DbPortOutput -and $DbPortOutput -ne "null") { $DbPortOutput } else { "5432" }
+} else {
+  $DbHostVal = if ($env:DB_HOST) { $env:DB_HOST } else { "postgres" }
+  $DbPortVal = if ($env:DB_PORT) { $env:DB_PORT } else { "5432" }
+}
+
 $EnvContent = @"
 PUBLIC_DOMAIN=$PublicDomain
 PUBLIC_URL=$PublicUrl
 FRONTEND_ORIGIN=$PublicUrl
 BFF_PUBLIC_URL=$BffPublicUrl
+DB_HOST=$DbHostVal
+DB_PORT=$DbPortVal
 POSTGRES_USER=$PgUser
 POSTGRES_PASSWORD=$PgPass
 RABBITMQ_USER=$RmqUser
@@ -155,6 +172,12 @@ $EnvContent = $EnvContent -replace "`r", ""
 $EnvWriteCmd = "cat <<'EOF' > /opt/pedidos360/app/Backend/.env.production`n${EnvContent}`nEOF`nsed -i 's/\r$//' /opt/pedidos360/app/Backend/.env.production"
 $EnvWriteCmd = $EnvWriteCmd -replace "`r", ""
 ssh @SshArgs "ubuntu@$PublicIp" $EnvWriteCmd
+
+if ($DbHostVal -ne "postgres") {
+  Write-Host "=== Inicializando bases de datos en AWS RDS ($DbHostVal) ===" -ForegroundColor Cyan
+  $InitRdsCmd = "cd /opt/pedidos360/app && chmod +x scripts/init-rds-dbs.sh && ./scripts/init-rds-dbs.sh"
+  ssh @SshArgs "ubuntu@$PublicIp" $InitRdsCmd
+}
 
 # ------------------------------------------------------------------------------
 # Función compose remota (se inyecta en cada bloque SSH como texto literal)
@@ -247,10 +270,16 @@ $ComposeFn
 # Flyway
 for svc in usuario pedidos productos carrito notificacion analitica chat; do
   echo "--- Verificando Flyway en `${svc} ---"
-  FAILED=`$(compose exec -T postgres psql \
-    -U "$PgUser" \
-    -d "`${svc}_db" \
-    -tAc "SELECT COUNT(*) FROM flyway_schema_history WHERE success = false;" 2>/dev/null || echo "ERROR")
+  if [ "$DbHostVal" != "postgres" ]; then
+    FAILED=`$(docker run --rm --net=host -e PGPASSWORD="$PgPass" postgres:16-alpine \
+      psql -h "$DbHostVal" -p "$DbPortVal" -U "$PgUser" -d "`${svc}_db" \
+      -tAc "SELECT COUNT(*) FROM flyway_schema_history WHERE success = false;" 2>/dev/null || echo "ERROR")
+  else
+    FAILED=`$(compose exec -T postgres psql \
+      -U "$PgUser" \
+      -d "`${svc}_db" \
+      -tAc "SELECT COUNT(*) FROM flyway_schema_history WHERE success = false;" 2>/dev/null || echo "ERROR")
+  fi
   if [ "`$FAILED" = "0" ]; then
     echo "Flyway OK en `${svc}"
   else

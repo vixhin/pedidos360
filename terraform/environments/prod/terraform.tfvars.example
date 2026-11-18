@@ -1,6 +1,16 @@
-aws_region       = "us-east-1"
-ami_id           = "ami-0c7217cdde317cfec"
-instance_type    = "t3.medium"
-key_name         = "pedidos360-prod-key"
-allowed_ssh_cidr = "200.1.2.3/32"
-environment      = "prod"
+aws_region           = "us-east-1"
+ami_id               = "ami-0c7217cdde317cfec"
+instance_type        = "t3.medium"
+key_name             = "pedidos360-prod-key"
+allowed_ssh_cidr     = "200.1.2.3/32"
+environment          = "prod"
+iam_instance_profile = "LabInstanceProfile"
+
+# RDS Database Configuration (Opcional, habilitado por defecto)
+enable_rds             = true
+db_instance_class      = "db.t3.micro"
+db_name                = "postgres"
+db_username            = "postgres"
+db_password            = "Pedidos360Secure2026!"
+db_publicly_accessible = false
+allowed_db_admin_cidr  = ""

@@ -4,7 +4,7 @@ Este directorio contiene la definición de infraestructura en AWS para el proyec
 
 ---
 
-## 📋 Requisitos Previos
+##  Requisitos Previos
 
 - **Terraform CLI**: `>= 1.5.0`
 - **AWS CLI**: `>= 2.0`
@@ -12,7 +12,7 @@ Este directorio contiene la definición de infraestructura en AWS para el proyec
 
 ---
 
-## 🔐 Configuración de Credenciales AWS
+##  Configuración de Credenciales AWS
 
 Para ejecutar comandos de Terraform de forma local o en AWS Academy, configure las credenciales de sesión en su terminal:
 
@@ -34,7 +34,7 @@ $env:AWS_DEFAULT_REGION="us-east-1"
 
 ---
 
-## 📁 Estructura del Proyecto
+##  Estructura del Proyecto
 
 ```
 terraform/
@@ -50,16 +50,34 @@ terraform/
 │       ├── outputs.tf
 │       └── terraform.tfvars.example
 └── modules/
-    ├── network/              # VPC, Subnet Pública, IGW, Route Table
+    ├── network/              # VPC, Subnet Pública y Secundaria Multi-AZ, IGW, Route Table
     ├── security_group/       # Reglas de SG (HTTP 80, HTTPS 443, SSH 22 restringido)
     ├── ec2/                  # Instancia EC2 Linux (Ubuntu + Docker Engine)
     ├── elastic_ip/           # Elastic IP estática
-    └── api_gateway/          # HTTP API Gateway v2 (Proxy ANY /api/bff/*, CORS & Throttling)
+    ├── api_gateway/          # HTTP API Gateway v2 (Proxy ANY /api/bff/*, CORS & Throttling)
+    └── rds/                  # Base de datos independiente AWS RDS PostgreSQL (db.t3.micro, Subnet Group, SG aislado)
 ```
 
 ---
 
-## 🛠️ Comandos de Aprovisionamiento (Terraform)
+##  Módulo de Base de Datos Independiente en AWS (RDS PostgreSQL)
+
+Para desacoplar el almacenamiento de datos del cómputo en EC2, la infraestructura cuenta con el módulo `modules/rds`:
+
+- **Servicio:** Amazon RDS for PostgreSQL (`engine = "postgres"`, versión `16.3`).
+- **Networking Multi-AZ:** Utiliza un `aws_db_subnet_group` que abarca al menos 2 zonas de disponibilidad (`us-east-1a` y `us-east-1b`) según la normativa de AWS RDS.
+- **Aislamiento de Red (Zero-Trust):** La base de datos se despliega con `publicly_accessible = false` y su Security Group permite tráfico entrante en el puerto `5432` **únicamente** desde la Security Group de la instancia EC2 (`source_security_group_id`).
+- **Optimización de Créditos (Learner Lab):** 
+  - `instance_class = "db.t3.micro"` (costo mínimo compatible con el saldo de $50 USD).
+  - `multi_az = false` (Single-AZ para reducir costo a la mitad).
+  - `allocated_storage = 20` (gp3, con `max_allocated_storage = 20` para evitar auto-escalado de cobros).
+  - `backup_retention_period = 0` y `skip_final_snapshot = true` (evita costos por almacenamiento persistente de snapshots al destruir con Terraform).
+- **Outputs exportados:** `db_endpoint`, `db_host` y `db_port`. El script de despliegue (`deploy-ec2.sh` / `deploy-ec2.ps1`) inyecta automáticamente `DB_HOST` en el archivo `.env.production` de la EC2 para que todos los microservicios apunten a AWS RDS.
+- **Inicialización de bases de datos:** El script `scripts/init-rds-dbs.sh` crea de forma automatizada e idempotente las 7 bases de datos (`usuario_db`, `pedidos_db`, `carrito_db`, `analitica_db`, `productos_db`, `notificacion_db`, `chat_db`) conectándose al endpoint de RDS.
+
+---
+
+##  Comandos de Aprovisionamiento (Terraform)
 
 ### Entorno de Desarrollo (`dev`)
 
@@ -100,7 +118,7 @@ terraform apply
 
 ---
 
-## 🚀 ETAPA 2 — Proceso de Despliegue en EC2 (Deployment)
+##  ETAPA 2 — Proceso de Despliegue en EC2 (Deployment)
 
 Una vez completado `terraform apply`, ejecute el script automatizado e idempotente de despliegue:
 
@@ -128,7 +146,7 @@ Una vez completado `terraform apply`, ejecute el script automatizado e idempoten
 
 ---
 
-## 🔐 Configuración de Microsoft Entra ID (Azure AD)
+##  Configuración de Microsoft Entra ID (Azure AD)
 
 Tras desplegar en AWS, registre la URL pública generada en el portal de Azure AD:
 
@@ -137,7 +155,7 @@ Tras desplegar en AWS, registre la URL pública generada en el portal de Azure A
 
 ---
 
-## 🔄 Redeploy & Rollback
+##  Redeploy & Rollback
 
 ### Re-desplegar última versión:
 ```bash
@@ -155,7 +173,7 @@ docker compose -f docker-compose.yml -f docker-compose.ec2.yml --env-file .env.p
 
 ---
 
-## 💾 Gestión de Estado (Terraform State)
+##  Gestión de Estado (Terraform State)
 
 - Cada entorno (`dev` y `prod`) posee su propio archivo de estado local **`terraform.tfstate`**.
 - Los archivos `*.tfstate` y `terraform.tfvars` están incluidos en `.gitignore` y **NUNCA** deben subirse al repositorio Git.
@@ -163,7 +181,7 @@ docker compose -f docker-compose.yml -f docker-compose.ec2.yml --env-file .env.p
 
 ---
 
-## 🛑 Detener EC2 vs Destruir Infraestructura (`stop` vs `destroy`)
+##  Detener EC2 vs Destruir Infraestructura (`stop` vs `destroy`)
 
 ### 1. Apagar Temporalmente la Instancia (`stop`)
 Apaga la máquina virtual sin destruir la VPC, Security Group ni la Elastic IP. **La IP pública se mantiene estable al volver a iniciar.**

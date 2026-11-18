@@ -51,6 +51,8 @@ fi
 
 PUBLIC_IP=$(cd "${TF_DIR}" && terraform output -raw public_ip 2>/dev/null || echo "")
 PUBLIC_DNS=$(cd "${TF_DIR}" && terraform output -raw public_dns 2>/dev/null || echo "")
+DB_HOST_OUTPUT=$(cd "${TF_DIR}" && terraform output -raw db_host 2>/dev/null || echo "")
+DB_PORT_OUTPUT=$(cd "${TF_DIR}" && terraform output -raw db_port 2>/dev/null || echo "")
 
 if [ -z "${PUBLIC_IP}" ]; then
   echo "Error: No se pudo obtener public_ip desde terraform output."
@@ -65,6 +67,11 @@ echo "-> Elastic IP     : ${PUBLIC_IP}"
 echo "-> AWS Public DNS : ${PUBLIC_DNS}"
 echo "-> PUBLIC_DOMAIN  : ${PUBLIC_DOMAIN}"
 echo "-> PUBLIC_URL     : ${PUBLIC_URL}"
+if [ -n "${DB_HOST_OUTPUT}" ] && [ "${DB_HOST_OUTPUT}" != "null" ]; then
+  echo "-> AWS RDS Host   : ${DB_HOST_OUTPUT}:${DB_PORT_OUTPUT:-5432}"
+else
+  echo "-> PostgreSQL     : Contenedor Docker Local"
+fi
 
 # ------------------------------------------------------------------------------
 # Resolución opcional de API Gateway
@@ -131,6 +138,14 @@ else
   JWT_SECRET_VAL="${JWT_SECRET:-pedidos360-super-secret-jwt-key-dev-2026}"
 fi
 
+if [ -n "${DB_HOST_OUTPUT}" ] && [ "${DB_HOST_OUTPUT}" != "null" ]; then
+  DB_HOST_VAL="${DB_HOST_OUTPUT}"
+  DB_PORT_VAL="${DB_PORT_OUTPUT:-5432}"
+else
+  DB_HOST_VAL="${DB_HOST:-postgres}"
+  DB_PORT_VAL="${DB_PORT:-5432}"
+fi
+
 # Generar .env.production en la EC2 (heredoc sin comillas → variables locales se expanden)
 ssh ${SSH_OPTS} ubuntu@"${PUBLIC_IP}" 'bash -s' <<REMOTE_ENV
 cat <<'INNEREOF' > /opt/pedidos360/app/Backend/.env.production
@@ -138,6 +153,8 @@ PUBLIC_DOMAIN=${PUBLIC_DOMAIN}
 PUBLIC_URL=${PUBLIC_URL}
 FRONTEND_ORIGIN=${PUBLIC_URL}
 BFF_PUBLIC_URL=${BFF_PUBLIC_URL}
+DB_HOST=${DB_HOST_VAL}
+DB_PORT=${DB_PORT_VAL}
 POSTGRES_USER=${POSTGRES_USER_VAL}
 POSTGRES_PASSWORD=${POSTGRES_PASS_VAL}
 RABBITMQ_USER=${RABBITMQ_USER_VAL}
@@ -150,6 +167,16 @@ CHAT_RETENTION_DAYS=${CHAT_RETENTION_DAYS:-30}
 INNEREOF
 sed -i 's/\r$//' /opt/pedidos360/app/Backend/.env.production
 REMOTE_ENV
+
+# Si se usa AWS RDS, inicializar las 7 bases de datos antes de arrancar los servicios
+if [ "${DB_HOST_VAL}" != "postgres" ]; then
+  echo "=== Inicializando bases de datos en AWS RDS (${DB_HOST_VAL}) ==="
+  ssh ${SSH_OPTS} ubuntu@"${PUBLIC_IP}" 'bash -s' <<REMOTE_INIT_RDS
+    cd /opt/pedidos360/app
+    chmod +x scripts/init-rds-dbs.sh
+    ./scripts/init-rds-dbs.sh
+REMOTE_INIT_RDS
+fi
 
 # ------------------------------------------------------------------------------
 # Desplegar pila de contenedores
@@ -261,10 +288,16 @@ ssh ${SSH_OPTS} ubuntu@"${PUBLIC_IP}" 'bash -s' <<REMOTE_POSTDEPLOY
   # ── 1. Flyway: verificar migraciones exitosas por servicio ──
   for svc in usuario pedidos productos carrito notificacion analitica chat; do
     echo "--- Verificando Flyway en \${svc} ---"
-    FAILED=\$(compose exec -T postgres psql \
-      -U "${POSTGRES_USER_VAL}" \
-      -d "\${svc}_db" \
-      -tAc "SELECT COUNT(*) FROM flyway_schema_history WHERE success = false;" 2>/dev/null || echo "ERROR")
+    if [ "${DB_HOST_VAL}" != "postgres" ]; then
+      FAILED=\$(docker run --rm --net=host -e PGPASSWORD="${POSTGRES_PASS_VAL}" postgres:16-alpine \
+        psql -h "${DB_HOST_VAL}" -p "${DB_PORT_VAL}" -U "${POSTGRES_USER_VAL}" -d "\${svc}_db" \
+        -tAc "SELECT COUNT(*) FROM flyway_schema_history WHERE success = false;" 2>/dev/null || echo "ERROR")
+    else
+      FAILED=\$(compose exec -T postgres psql \
+        -U "${POSTGRES_USER_VAL}" \
+        -d "\${svc}_db" \
+        -tAc "SELECT COUNT(*) FROM flyway_schema_history WHERE success = false;" 2>/dev/null || echo "ERROR")
+    fi
     if [ "\${FAILED}" = "0" ]; then
       echo "Flyway OK en \${svc}"
     else

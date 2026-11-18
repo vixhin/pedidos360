@@ -38,3 +38,48 @@ variable "iam_instance_profile" {
   description = "Optional IAM instance profile name (e.g. LabInstanceProfile in AWS Academy Learner Lab)"
   default     = "LabInstanceProfile"
 }
+
+# ─── BASE DE DATOS AWS RDS POSTGRESQL ─────────────────────────────────────────
+
+variable "enable_rds" {
+  type        = bool
+  description = "Whether to provision the independent AWS RDS PostgreSQL database"
+  default     = true
+}
+
+variable "db_instance_class" {
+  type        = string
+  description = "RDS instance class (e.g. db.t3.micro for low cost in Learner Lab)"
+  default     = "db.t3.micro"
+}
+
+variable "db_name" {
+  type        = string
+  description = "Initial default database name created in RDS"
+  default     = "postgres"
+}
+
+variable "db_username" {
+  type        = string
+  description = "Master username for RDS PostgreSQL"
+  default     = "postgres"
+}
+
+variable "db_password" {
+  type        = string
+  description = "Master password for RDS PostgreSQL"
+  sensitive   = true
+  default     = "Pedidos360Secure2026!"
+}
+
+variable "db_publicly_accessible" {
+  type        = bool
+  description = "Whether RDS is accessible from the internet (false recommended for VPC private security)"
+  default     = false
+}
+
+variable "allowed_db_admin_cidr" {
+  type        = string
+  description = "Optional CIDR block allowed direct inbound access to port 5432 for administrative GUI tools"
+  default     = ""
+}

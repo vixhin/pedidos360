@@ -50,3 +50,18 @@ module "api_gateway" {
   public_domain = local.public_domain
   environment   = var.environment
 }
+
+module "rds" {
+  count                 = var.enable_rds ? 1 : 0
+  source                = "../../modules/rds"
+  environment           = var.environment
+  vpc_id                = module.network.vpc_id
+  subnet_ids            = module.network.db_subnet_ids
+  ec2_security_group_id = module.security_group.security_group_id
+  db_name               = var.db_name
+  db_username           = var.db_username
+  db_password           = var.db_password
+  instance_class        = var.db_instance_class
+  publicly_accessible   = var.db_publicly_accessible
+  allowed_admin_cidr    = var.allowed_db_admin_cidr
+}
