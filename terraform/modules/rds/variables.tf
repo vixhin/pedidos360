@@ -38,8 +38,8 @@ variable "db_password" {
 
 variable "engine_version" {
   type        = string
-  description = "PostgreSQL engine version"
-  default     = "16.3"
+  description = "PostgreSQL engine version (optional, defaults to null so AWS automatically assigns the current stable default version)"
+  default     = null
 }
 
 variable "instance_class" {

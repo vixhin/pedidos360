@@ -73,6 +73,10 @@ resource "aws_db_instance" "this" {
   backup_retention_period    = var.backup_retention_period
   apply_immediately          = true
 
+  lifecycle {
+    ignore_changes = [engine_version]
+  }
+
   tags = {
     Name        = "pedidos360-db-${var.environment}"
     Project     = "Pedidos360"
