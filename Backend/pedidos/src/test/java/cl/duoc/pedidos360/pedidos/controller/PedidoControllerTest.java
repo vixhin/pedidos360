@@ -1,7 +1,9 @@
 package cl.duoc.pedidos360.pedidos.controller;
 
+import cl.duoc.pedidos360.pedidos.dto.CrearPedidoRequestDTO;
 import cl.duoc.pedidos360.pedidos.entity.Pedido;
 import cl.duoc.pedidos360.pedidos.service.PedidoService;
+import cl.duoc.pedidos360.pedidos.service.PrecioPedidoService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,6 +30,9 @@ class PedidoControllerTest {
 
     @Mock
     private PedidoService pedidoService;
+
+    @Mock
+    private PrecioPedidoService precioPedidoService;
 
     @InjectMocks
     private PedidoController pedidoController;
@@ -58,8 +63,8 @@ class PedidoControllerTest {
     @DisplayName("1. cliente crea pedido con usuarioId falso -> backend fuerza callerUserId")
     void testClienteCreaPedidoConUsuarioIdFalso() {
         MockHttpServletRequest request = createAuthRequest("10", "CLIENTE");
-        Pedido pedidoEntrante = new Pedido();
-        pedidoEntrante.setUsuarioId(999L); // Falso
+        CrearPedidoRequestDTO pedidoEntrante = new CrearPedidoRequestDTO(
+                999L, null, null, null, null, "Calle Falsa 123", List.of(), null, null); // usuarioId falso
 
         when(pedidoService.guardar(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
 

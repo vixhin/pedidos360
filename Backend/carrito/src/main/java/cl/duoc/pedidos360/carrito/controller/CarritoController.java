@@ -1,5 +1,7 @@
 package cl.duoc.pedidos360.carrito.controller;
 
+import cl.duoc.pedidos360.carrito.dto.CantidadRequestDTO;
+import cl.duoc.pedidos360.carrito.dto.CarritoItemRequestDTO;
 import cl.duoc.pedidos360.carrito.entity.CarritoItem;
 import cl.duoc.pedidos360.carrito.service.CarritoService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -34,7 +36,8 @@ public class CarritoController {
     }
 
     @PostMapping
-    public ResponseEntity<CarritoItem> agregarItem(@RequestBody CarritoItem item, @Autowired(required = false) HttpServletRequest request) {
+    public ResponseEntity<CarritoItem> agregarItem(@RequestBody CarritoItemRequestDTO dto, @Autowired(required = false) HttpServletRequest request) {
+        CarritoItem item = dto.toEntity();
         if (request != null) {
             Long callerId = (Long) request.getAttribute("p360.userId");
             String role = (String) request.getAttribute("p360.role");
@@ -45,18 +48,22 @@ public class CarritoController {
         return ResponseEntity.ok(carritoService.agregarOActualizar(item));
     }
 
-    public ResponseEntity<CarritoItem> agregarItem(CarritoItem item) {
-        return agregarItem(item, null);
+    public ResponseEntity<CarritoItem> agregarItem(CarritoItemRequestDTO dto) {
+        return agregarItem(dto, null);
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<CarritoItem> actualizarCantidad(
             @PathVariable Long id,
             @RequestParam(required = false) Integer cantidad,
-            @RequestBody(required = false) CarritoItem body) {
-        Integer qty = cantidad != null ? cantidad : (body != null ? body.getCantidad() : null);
+            @RequestBody(required = false) CantidadRequestDTO body,
+            @Autowired(required = false) HttpServletRequest request) {
+        Integer qty = cantidad != null ? cantidad : (body != null ? body.cantidad() : null);
         if (qty == null) {
             return ResponseEntity.badRequest().build();
+        }
+        if (request != null) {
+            validarDuenoDelItem(request, id);
         }
         CarritoItem actualizado = carritoService.actualizarCantidad(id, qty);
         if (actualizado == null) {
@@ -66,9 +73,23 @@ public class CarritoController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> eliminarItem(@PathVariable Long id) {
+    public ResponseEntity<Void> eliminarItem(@PathVariable Long id, @Autowired(required = false) HttpServletRequest request) {
+        if (request != null) {
+            validarDuenoDelItem(request, id);
+        }
         carritoService.eliminarItem(id);
         return ResponseEntity.noContent().build();
+    }
+
+    public ResponseEntity<Void> eliminarItem(Long id) {
+        return eliminarItem(id, null);
+    }
+
+    /** Evita IDOR: sólo el dueño del ítem (o ADMIN/VENDEDOR) puede modificarlo o eliminarlo. */
+    private void validarDuenoDelItem(HttpServletRequest request, Long itemId) {
+        CarritoItem item = carritoService.obtenerPorId(itemId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ítem de carrito no encontrado."));
+        validarPropietarioOAdmin(request, item.getUsuarioId());
     }
 
     @DeleteMapping("/usuario/{usuarioId}")

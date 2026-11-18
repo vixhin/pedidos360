@@ -1,5 +1,6 @@
 package cl.duoc.pedidos360.carrito.controller;
 
+import cl.duoc.pedidos360.carrito.dto.CarritoItemRequestDTO;
 import cl.duoc.pedidos360.carrito.entity.CarritoItem;
 import cl.duoc.pedidos360.carrito.service.CarritoService;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,7 +55,7 @@ class CarritoControllerTest {
     void testAgregarItem() {
         when(carritoService.agregarOActualizar(any(CarritoItem.class))).thenReturn(mockItem);
 
-        ResponseEntity<CarritoItem> response = carritoController.agregarItem(mockItem);
+        ResponseEntity<CarritoItem> response = carritoController.agregarItem(new CarritoItemRequestDTO(5L, 10L, 2, 1990.0));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().getId()).isEqualTo(1L);

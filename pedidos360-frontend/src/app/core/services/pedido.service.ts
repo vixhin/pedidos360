@@ -40,6 +40,9 @@ export interface CrearPedidoRequest {
   tarifaServicio?: number;
   direccionEntrega?: string;
   items: PedidoItemBackend[];
+  /** El servidor recalcula precios y totales usando el cupón y la comuna. */
+  codigoCupon?: string;
+  comuna?: string;
 }
 
 export interface ClientOrderFromDB {
@@ -231,7 +234,9 @@ export class PedidoService {
     subtotalAmount?: number,
     shippingCostAmount?: number,
     serviceFeeAmount?: number,
-    direccion?: string
+    direccion?: string,
+    codigoCupon?: string,
+    comuna?: string
   ): Observable<PedidoBackend | null> {
     const user = this.auth.user();
     if (!user?.id) {
@@ -269,6 +274,8 @@ export class PedidoService {
       total: calculatedTotal,
       direccionEntrega: direccion || 'Santiago Centro, Chile',
       items: itemsPayload,
+      codigoCupon: codigoCupon?.trim() || undefined,
+      comuna: comuna || undefined,
     };
 
     this.isSubmitting.set(true);
@@ -289,28 +296,8 @@ export class PedidoService {
           this.lastOrderId.set(mapped.id);
           this.pedidos.update((list) => [mapped, ...list]);
 
-          // Descontar stock real en PostgreSQL para cada producto del pedido y refrescar catálogo
-          for (const item of cartLines) {
-            if (item.productId) {
-              const rawProdId = String(item.productId).replace(/\D/g, '');
-              if (rawProdId) {
-                this.http
-                  .put<{ success: boolean; data: any }>(
-                    `${this.urls.base('productos')}/${rawProdId}/stock/descontar?cantidad=${item.quantity}`,
-                    {}
-                  )
-                  .pipe(
-                    catchError((err) => {
-                      console.warn(`[PedidoService] Falló descuento REST producto #${rawProdId}:`, err);
-                      return of(null);
-                    })
-                  )
-                  .subscribe(() => {
-                    this.catalogSvc.cargarProductosDeBackend();
-                  });
-              }
-            }
-          }
+          // El stock lo descuenta pedidos-service en el servidor; aquí sólo se refresca el catálogo
+          this.catalogSvc.cargarProductosDeBackend();
 
           // Notificación
           this.notifSvc.enviarNotificacion(

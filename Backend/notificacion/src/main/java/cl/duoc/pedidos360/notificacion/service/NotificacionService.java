@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class NotificacionService {
@@ -34,6 +35,10 @@ public class NotificacionService {
             notificacion.setLeida(false);
         }
         return notificacionRepository.save(notificacion);
+    }
+
+    public Optional<Notificacion> obtenerPorId(Long id) {
+        return notificacionRepository.findById(id);
     }
 
     @Transactional

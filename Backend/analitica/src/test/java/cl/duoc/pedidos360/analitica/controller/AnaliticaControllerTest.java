@@ -1,5 +1,6 @@
 package cl.duoc.pedidos360.analitica.controller;
 
+import cl.duoc.pedidos360.analitica.dto.AnaliticaEventoRequestDTO;
 import cl.duoc.pedidos360.analitica.entity.AnaliticaEvento;
 import cl.duoc.pedidos360.analitica.service.AnaliticaService;
 import org.junit.jupiter.api.BeforeEach;
@@ -62,7 +63,7 @@ class AnaliticaControllerTest {
     void testRegistrar() {
         when(analiticaService.registrarEvento(any(AnaliticaEvento.class))).thenReturn(mockEvento);
 
-        ResponseEntity<AnaliticaEvento> response = analiticaController.registrar(mockEvento);
+        ResponseEntity<AnaliticaEvento> response = analiticaController.registrar(new AnaliticaEventoRequestDTO("LOGIN", "Inicio de sesion", null));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().getId()).isEqualTo(1L);

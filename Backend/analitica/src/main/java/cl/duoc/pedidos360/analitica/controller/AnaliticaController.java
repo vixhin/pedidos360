@@ -1,5 +1,6 @@
 package cl.duoc.pedidos360.analitica.controller;
 
+import cl.duoc.pedidos360.analitica.dto.AnaliticaEventoRequestDTO;
 import cl.duoc.pedidos360.analitica.entity.AnaliticaEvento;
 import cl.duoc.pedidos360.analitica.service.AnaliticaService;
 import org.springframework.http.ResponseEntity;
@@ -28,7 +29,7 @@ public class AnaliticaController {
     }
 
     @PostMapping
-    public ResponseEntity<AnaliticaEvento> registrar(@RequestBody AnaliticaEvento evento) {
-        return ResponseEntity.ok(analiticaService.registrarEvento(evento));
+    public ResponseEntity<AnaliticaEvento> registrar(@RequestBody AnaliticaEventoRequestDTO evento) {
+        return ResponseEntity.ok(analiticaService.registrarEvento(evento.toEntity()));
     }
 }

@@ -1,5 +1,6 @@
 package cl.duoc.pedidos360.notificacion.controller;
 
+import cl.duoc.pedidos360.notificacion.dto.NotificacionRequestDTO;
 import cl.duoc.pedidos360.notificacion.entity.Notificacion;
 import cl.duoc.pedidos360.notificacion.service.NotificacionService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -52,14 +53,43 @@ public class NotificacionController {
     }
 
     @PostMapping
-    public ResponseEntity<Notificacion> enviar(@RequestBody Notificacion notificacion) {
-        return ResponseEntity.ok(notificacionService.enviarNotificacion(notificacion));
+    public ResponseEntity<Notificacion> enviar(@RequestBody NotificacionRequestDTO notificacion,
+                                               @Autowired(required = false) HttpServletRequest request) {
+        Notificacion nueva = notificacion.toEntity();
+        if (request != null && !esAdminOVendedor(request)) {
+            // Un cliente sólo puede crearse notificaciones a sí mismo (evita suplantar avisos a otros usuarios)
+            Long callerId = (Long) request.getAttribute("p360.userId");
+            if (callerId == null) {
+                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Se requiere autenticación.");
+            }
+            nueva.setUsuarioId(callerId);
+        }
+        return ResponseEntity.ok(notificacionService.enviarNotificacion(nueva));
+    }
+
+    public ResponseEntity<Notificacion> enviar(NotificacionRequestDTO notificacion) {
+        return enviar(notificacion, null);
     }
 
     @PutMapping("/{id}/leida")
-    public ResponseEntity<Void> marcarLeida(@PathVariable Long id) {
+    public ResponseEntity<Void> marcarLeida(@PathVariable Long id, @Autowired(required = false) HttpServletRequest request) {
+        if (request != null) {
+            // Evita IDOR: sólo el destinatario (o ADMIN/VENDEDOR) puede marcarla como leída
+            Notificacion existente = notificacionService.obtenerPorId(id)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Notificación no encontrada."));
+            validarPropietarioOAdmin(request, existente.getUsuarioId());
+        }
         notificacionService.marcarLeida(id);
         return ResponseEntity.ok().build();
+    }
+
+    public ResponseEntity<Void> marcarLeida(Long id) {
+        return marcarLeida(id, null);
+    }
+
+    private boolean esAdminOVendedor(HttpServletRequest request) {
+        String role = (String) request.getAttribute("p360.role");
+        return role != null && (role.contains("ADMIN") || role.contains("VENDEDOR"));
     }
 
     @PutMapping("/usuario/{usuarioId}/marcar-todas-leidas")
