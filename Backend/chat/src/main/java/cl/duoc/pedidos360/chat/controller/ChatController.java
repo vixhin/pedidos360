@@ -126,6 +126,13 @@ public class ChatController {
     }
 
     private UserIdentity resolveIdentity(HttpServletRequest request) {
+        Long attrUserId = (Long) request.getAttribute("p360.userId");
+        if (attrUserId != null) {
+            String attrEmail = (String) request.getAttribute("p360.email");
+            String attrRole = (String) request.getAttribute("p360.role");
+            return new UserIdentity(attrUserId, attrEmail, attrRole != null ? attrRole : "CLIENTE");
+        }
+
         String serviceKey = request.getHeader("X-Internal-Service-Key");
         String xUserId = request.getHeader("X-User-Id");
         String xUserEmail = request.getHeader("X-User-Email");
@@ -149,17 +156,29 @@ public class ChatController {
             return new UserIdentity(userId, xUserEmail, xUserRoles != null ? xUserRoles : "CLIENTE");
         }
 
+        String token = null;
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            String token = authHeader.substring(7);
-            if (jwtUtil.validateToken(token)) {
-                String email = jwtUtil.extractEmail(token);
-                String role = jwtUtil.extractRole(token);
-                Long userId = resolveUserIdByEmail(email);
-                if (userId == null) {
-                    throw new SecurityException("Acceso denegado: No se pudo resolver la cuenta de usuario.");
+            token = authHeader.substring(7);
+        } else if (request.getCookies() != null) {
+            for (jakarta.servlet.http.Cookie c : request.getCookies()) {
+                if ("p360_session".equals(c.getName())) {
+                    token = c.getValue();
+                    break;
                 }
-                return new UserIdentity(userId, email, role != null ? role : "CLIENTE");
             }
+        }
+
+        if (token != null && jwtUtil.validateToken(token)) {
+            Long userId = jwtUtil.extractUserId(token);
+            String email = jwtUtil.extractEmail(token);
+            String role = jwtUtil.extractRole(token);
+            if (userId == null && email != null) {
+                userId = resolveUserIdByEmail(email);
+            }
+            if (userId == null) {
+                throw new SecurityException("Acceso denegado: No se pudo resolver la cuenta de usuario.");
+            }
+            return new UserIdentity(userId, email, role != null ? role : "CLIENTE");
         }
 
         throw new SecurityException("Acceso denegado: Requiere autenticación JWT válida o clave interna de servicio.");

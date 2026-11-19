@@ -64,11 +64,35 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
+        org.springframework.web.socket.server.support.HttpSessionHandshakeInterceptor cookieInterceptor =
+                new org.springframework.web.socket.server.support.HttpSessionHandshakeInterceptor() {
+                    @Override
+                    public boolean beforeHandshake(org.springframework.http.server.ServerHttpRequest request,
+                                                  org.springframework.http.server.ServerHttpResponse response,
+                                                  org.springframework.web.socket.WebSocketHandler wsHandler,
+                                                  Map<String, Object> attributes) throws Exception {
+                        if (request instanceof org.springframework.http.server.ServletServerHttpRequest servletRequest) {
+                            jakarta.servlet.http.Cookie[] cookies = servletRequest.getServletRequest().getCookies();
+                            if (cookies != null) {
+                                for (jakarta.servlet.http.Cookie c : cookies) {
+                                    if ("p360_session".equals(c.getName())) {
+                                        attributes.put("p360_session", c.getValue());
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        return super.beforeHandshake(request, response, wsHandler, attributes);
+                    }
+                };
+
         // Endpoint WebSocket nativo y SockJS para la app Angular (sin origins salvajes "*")
         registry.addEndpoint("/ws-chat")
-                .setAllowedOriginPatterns("http://localhost:*", frontendOrigin);
+                .setAllowedOriginPatterns("http://localhost:*", frontendOrigin, "https://*.sslip.io", "http://*.sslip.io")
+                .addInterceptors(cookieInterceptor);
         registry.addEndpoint("/ws-chat")
-                .setAllowedOriginPatterns("http://localhost:*", frontendOrigin)
+                .setAllowedOriginPatterns("http://localhost:*", frontendOrigin, "https://*.sslip.io", "http://*.sslip.io")
+                .addInterceptors(cookieInterceptor)
                 .withSockJS();
     }
 
@@ -81,13 +105,19 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                 if (accessor != null) {
                     if (StompCommand.CONNECT.equals(accessor.getCommand())) {
                         String authHeader = accessor.getFirstNativeHeader("Authorization");
+                        String token = null;
 
-                        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-                            log.warn("[WS-CHAT] Connection rejected: Missing Authorization header.");
+                        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                            token = authHeader.substring(7);
+                        } else if (accessor.getSessionAttributes() != null && accessor.getSessionAttributes().containsKey("p360_session")) {
+                            token = (String) accessor.getSessionAttributes().get("p360_session");
+                        }
+
+                        if (token == null) {
+                            log.warn("[WS-CHAT] Connection rejected: Missing Authorization header and session cookie.");
                             throw new IllegalArgumentException("Conexión WebSocket rechazada: Token JWT requerido.");
                         }
 
-                        String token = authHeader.substring(7);
                         if (!jwtUtil.validateToken(token)) {
                             log.warn("[WS-CHAT] Connection rejected: Invalid or expired JWT token.");
                             throw new IllegalArgumentException("Conexión WebSocket rechazada: Token JWT inválido o expirado.");

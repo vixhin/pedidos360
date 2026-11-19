@@ -99,6 +99,7 @@ services:
         max-file: "3"
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
       FRONTEND_ORIGIN: ${PUBLIC_URL}
       BFF_INTERNAL_KEY: ${BFF_INTERNAL_KEY:?BFF_INTERNAL_KEY required}
 
@@ -113,6 +114,7 @@ services:
         max-file: "3"
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
       FRONTEND_ORIGIN: ${PUBLIC_URL}
       DB_USER: ${POSTGRES_USER:?POSTGRES_USER required}
       DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
@@ -120,8 +122,13 @@ services:
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD required}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET required}
       BFF_INTERNAL_KEY: ${BFF_INTERNAL_KEY:?BFF_INTERNAL_KEY required}
+      ACCESS_TOKEN_TTL: PT8H
+      USUARIO_SERVICE_URL: http://usuario:8081
+      PEDIDOS_SERVICE_URL: http://pedidos:8082
       TURNSTILE_ENABLED: ${TURNSTILE_ENABLED:-true}
-      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
+      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-1x0000000000000000000000000000000AA}
+      TURNSTILE_ALLOWED_HOSTNAMES: ${TURNSTILE_ALLOWED_HOSTNAMES:-localhost,127.0.0.1,100-28-114-124.sslip.io}
+      TURNSTILE_VERIFY_ACTION: ${TURNSTILE_VERIFY_ACTION:-false}
       ADMIN_BOOTSTRAP_TOKEN: ${ADMIN_BOOTSTRAP_TOKEN:-}
 
   productos:
@@ -135,11 +142,15 @@ services:
         max-file: "3"
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
       FRONTEND_ORIGIN: ${PUBLIC_URL}
       DB_USER: ${POSTGRES_USER:?POSTGRES_USER required}
       DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET required}
       BFF_INTERNAL_KEY: ${BFF_INTERNAL_KEY:?BFF_INTERNAL_KEY required}
+      ACCESS_TOKEN_TTL: PT8H
+      USUARIO_SERVICE_URL: http://usuario:8081
+      PEDIDOS_SERVICE_URL: http://pedidos:8082
 
   pedidos:
     ports: !reset []
@@ -152,6 +163,7 @@ services:
         max-file: "3"
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
       FRONTEND_ORIGIN: ${PUBLIC_URL}
       DB_USER: ${POSTGRES_USER:?POSTGRES_USER required}
       DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
@@ -159,6 +171,9 @@ services:
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD required}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET required}
       BFF_INTERNAL_KEY: ${BFF_INTERNAL_KEY:?BFF_INTERNAL_KEY required}
+      ACCESS_TOKEN_TTL: PT8H
+      USUARIO_SERVICE_URL: http://usuario:8081
+      PEDIDOS_SERVICE_URL: http://pedidos:8082
 
   carrito:
     ports: !reset []
@@ -171,6 +186,7 @@ services:
         max-file: "3"
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
       FRONTEND_ORIGIN: ${PUBLIC_URL}
       DB_USER: ${POSTGRES_USER:?POSTGRES_USER required}
       DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
@@ -178,6 +194,9 @@ services:
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD required}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET required}
       BFF_INTERNAL_KEY: ${BFF_INTERNAL_KEY:?BFF_INTERNAL_KEY required}
+      ACCESS_TOKEN_TTL: PT8H
+      USUARIO_SERVICE_URL: http://usuario:8081
+      PEDIDOS_SERVICE_URL: http://pedidos:8082
 
   notificacion:
     ports: !reset []
@@ -190,6 +209,7 @@ services:
         max-file: "3"
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
       FRONTEND_ORIGIN: ${PUBLIC_URL}
       DB_USER: ${POSTGRES_USER:?POSTGRES_USER required}
       DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
@@ -197,6 +217,9 @@ services:
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD required}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET required}
       BFF_INTERNAL_KEY: ${BFF_INTERNAL_KEY:?BFF_INTERNAL_KEY required}
+      ACCESS_TOKEN_TTL: PT8H
+      USUARIO_SERVICE_URL: http://usuario:8081
+      PEDIDOS_SERVICE_URL: http://pedidos:8082
 
   analitica:
     ports: !reset []
@@ -209,6 +232,7 @@ services:
         max-file: "3"
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
       FRONTEND_ORIGIN: ${PUBLIC_URL}
       DB_USER: ${POSTGRES_USER:?POSTGRES_USER required}
       DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
@@ -216,6 +240,9 @@ services:
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD required}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET required}
       BFF_INTERNAL_KEY: ${BFF_INTERNAL_KEY:?BFF_INTERNAL_KEY required}
+      ACCESS_TOKEN_TTL: PT8H
+      USUARIO_SERVICE_URL: http://usuario:8081
+      PEDIDOS_SERVICE_URL: http://pedidos:8082
 
   chat:
     ports: !reset []
@@ -228,6 +255,7 @@ services:
         max-file: "3"
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
       FRONTEND_ORIGIN: ${PUBLIC_URL}
       DB_USER: ${POSTGRES_USER:?POSTGRES_USER required}
       DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
@@ -235,6 +263,9 @@ services:
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD required}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET required}
       BFF_INTERNAL_KEY: ${BFF_INTERNAL_KEY:?BFF_INTERNAL_KEY required}
+      ACCESS_TOKEN_TTL: PT8H
+      USUARIO_SERVICE_URL: http://usuario:8081
+      PEDIDOS_SERVICE_URL: http://pedidos:8082
 
 volumes:
   caddy_data:

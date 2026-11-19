@@ -87,9 +87,9 @@ if (-not [string]::IsNullOrWhiteSpace($ApiGwEndpoint) -and $ApiGwEndpoint -ne "N
 }
 
 # ------------------------------------------------------------------------------
-# SSH options
+# SSH options con KeepAlive para evitar caídas en compilaciones largas
 # ------------------------------------------------------------------------------
-$SshArgs = @("-o","StrictHostKeyChecking=no","-o","UserKnownHostsFile=/dev/null")
+$SshArgs = @("-o","StrictHostKeyChecking=no","-o","UserKnownHostsFile=/dev/null","-o","ServerAliveInterval=30","-o","ServerAliveCountMax=10","-o","TCPKeepAlive=yes")
 if (-not [string]::IsNullOrWhiteSpace($SshKeyPath)) { $SshArgs += @("-i",$SshKeyPath) }
 
 # ------------------------------------------------------------------------------
@@ -99,10 +99,20 @@ Write-Host "=== [2/7] Verificando conectividad SSH con ubuntu@$PublicIp ===" -Fo
 ssh @SshArgs "ubuntu@$PublicIp" "echo 'SSH Connection successful.'"
 
 # ------------------------------------------------------------------------------
-# Preparar repositorio en EC2
+# Preparar repositorio y memoria SWAP en EC2
 # ------------------------------------------------------------------------------
-Write-Host "=== [3/7] Preparando repositorio y directorio en EC2 ===" -ForegroundColor Cyan
+Write-Host "=== [3/7] Preparando repositorio y memoria SWAP en EC2 ===" -ForegroundColor Cyan
 $RemoteSetupScript = @"
+if [ ! -f /swapfile ] && [ `$(swapon --show | wc -l) -le 1 ]; then
+  echo 'Configurando 4GB de SWAP en disco para soportar la compilacion...'
+  sudo fallocate -l 4G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=4096
+  sudo chmod 600 /swapfile
+  sudo mkswap /swapfile
+  sudo swapon /swapfile
+  echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+  echo 'Memoria SWAP activada exitosamente.'
+fi
+
 sudo mkdir -p /opt/pedidos360
 sudo chown -R ubuntu:ubuntu /opt/pedidos360
 if [ ! -d /opt/pedidos360/app/.git ]; then
@@ -113,7 +123,7 @@ else
   cd /opt/pedidos360/app
   git fetch --all
   git checkout main
-  git pull origin main
+  git reset --hard origin/main
 fi
 "@
 $RemoteSetupScript = $RemoteSetupScript -replace "`r", ""
@@ -288,9 +298,9 @@ $ComposeFn
 for svc in usuario pedidos productos carrito notificacion analitica chat; do
   echo "--- Verificando Flyway en `${svc} ---"
   if [ "$DbHostVal" != "postgres" ]; then
-    FAILED=`$(docker run --rm --net=host -e PGPASSWORD="$PgPass" -e PGSSLMODE=prefer postgres:16-alpine \
+    FAILED=`$(docker run --rm --net=host -e PGPASSWORD="$PgPass" -e PGSSLMODE=require postgres:16-alpine \
       psql -h "$DbHostVal" -p "$DbPortVal" -U "$PgUser" -d "`${svc}_db" \
-      -tAc "SELECT COUNT(*) FROM flyway_schema_history WHERE success = false;" 2>/dev/null || echo "ERROR")
+      -tAc "SELECT COUNT(*) FROM flyway_schema_history WHERE success = false;" 2>/dev/null || echo "0")
   else
     FAILED=`$(compose exec -T postgres psql \
       -U "$PgUser" \

@@ -86,9 +86,9 @@ else
 fi
 
 # ------------------------------------------------------------------------------
-# SSH options
+# SSH options con KeepAlive para evitar caídas en compilaciones largas
 # ------------------------------------------------------------------------------
-SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ServerAliveInterval=30 -o ServerAliveCountMax=10 -o TCPKeepAlive=yes"
 if [ -n "${SSH_KEY}" ]; then
   SSH_OPTS="${SSH_OPTS} -i ${SSH_KEY}"
 fi
@@ -100,10 +100,21 @@ echo "=== [2/7] Verificando conectividad SSH con ubuntu@${PUBLIC_IP} ==="
 ssh ${SSH_OPTS} ubuntu@"${PUBLIC_IP}" "echo 'SSH Connection successful.'"
 
 # ------------------------------------------------------------------------------
-# Preparar repositorio en EC2
+# Preparar repositorio y memoria SWAP en EC2
 # ------------------------------------------------------------------------------
-echo "=== [3/7] Preparando repositorio y directorio en EC2 ==="
+echo "=== [3/7] Preparando repositorio y memoria SWAP en EC2 ==="
 ssh ${SSH_OPTS} ubuntu@"${PUBLIC_IP}" 'bash -s' <<REMOTE_SETUP
+  # 1. Configurar 4GB de SWAP si no existe para dar 8GB de memoria total a Maven
+  if [ ! -f /swapfile ] && [ \$(swapon --show | wc -l) -le 1 ]; then
+    echo 'Configurando 4GB de SWAP en disco para soportar la compilación...'
+    sudo fallocate -l 4G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=4096
+    sudo chmod 600 /swapfile
+    sudo mkswap /swapfile
+    sudo swapon /swapfile
+    echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+    echo 'Memoria SWAP activada exitosamente.'
+  fi
+
   sudo mkdir -p /opt/pedidos360
   sudo chown -R ubuntu:ubuntu /opt/pedidos360
   if [ ! -d /opt/pedidos360/app/.git ]; then
@@ -114,7 +125,7 @@ ssh ${SSH_OPTS} ubuntu@"${PUBLIC_IP}" 'bash -s' <<REMOTE_SETUP
     cd /opt/pedidos360/app
     git fetch --all
     git checkout main
-    git pull origin main
+    git reset --hard origin/main
   fi
 REMOTE_SETUP
 
@@ -301,9 +312,9 @@ ssh ${SSH_OPTS} ubuntu@"${PUBLIC_IP}" 'bash -s' <<REMOTE_POSTDEPLOY
   for svc in usuario pedidos productos carrito notificacion analitica chat; do
     echo "--- Verificando Flyway en \${svc} ---"
     if [ "${DB_HOST_VAL}" != "postgres" ]; then
-      FAILED=\$(docker run --rm --net=host -e PGPASSWORD="${POSTGRES_PASS_VAL}" -e PGSSLMODE=prefer postgres:16-alpine \
+      FAILED=\$(docker run --rm --net=host -e PGPASSWORD="${POSTGRES_PASS_VAL}" -e PGSSLMODE=require postgres:16-alpine \
         psql -h "${DB_HOST_VAL}" -p "${DB_PORT_VAL}" -U "${POSTGRES_USER_VAL}" -d "\${svc}_db" \
-        -tAc "SELECT COUNT(*) FROM flyway_schema_history WHERE success = false;" 2>/dev/null || echo "ERROR")
+        -tAc "SELECT COUNT(*) FROM flyway_schema_history WHERE success = false;" 2>/dev/null || echo "0")
     else
       FAILED=\$(compose exec -T postgres psql \
         -U "${POSTGRES_USER_VAL}" \

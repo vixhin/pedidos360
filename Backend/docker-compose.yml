@@ -236,6 +236,8 @@ services:
       RABBITMQ_USER: ${RABBITMQ_USER:-guest}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
       CHAT_RETENTION_DAYS: ${CHAT_RETENTION_DAYS:-30}
+      PEDIDOS_SERVICE_URL: http://pedidos:8082
+      USUARIO_SERVICE_URL: http://usuario:8081
     ports:
       - "8091:8091"
     depends_on:
