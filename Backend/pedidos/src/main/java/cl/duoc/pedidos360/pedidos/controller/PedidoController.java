@@ -205,11 +205,14 @@ public class PedidoController {
             Pedido pedido = pedidoService.obtenerPorId(id)
                     .orElseThrow(() -> new IllegalArgumentException("Pedido no encontrado con ID: " + id));
 
-            validarPuedeActualizarEstado(identity, pedido);
+            validarPuedeActualizarEstado(identity, pedido, nuevoEstado);
             return ResponseEntity.ok(pedidoService.actualizarEstado(id, nuevoEstado, identity.userId, identity.role));
         } catch (SecurityException se) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("success", false, "message", se.getMessage()));
+        } catch (IllegalStateException ise) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("success", false, "message", ise.getMessage()));
         } catch (IllegalArgumentException ie) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("success", false, "message", ie.getMessage()));
@@ -266,9 +269,15 @@ public class PedidoController {
         }
     }
 
-    private void validarPuedeActualizarEstado(UserIdentity identity, Pedido pedido) {
+    private void validarPuedeActualizarEstado(UserIdentity identity, Pedido pedido, String nuevoEstado) {
         String role = identity.getRoleUpper();
-        if (role.contains("CLIENTE")) {
+        if (role.contains("CLIENTE") && !role.contains("ADMIN") && !role.contains("VENDEDOR")) {
+            if ("CANCELADO".equalsIgnoreCase(nuevoEstado) && pedido.getUsuarioId().equals(identity.userId)) {
+                if ("ENTREGADO".equalsIgnoreCase(pedido.getEstado()) || "CANCELADO".equalsIgnoreCase(pedido.getEstado())) {
+                    throw new IllegalStateException("No se puede cancelar un pedido que ya está entregado o cancelado.");
+                }
+                return;
+            }
             throw new SecurityException("Acceso denegado: El cliente no puede modificar el estado del pedido.");
         }
         if (role.contains("REPARTIDOR") && !role.contains("ADMIN") && !role.contains("VENDEDOR")) {

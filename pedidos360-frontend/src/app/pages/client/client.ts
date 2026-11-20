@@ -6,19 +6,7 @@ import { Icon } from '../../shared/icon/icon';
 import { CartService } from '../../core/services/cart.service';
 import { CatalogService } from '../../core/services/catalog.service';
 import { AuthService } from '../../core/services/auth.service';
-import { PedidoService } from '../../core/services/pedido.service';
-
-export interface ClientOrder {
-  id: string;
-  date: string;
-  items: { name: string; icon: string; quantity: number; price: number }[];
-  total: number;
-  statusStep: 1 | 2 | 3 | 4;
-  statusLabel: string;
-  deliveryEta: string;
-  courierName: string;
-  courierPhone: string;
-}
+import { PedidoService, ClientOrderFromDB } from '../../core/services/pedido.service';
 
 export interface DeliveryAddress {
   id: string;
@@ -41,15 +29,33 @@ import { ChatComponent } from '../../shared/components/chat/chat.component';
 export class Client implements OnInit {
   readonly activeTab = signal<'active-order' | 'history' | 'addresses'>('active-order');
 
-  // Pedido activo en seguimiento real desde PostgreSQL
-  readonly activeOrder = computed<ClientOrder | null>(() => {
-    const list = this.pedidoSvc.pedidos();
-    return list.find((p) => p.statusStep < 4) || null;
+  // ID del pedido seleccionado manualmente por el usuario
+  readonly selectedOrderId = signal<string | null>(null);
+
+  // Estado de cancelación
+  readonly isCancelling = signal(false);
+
+  // Pedidos activos en seguimiento real desde PostgreSQL
+  readonly activeOrders = computed<ClientOrderFromDB[]>(() => {
+    return this.pedidoSvc.pedidos().filter((p) => p.statusStep < 4 && p.estado !== 'CANCELADO');
   });
 
-  // Historial de compras reales del cliente
-  readonly pastOrders = computed<ClientOrder[]>(() => {
-    return this.pedidoSvc.pedidos().filter((p) => p.statusStep === 4);
+  // Pedido activo enfocado (prioriza el que esté 'EN CAMINO' para chatear o el seleccionado)
+  readonly selectedActiveOrder = computed<ClientOrderFromDB | null>(() => {
+    const list = this.activeOrders();
+    if (list.length === 0) return null;
+    const selId = this.selectedOrderId();
+    if (selId) {
+      const found = list.find((p) => p.id === selId);
+      if (found) return found;
+    }
+    // Preferir pedidos 'EN CAMINO' (statusStep === 3) para habilitar chat de inmediato
+    return list.find((p) => p.statusStep === 3) || list[0];
+  });
+
+  // Historial de compras reales del cliente (incluye entregados y cancelados)
+  readonly pastOrders = computed<ClientOrderFromDB[]>(() => {
+    return this.pedidoSvc.pedidos().filter((p) => p.statusStep === 4 || p.estado === 'CANCELADO');
   });
 
   // Lista de direcciones guardadas por el cliente
@@ -59,8 +65,9 @@ export class Client implements OnInit {
   readonly showAddAddressModal = signal(false);
   readonly newAddressTitle = signal('');
 
-  parseNumericId(idStr?: string): number {
+  parseNumericId(idStr?: string | number): number {
     if (!idStr) return 0;
+    if (typeof idStr === 'number') return idStr;
     return Number(idStr.replace(/[^0-9]/g, '')) || 0;
   }
   readonly newAddressStreet = signal('');
@@ -131,7 +138,34 @@ export class Client implements OnInit {
     setTimeout(() => this.toastMessage.set(null), 3000);
   }
 
-  repeatOrder(order: ClientOrder): void {
+  selectOrder(orderId: string): void {
+    this.selectedOrderId.set(orderId);
+  }
+
+  cancelarPedido(order: ClientOrderFromDB): void {
+    if (!confirm(`¿Estás seguro de que deseas cancelar el pedido ${order.id}?`)) {
+      return;
+    }
+    this.isCancelling.set(true);
+    this.pedidoSvc.cancelarPedido(order.numericId).subscribe({
+      next: (ok) => {
+        this.isCancelling.set(false);
+        if (ok) {
+          this.toastMessage.set(`El pedido ${order.id} fue cancelado exitosamente.`);
+          setTimeout(() => this.toastMessage.set(null), 4000);
+        } else {
+          alert('No se pudo cancelar el pedido. Verifica que no haya sido entregado.');
+        }
+      },
+      error: (err) => {
+        this.isCancelling.set(false);
+        console.error('[Client] Error al cancelar pedido:', err);
+        alert('Ocurrió un error al intentar cancelar el pedido.');
+      }
+    });
+  }
+
+  repeatOrder(order: ClientOrderFromDB): void {
     order.items.forEach((item) => {
       const match = this.catalog.products().find((p) => p.name === item.name);
       if (match) {

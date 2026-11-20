@@ -1,6 +1,6 @@
 import { Injectable, signal, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, catchError, of, tap } from 'rxjs';
+import { Observable, catchError, of, tap, map } from 'rxjs';
 import { BackendUrlService } from './backend-url.service';
 import { AuthService } from './auth.service';
 import { NotificationsService } from './notifications.service';
@@ -47,14 +47,18 @@ export interface CrearPedidoRequest {
 
 export interface ClientOrderFromDB {
   id: string;
+  numericId: number;
   date: string;
   items: { name: string; icon: string; quantity: number; price: number }[];
   total: number;
-  statusStep: 1 | 2 | 3 | 4;
+  statusStep: 1 | 2 | 3 | 4 | 5;
   statusLabel: string;
   deliveryEta: string;
   courierName: string;
   courierPhone: string;
+  estado: string;
+  repartidorId?: number | null;
+  usuarioId: number;
 }
 
 export interface CotizacionItemRequest {
@@ -157,12 +161,28 @@ export class PedidoService {
     return this.http.put<ConfiguracionComercialItem>(`${this.urls.base('pedidos')}/configuracion`, { clave, valor });
   }
 
-  private estadoToStep(estado: string): 1 | 2 | 3 | 4 {
+  cancelarPedido(id: number): Observable<boolean> {
+    return this.http
+      .put(`${this.urls.base('pedidos')}/${id}/estado?nuevoEstado=CANCELADO`, {})
+      .pipe(
+        tap(() => {
+          this.cargarPedidosDeUsuario();
+        }),
+        map(() => true),
+        catchError((err) => {
+          console.error('[PedidoService] Error al cancelar pedido:', err);
+          return of(false);
+        })
+      );
+  }
+
+  private estadoToStep(estado: string): 1 | 2 | 3 | 4 | 5 {
     switch (estado?.toUpperCase()) {
       case 'PENDIENTE': return 1;
       case 'EN_PREPARACION': return 2;
       case 'EN_CAMINO': return 3;
       case 'ENTREGADO': return 4;
+      case 'CANCELADO': return 5;
       default: return 1;
     }
   }
@@ -173,6 +193,7 @@ export class PedidoService {
       case 'EN_PREPARACION': return 'Preparando tu pedido';
       case 'EN_CAMINO': return 'Repartidor en camino a tu domicilio';
       case 'ENTREGADO': return 'Entregado exitosamente';
+      case 'CANCELADO': return 'Pedido cancelado';
       default: return 'Pedido en proceso';
     }
   }
@@ -188,6 +209,7 @@ export class PedidoService {
 
     return {
       id: `PED-${p.id}`,
+      numericId: p.id,
       date: p.fechaCreacion
         ? new Date(p.fechaCreacion).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' })
         : 'Fecha no disponible',
@@ -195,9 +217,12 @@ export class PedidoService {
       total: p.total,
       statusStep: step,
       statusLabel: this.estadoToLabel(p.estado),
-      deliveryEta: step === 4 ? 'Entregado' : 'Pendiente de entrega',
+      deliveryEta: step === 4 ? 'Entregado' : (step === 5 ? 'Cancelado' : 'Pendiente de entrega'),
       courierName: p.repartidorNombre || (p.repartidorId ? `Repartidor #${p.repartidorId}` : 'Por asignar'),
       courierPhone: p.repartidorTelefono || 'Sin teléfono registrado',
+      estado: p.estado,
+      repartidorId: p.repartidorId,
+      usuarioId: p.usuarioId,
     };
   }
 

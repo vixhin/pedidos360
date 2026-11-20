@@ -279,3 +279,140 @@
   padding: 8px 12px;
   border-radius: 12px;
 }
+
+/* SELECTOR DE PEDIDOS EN CURSO */
+.active-orders-selector {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.selector-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #334155;
+  margin-bottom: 0.75rem;
+}
+
+.order-pills-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.order-pill-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 24px;
+  border: 1.5px solid #cbd5e1;
+  background: #ffffff;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+}
+
+.order-pill-btn:hover {
+  border-color: #3b82f6;
+  background: #f0f7ff;
+}
+
+.order-pill-btn.active {
+  border-color: #2563eb;
+  background: #eff6ff;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+.pill-id {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.pill-badge {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: #f1f5f9;
+  color: #475569;
+  font-weight: 600;
+}
+
+.pill-badge.en-camino {
+  background: #dcfce7;
+  color: #166534;
+  font-weight: 700;
+}
+
+.pill-badge.prep {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.head-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.btn-outline-danger {
+  background: transparent;
+  border: 1.5px solid #ef4444;
+  color: #dc2626;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-outline-danger:hover:not(:disabled) {
+  background: #fef2f2;
+  border-color: #dc2626;
+}
+
+.btn-outline-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.badge--prep {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.badge--danger {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.chat-pending-banner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 1.5rem;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 14px;
+  margin-top: 1.5rem;
+}
+
+.chat-pending-banner h4 {
+  margin: 0 0 4px 0;
+  font-size: 1rem;
+  color: #334155;
+  font-weight: 700;
+}
+
+.chat-pending-banner p {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #64748b;
+  line-height: 1.4;
+}

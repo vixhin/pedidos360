@@ -23,10 +23,10 @@
   <!-- Pestañas del Portal -->
   <div class="tab-nav">
     <button type="button" [class.active]="activeTab() === 'active-order'" (click)="setTab('active-order')">
-      Pedido Activo en Vivo
+      Pedidos en Curso ({{ activeOrders().length }})
     </button>
     <button type="button" [class.active]="activeTab() === 'history'" (click)="setTab('history')">
-      Historial de Compras ({{ pedidoSvc.pedidos().length || pastOrders().length }})
+      Historial de Compras ({{ pastOrders().length }})
     </button>
     <button type="button" [class.active]="activeTab() === 'addresses'" (click)="setTab('addresses')">
       Mis Direcciones & Datos
@@ -36,17 +36,50 @@
   <!-- PESTAÑA 1: SEGUIMIENTO DE PEDIDO ACTIVO -->
   @if (activeTab() === 'active-order') {
     <div class="tab-content">
-      @if (activeOrder(); as order) {
+      <!-- SELECTOR DE PEDIDOS EN CURSO SI HAY MÁS DE 1 -->
+      @if (activeOrders().length > 1) {
+        <div class="active-orders-selector">
+          <span class="selector-label">
+            <app-icon name="package" size="18" /> Tus pedidos activos (haz clic para ver detalles y chat):
+          </span>
+          <div class="order-pills-row">
+            @for (o of activeOrders(); track o.id) {
+              <button
+                type="button"
+                class="order-pill-btn"
+                [class.active]="selectedActiveOrder()?.id === o.id"
+                (click)="selectOrder(o.id)"
+              >
+                <span class="pill-id">Pedido #{{ o.numericId }}</span>
+                <span class="pill-badge" [class.en-camino]="o.statusStep === 3" [class.prep]="o.statusStep === 2">
+                  {{ o.statusStep === 3 ? '🚚 En Camino' : (o.statusStep === 2 ? '👨‍🍳 En Preparación' : '⏳ Recibido') }}
+                </span>
+              </button>
+            }
+          </div>
+        </div>
+      }
+
+      @if (selectedActiveOrder(); as order) {
         <div class="card active-order-card">
           <div class="active-order-card__head">
             <div>
-              <span class="badge badge--live">● EN VIVO</span>
+              <span class="badge" [class.badge--live]="order.statusStep === 3" [class.badge--prep]="order.statusStep < 3">
+                {{ order.statusStep === 3 ? '● EN CAMINO A TU DOMICILIO' : '● EN PREPARACIÓN' }}
+              </span>
               <h2>Pedido <code>{{ order.id }}</code></h2>
               <p>{{ order.date }}</p>
             </div>
-            <div class="eta-box">
-              <small>Tiempo Estimado</small>
-              <strong>{{ order.deliveryEta }}</strong>
+            <div class="head-actions">
+              @if (order.statusStep <= 2) {
+                <button type="button" class="btn btn-outline-danger btn-sm" (click)="cancelarPedido(order)" [disabled]="isCancelling()">
+                  {{ isCancelling() ? 'Cancelando...' : '✖ Cancelar Pedido' }}
+                </button>
+              }
+              <div class="eta-box">
+                <small>Tiempo Estimado</small>
+                <strong>{{ order.deliveryEta }}</strong>
+              </div>
             </div>
           </div>
 
@@ -108,13 +141,23 @@
         </div>
 
         <!-- CHAT EN TIEMPO REAL CON REPARTIDOR -->
-        <div style="margin-top: 1.5rem;">
-          <app-chat
-            [pedidoId]="parseNumericId(order.id)"
-            [clienteId]="auth.user()?.id || 0"
-            [repartidorId]="parseNumericId(order.courierName) || 1"
-          ></app-chat>
-        </div>
+        @if (order.repartidorId) {
+          <div style="margin-top: 1.5rem;">
+            <app-chat
+              [pedidoId]="order.numericId"
+              [clienteId]="auth.user()?.id || 0"
+              [repartidorId]="order.repartidorId"
+            ></app-chat>
+          </div>
+        } @else {
+          <div class="chat-pending-banner">
+            <app-icon name="user" size="28" />
+            <div>
+              <h4>Chat directo con repartidor</h4>
+              <p>Tu pedido está siendo preparado. El canal directo de chat se activará automáticamente cuando un repartidor tome tu pedido y se ponga en camino.</p>
+            </div>
+          </div>
+        }
       </div>
     } @else {
       <div class="card empty-card" style="text-align: center; padding: 3rem;">
@@ -140,14 +183,14 @@
       } @else {
 
         <!-- Orders from DB -->
-        @if (pedidoSvc.pedidos().length > 0) {
+        @if (pastOrders().length > 0) {
           <div class="history-list">
-            @for (order of pedidoSvc.pedidos(); track order.id) {
+            @for (order of pastOrders(); track order.id) {
               <div class="card history-card">
                 <div class="history-card__head">
                   <div>
                     <h3>Pedido <code>{{ order.id }}</code></h3>
-                    <p>{{ order.date }} | <span class="badge badge--success">{{ order.statusLabel }}</span></p>
+                    <p>{{ order.date }} | <span class="badge" [class.badge--success]="order.statusStep === 4" [class.badge--danger]="order.statusStep === 5">{{ order.statusLabel }}</span></p>
                   </div>
                   @if (order.statusStep === 4) {
                     <button type="button" class="btn btn-primary btn-sm" (click)="repeatOrder(order)">
